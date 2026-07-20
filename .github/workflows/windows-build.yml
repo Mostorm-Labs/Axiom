@@ -1,0 +1,33 @@
+name: Windows Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg_installed
+            C:/vcpkg/archives
+          key: canvas-vcpkg-${{ hashFiles('vcpkg.json') }}
+      - name: Configure
+        env:
+          VCPKG_ROOT: C:/vcpkg
+        run: cmake --preset windows-x64
+      - name: Build
+        run: cmake --build --preset windows-x64-release --parallel
+      - name: Test
+        run: ctest --preset windows-x64-release
+      - name: Whitespace check
+        run: git diff --check
