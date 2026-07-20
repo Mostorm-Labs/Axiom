@@ -18,5 +18,5 @@ library RPATH), the full regression suite was run with:
     cmake --build out/build/task-03-green-x86-nortti-rpath --parallel
     ctest --test-dir out/build/task-03-green-x86-nortti-rpath --output-on-failure
 
-Result: 16/16 tests passed, 0 failed, including all seven document tests and
+Result: 16/16 tests passed, 0 failed, including all eight document tests and
 the existing version, geometry, and pointer tests.
