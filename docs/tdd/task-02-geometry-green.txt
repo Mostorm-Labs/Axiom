@@ -12,7 +12,9 @@ cmake --build out/build/native-x86-nortti-rpath --target clean
 cmake --build out/build/native-x86-nortti-rpath --parallel
 ctest --test-dir out/build/native-x86-nortti-rpath --output-on-failure
 
-Result: 7/7 tests passed, 0 failed (including the existing version smoke test).
+Result: 8/8 tests passed, 0 failed (including the existing version smoke test).
+The regression suite also checks four-float Transform2D layout and ordinary
+composability of inverse()/map() using non-integral points.
 
 On the default arm64 AppleClang configure, compilation succeeds but linking
 against the preinstalled x86_64 GTest fails. The Windows VS2022/vcpkg preset

@@ -66,20 +66,7 @@ struct Transform2D {
   float translateX = 0.0F;
   float translateY = 0.0F;
 
-  // Inverse transforms retain their source parameters so the reverse map can
-  // evaluate as (screen - translation) / scale and avoid avoidable float
-  // cancellation when round-tripping points.
-  bool useOriginalCoordinates = false;
-  float originalScaleX = 1.0F;
-  float originalScaleY = 1.0F;
-  float originalTranslateX = 0.0F;
-  float originalTranslateY = 0.0F;
-
   constexpr Vec2 map(Vec2 point) const noexcept {
-    if (useOriginalCoordinates) {
-      return Vec2{(point.x - originalTranslateX) / originalScaleX,
-                  (point.y - originalTranslateY) / originalScaleY};
-    }
     return Vec2{point.x * scaleX + translateX,
                 point.y * scaleY + translateY};
   }
@@ -89,16 +76,8 @@ struct Transform2D {
     if (std::fabs(scaleX) < kMinimumScale || std::fabs(scaleY) < kMinimumScale) {
       throw std::domain_error("Transform2D is not invertible");
     }
-    Transform2D result{1.0F / scaleX,
-                       1.0F / scaleY,
-                       -translateX / scaleX,
+    return Transform2D{1.0F / scaleX, 1.0F / scaleY, -translateX / scaleX,
                        -translateY / scaleY};
-    result.useOriginalCoordinates = true;
-    result.originalScaleX = scaleX;
-    result.originalScaleY = scaleY;
-    result.originalTranslateX = translateX;
-    result.originalTranslateY = translateY;
-    return result;
   }
 };
 
