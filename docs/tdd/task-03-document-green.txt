@@ -1,0 +1,22 @@
+Task 3 document model TDD evidence (GREEN)
+
+Environment: macOS AppleClang 17, CMake 3.21+, C++17.
+
+The default arm64 build configured successfully and compiled the document
+implementation, but linking the preinstalled x86_64-only GTest dylibs failed
+with an architecture mismatch ("ignoring file ... found architecture
+'x86_64', required architecture 'arm64'"). The Windows VS2022/vcpkg preset is
+not runnable on this macOS host.
+
+Using the established local workaround (x86_64 GTest, no RTTI, and GTest
+library RPATH), the full regression suite was run with:
+
+    cmake -S . -B out/build/task-03-green-x86-nortti-rpath \
+      -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_CXX_FLAGS=-fno-rtti \
+      -DCMAKE_BUILD_RPATH=/Users/qing/opt/anaconda3/lib
+    cmake --build out/build/task-03-green-x86-nortti-rpath --parallel
+    ctest --test-dir out/build/task-03-green-x86-nortti-rpath --output-on-failure
+
+Result: 16/16 tests passed, 0 failed, including all seven document tests and
+the existing version, geometry, and pointer tests.

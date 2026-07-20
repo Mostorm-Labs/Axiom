@@ -16,7 +16,7 @@ endif()
 include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
-add_library(canvas_core STATIC src/core/version.cpp)
+add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp)
 add_library(canvas::core ALIAS canvas_core)
 target_include_directories(canvas_core PUBLIC include)
 canvas_enable_warnings(canvas_core)
