@@ -1,6 +1,6 @@
 Task 02 TDD GREEN evidence
 
-The geometry and pointer value types compile and all six new tests pass with
+The geometry and pointer value types compile and all seven new tests pass with
 AppleClang using the available x86_64 GTest dylibs. The local GTest package was
 built without RTTI and only for x86_64, so this reproducible native workaround
 was used:
