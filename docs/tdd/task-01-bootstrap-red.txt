@@ -1,0 +1,15 @@
+Task 01 TDD RED evidence
+
+This command was run from the repository root before creating
+include/canvas/core/version.h and src/core/version.cpp.
+
+Target: canvas_version_test
+
+Command:
+c++ -std=c++17 -Iinclude -fsyntax-only tests/unit/version_test.cpp
+
+Observed output:
+tests/unit/version_test.cpp:1:10: fatal error: 'canvas/core/version.h' file not found
+    1 | #include "canvas/core/version.h"
+      |          ^~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.
