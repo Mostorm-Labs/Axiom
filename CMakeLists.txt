@@ -16,14 +16,9 @@ endif()
 include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
-find_package(GTest CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
-find_package(spdlog CONFIG REQUIRED)
-
 add_library(canvas_core STATIC src/core/version.cpp)
 add_library(canvas::core ALIAS canvas_core)
 target_include_directories(canvas_core PUBLIC include)
-target_link_libraries(canvas_core PUBLIC nlohmann_json::nlohmann_json)
 canvas_enable_warnings(canvas_core)
 
 if(BUILD_TESTING)

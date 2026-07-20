@@ -1,3 +1,4 @@
+find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
 add_executable(canvas_version_test unit/version_test.cpp)

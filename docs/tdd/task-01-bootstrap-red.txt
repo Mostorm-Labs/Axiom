@@ -1,9 +1,10 @@
 Task 01 TDD RED evidence
 
-This command was run from the repository root before creating
-include/canvas/core/version.h and src/core/version.cpp.
+This direct compiler/header RED check was run from the repository root before
+creating include/canvas/core/version.h and src/core/version.cpp. It was not a
+CMake target failure.
 
-Target: canvas_version_test
+Associated CMake target: canvas_version_test
 
 Command:
 c++ -std=c++17 -Iinclude -fsyntax-only tests/unit/version_test.cpp
