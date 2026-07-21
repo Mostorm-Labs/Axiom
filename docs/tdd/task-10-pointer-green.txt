@@ -1,0 +1,19 @@
+Task 10 Windows pointer adapter GREEN (Windows CI pending, 2026-07-21)
+
+The adapter test target contains six focused tests:
+
+* coordinate, pressure, tilt, phase, and QPC timestamp normalization;
+* newest-first history converted to oldest-first output;
+* low/high pressure clamping;
+* zero QPC frequency handling;
+* supplied Touch kind with predicted=false; and
+* empty history handling.
+
+All six tests were not executed locally because this macOS host cannot create
+the Windows VS2022 preset and does not provide the Windows SDK. The result is
+not represented as a test pass. Bounded static verification completed with:
+
+    git diff HEAD^ --check
+
+The Windows VS2022/vcpkg CI build must configure, compile, and run
+`canvas_win_pointer_adapter_test`; that CI result is authoritative for GREEN.
