@@ -23,3 +23,17 @@ predicted path:
     2 tests failed out of 2
 
 Status: RED confirmed (ctest exit code 8).
+
+For the final predicted-tail invalidation area, the new finish regression was
+compiled against the same old implementation:
+
+    cmake --build out/build/task-04-fix-green-x86-nortti-rpath \
+      --target canvas_stroke_builder_test --parallel
+
+The target failed as expected because the new accessor was not yet present:
+
+    error: no member named 'finishDirtyBounds' in 'canvas::stroke::StrokeBuilder'
+    2 errors generated.
+    make: *** [canvas_stroke_builder_test] Error 2
+
+Status: RED confirmed (target build exit code 2).

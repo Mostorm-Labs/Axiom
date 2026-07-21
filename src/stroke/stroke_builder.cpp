@@ -22,9 +22,14 @@ core::Rect StrokeBuilder::predictedBounds() const {
   return bounds.inflated(width_);
 }
 
+core::Rect StrokeBuilder::finishDirtyBounds() const noexcept {
+  return finishDirtyBounds_;
+}
+
 void StrokeBuilder::begin(const input::PointerSample& sample) {
   committed_.clear();
   predicted_.clear();
+  finishDirtyBounds_ = {};
   committed_.push_back(toPoint(sample));
 }
 
@@ -58,6 +63,8 @@ StrokeUpdate StrokeBuilder::append(const input::PointerSample& sample) {
 }
 
 document::StrokeNode StrokeBuilder::finish() {
+  finishDirtyBounds_ =
+      predicted_.empty() ? core::Rect{} : predictedBounds();
   predicted_.clear();
   document::StrokeNode result;
   result.points = committed_;

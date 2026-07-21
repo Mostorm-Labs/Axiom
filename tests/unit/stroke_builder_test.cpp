@@ -129,6 +129,21 @@ TEST(StrokeBuilderTest, FilteredRealSampleStillInvalidatesPredictedTail) {
   EXPECT_EQ(result.points.front().position, (core::Vec2{0, 0}));
 }
 
+TEST(StrokeBuilderTest, FinishReportsPredictedDirtyBounds) {
+  stroke::StrokeBuilder builder(1.0F);
+  builder.begin(makeSample({0, 0}, 1000));
+  ASSERT_TRUE(
+      builder.append(makeSample({100, 0}, 2000, 0.5F, true)).accepted);
+
+  const auto result = builder.finish();
+
+  ASSERT_EQ(result.points.size(), 1U);
+  EXPECT_TRUE(builder.finishDirtyBounds() == (core::Rect{-1, -1, 102, 2}));
+
+  builder.begin(makeSample({10, 10}, 3000));
+  EXPECT_TRUE(builder.finishDirtyBounds() == (core::Rect{}));
+}
+
 TEST(StrokeBuilderTest, FinishExcludesPredictedPoints) {
   stroke::StrokeBuilder builder(2.0F);
   builder.begin(makeSample({1, 2}, 1000));
