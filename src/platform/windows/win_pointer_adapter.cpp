@@ -88,8 +88,10 @@ input::PointerSample WinPointerAdapter::normalize(
   sample.pointerId = raw.pointerId;
   sample.timestampMicros = qpcToMicros(raw.performanceCount, qpcFrequency);
   sample.screenPosition =
-      core::Vec2{static_cast<float>(raw.screenX - clientOriginScreen.x),
-                 static_cast<float>(raw.screenY - clientOriginScreen.y)};
+      core::Vec2{static_cast<float>(raw.screenX) -
+                     static_cast<float>(clientOriginScreen.x),
+                 static_cast<float>(raw.screenY) -
+                     static_cast<float>(clientOriginScreen.y)};
   sample.pressure = static_cast<float>(clampedPressure) / 1024.0F;
   sample.tiltXDegrees = static_cast<float>(raw.tiltX);
   sample.tiltYDegrees = static_cast<float>(raw.tiltY);

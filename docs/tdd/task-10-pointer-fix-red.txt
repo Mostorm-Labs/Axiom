@@ -1,0 +1,14 @@
+Task 10 pointer adapter hardening RED (macOS, 2026-07-21)
+
+Static review found that the original coordinate normalization evaluated
+`raw.screenX - origin.x` as a Win32 `long` subtraction. Opposite-sign extreme
+coordinates can overflow that signed type before conversion to float. The
+WM_POINTER path also needed capture cleanup to remain unconditional when
+pointer-type or history lookup exits early.
+
+This is a Windows-only path. The macOS host cannot create the Windows VS2022
+preset (the `Visual Studio 17 2022` generator is unavailable), has no Windows
+SDK headers, and has no MinGW cross-compiler. Therefore the regression could
+not be compiled or run locally; the RED finding is recorded from bounded
+static review rather than a fabricated Windows test result. Windows
+VS2022/vcpkg CI is authoritative.

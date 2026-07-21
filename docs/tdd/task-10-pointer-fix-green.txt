@@ -1,0 +1,18 @@
+Task 10 pointer adapter hardening GREEN (Windows CI pending, 2026-07-21)
+
+Coordinate normalization now casts each Win32 coordinate to float before
+subtraction, avoiding signed `long` overflow. A seventh adapter test covers
+`long` min/max screen coordinates and asserts finite normalized positions.
+`WM_POINTERUP` and `WM_POINTERCAPTURECHANGED` release capture before any
+possible early return from pointer lookup or history handling; DOWN still
+captures after a recognized pen/touch pointer is processed. Touch history keeps
+the required pressure value of 512 (normalized to 0.5).
+
+The seven Windows adapter tests were not executed on this macOS host because
+the VS2022 generator and Windows SDK are unavailable. No test pass is claimed.
+Static verification completed with:
+
+    git diff --check
+
+Windows VS2022/vcpkg CI must compile and run `canvas_win_pointer_adapter_test`
+for the authoritative GREEN result.

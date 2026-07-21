@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <limits>
 #include <vector>
 
 namespace canvas::windows {
@@ -79,6 +81,19 @@ TEST(WinPointerAdapterTest, EmptyHistoryProducesNoSamples) {
       input::PointerKind::Touch);
 
   EXPECT_TRUE(samples.empty());
+}
+
+TEST(WinPointerAdapterTest, ExtremeScreenCoordinatesRemainFinite) {
+  const RawPenPoint raw{1, 0, std::numeric_limits<long>::max(),
+                        std::numeric_limits<long>::min()};
+  const POINT origin{std::numeric_limits<long>::min(),
+                     std::numeric_limits<long>::max()};
+
+  const auto sample = WinPointerAdapter::normalize(
+      raw, origin, 1, input::PointerPhase::Move);
+
+  EXPECT_TRUE(std::isfinite(sample.screenPosition.x));
+  EXPECT_TRUE(std::isfinite(sample.screenPosition.y));
 }
 
 }  // namespace
