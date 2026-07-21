@@ -99,6 +99,36 @@ TEST(StrokeBuilderTest, RealSamplesClearThePredictedTail) {
   EXPECT_EQ(update.dirtyBounds, (core::Rect{7, -1, 6, 2}));
 }
 
+TEST(StrokeBuilderTest, RealSampleInvalidatesDistantPredictedTail) {
+  stroke::StrokeBuilder builder(1.0F);
+  builder.begin(makeSample({0, 0}, 1000));
+  ASSERT_TRUE(
+      builder.append(makeSample({100, 0}, 2000, 0.5F, true)).accepted);
+
+  const auto update = builder.append(makeSample({1, 0}, 3000));
+  const auto result = builder.finish();
+
+  EXPECT_TRUE(update.accepted);
+  EXPECT_TRUE(update.dirtyBounds == (core::Rect{-1, -1, 102, 2}));
+  ASSERT_EQ(result.points.size(), 2U);
+  EXPECT_EQ(result.points.back().position, (core::Vec2{1, 0}));
+}
+
+TEST(StrokeBuilderTest, FilteredRealSampleStillInvalidatesPredictedTail) {
+  stroke::StrokeBuilder builder(1.0F);
+  builder.begin(makeSample({0, 0}, 1000));
+  ASSERT_TRUE(
+      builder.append(makeSample({100, 0}, 2000, 0.5F, true)).accepted);
+
+  const auto update = builder.append(makeSample({0.2F, 0}, 3000));
+  const auto result = builder.finish();
+
+  EXPECT_FALSE(update.accepted);
+  EXPECT_TRUE(update.dirtyBounds == (core::Rect{-1, -1, 102, 2}));
+  ASSERT_EQ(result.points.size(), 1U);
+  EXPECT_EQ(result.points.front().position, (core::Vec2{0, 0}));
+}
+
 TEST(StrokeBuilderTest, FinishExcludesPredictedPoints) {
   stroke::StrokeBuilder builder(2.0F);
   builder.begin(makeSample({1, 2}, 1000));

@@ -12,6 +12,16 @@ document::StrokePoint StrokeBuilder::toPoint(
   return {sample.screenPosition, sample.pressure, sample.timestampMicros};
 }
 
+core::Rect StrokeBuilder::predictedBounds() const {
+  core::Rect bounds = core::Rect::fromPoints(
+      committed_.back().position, predicted_.front().position);
+  for (std::size_t index = 1; index < predicted_.size(); ++index) {
+    bounds = bounds.united(core::Rect::fromPoints(
+        predicted_[index - 1].position, predicted_[index].position));
+  }
+  return bounds.inflated(width_);
+}
+
 void StrokeBuilder::begin(const input::PointerSample& sample) {
   committed_.clear();
   predicted_.clear();
@@ -19,6 +29,10 @@ void StrokeBuilder::begin(const input::PointerSample& sample) {
 }
 
 StrokeUpdate StrokeBuilder::append(const input::PointerSample& sample) {
+  const bool replacingPredictedTail = !sample.predicted && !predicted_.empty();
+  const core::Rect replacedPredictedBounds =
+      replacingPredictedTail ? predictedBounds() : core::Rect{};
+
   if (!sample.predicted) {
     predicted_.clear();
   }
@@ -31,11 +45,16 @@ StrokeUpdate StrokeBuilder::append(const input::PointerSample& sample) {
   const float dx = current.x - previous.x;
   const float dy = current.y - previous.y;
   if (dx * dx + dy * dy < 0.25F) {
-    return {{}, false};
+    return {replacedPredictedBounds, false};
   }
 
   target.push_back(toPoint(sample));
-  return {core::Rect::fromPoints(previous, current).inflated(width_), true};
+  core::Rect dirtyBounds =
+      core::Rect::fromPoints(previous, current).inflated(width_);
+  if (replacingPredictedTail) {
+    dirtyBounds = replacedPredictedBounds.united(dirtyBounds);
+  }
+  return {dirtyBounds, true};
 }
 
 document::StrokeNode StrokeBuilder::finish() {

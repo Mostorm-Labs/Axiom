@@ -9,20 +9,26 @@ macOS host, so native Windows execution remains a Windows-environment check.
 Using the established local workaround (x86_64 GTest, no RTTI, and the GTest
 library RPATH), a fresh full configure, build, and regression run used:
 
-    cmake -S . -B out/build/task-04-green-x86-nortti-rpath \
+    cmake -S . -B out/build/task-04-fix-green-x86-nortti-rpath \
       -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_CXX_FLAGS=-fno-rtti \
       -DGTest_DIR=/Users/qing/opt/anaconda3/lib/cmake/GTest \
       -DCMAKE_BUILD_RPATH=/Users/qing/opt/anaconda3/lib
-    cmake --build out/build/task-04-green-x86-nortti-rpath --parallel
-    ctest --test-dir out/build/task-04-green-x86-nortti-rpath \
+    cmake --build out/build/task-04-fix-green-x86-nortti-rpath --parallel
+    ctest --test-dir out/build/task-04-fix-green-x86-nortti-rpath \
       --output-on-failure
 
-Result: configure, build, and ctest each exited 0. All 27/27 tests passed with
-0 failures: all nine new StrokeBuilder tests and all 18 existing regression
-tests.
+Result: configure, build, and ctest each exited 0. All 29/29 tests passed with
+0 failures: all 11 StrokeBuilder tests (including both predicted-tail
+invalidation regressions) and all 18 existing regression tests.
+
+The replacement path now invalidates the complete old predicted bounds before
+clearing them. This preserves the invariant that every accepted predicted
+append's painted area is covered by a later real-sample update, and a filtered
+real sample still invalidates the old predicted area before `finish()` drops
+the tail.
 
 The established `out/build/native-x86-nortti-rpath` directory was also
 reconfigured with the same architecture, no-RTTI, GTest, and RPATH settings,
 then fully rebuilt and tested. That compatibility run also exited 0 with
-27/27 tests passed and 0 failures.
+29/29 tests passed and 0 failures.

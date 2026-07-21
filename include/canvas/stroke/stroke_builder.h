@@ -22,6 +22,7 @@ class StrokeBuilder {
 
  private:
   document::StrokePoint toPoint(const input::PointerSample& sample) const;
+  core::Rect predictedBounds() const;
 
   float width_;
   std::vector<document::StrokePoint> committed_;
