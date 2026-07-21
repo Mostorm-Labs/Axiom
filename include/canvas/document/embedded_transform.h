@@ -17,6 +17,20 @@ inline void validateParentBounds(const core::Rect& parent) {
     throw std::domain_error("Embedded parent has invalid bounds");
   }
 }
+
+inline float checkedFinite(float value, const char* message) {
+  if (!std::isfinite(value)) {
+    throw std::domain_error(message);
+  }
+  return value;
+}
+
+inline core::Vec2 checkedFinite(core::Vec2 value, const char* message) {
+  if (!std::isfinite(value.x) || !std::isfinite(value.y)) {
+    throw std::domain_error(message);
+  }
+  return value;
+}
 }  // namespace detail
 
 inline core::Vec2 toParentNormalized(core::Vec2 world,
@@ -25,8 +39,10 @@ inline core::Vec2 toParentNormalized(core::Vec2 world,
   if (!std::isfinite(world.x) || !std::isfinite(world.y)) {
     throw std::domain_error("Embedded point has invalid coordinates");
   }
-  return {(world.x - parent.x) / parent.width,
-          (world.y - parent.y) / parent.height};
+  return detail::checkedFinite(
+      core::Vec2{(world.x - parent.x) / parent.width,
+                 (world.y - parent.y) / parent.height},
+      "Embedded normalized point is not finite");
 }
 
 inline core::Vec2 fromParentNormalized(core::Vec2 local,
@@ -35,8 +51,10 @@ inline core::Vec2 fromParentNormalized(core::Vec2 local,
   if (!std::isfinite(local.x) || !std::isfinite(local.y)) {
     throw std::domain_error("Embedded point has invalid coordinates");
   }
-  return {parent.x + local.x * parent.width,
-          parent.y + local.y * parent.height};
+  return detail::checkedFinite(
+      core::Vec2{parent.x + local.x * parent.width,
+                 parent.y + local.y * parent.height},
+      "Embedded world point is not finite");
 }
 
 inline float toParentRelativeWidth(float worldWidth,
@@ -45,7 +63,9 @@ inline float toParentRelativeWidth(float worldWidth,
   if (!std::isfinite(worldWidth)) {
     throw std::domain_error("Embedded stroke has invalid width");
   }
-  return worldWidth / std::min(parent.width, parent.height);
+  return detail::checkedFinite(
+      worldWidth / std::min(parent.width, parent.height),
+      "Embedded relative width is not finite");
 }
 
 inline float fromParentRelativeWidth(float relativeWidth,
@@ -54,7 +74,9 @@ inline float fromParentRelativeWidth(float relativeWidth,
   if (!std::isfinite(relativeWidth)) {
     throw std::domain_error("Embedded stroke has invalid width");
   }
-  return relativeWidth * std::min(parent.width, parent.height);
+  return detail::checkedFinite(
+      relativeWidth * std::min(parent.width, parent.height),
+      "Embedded world width is not finite");
 }
 
 inline StrokeNode attachStrokeToParent(StrokeNode stroke,

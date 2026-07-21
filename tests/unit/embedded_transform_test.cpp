@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cfloat>
+#include <limits>
+
 using namespace canvas;
 
 TEST(EmbeddedTransformTest, NormalizesAndRestoresAttachedPoints) {
@@ -42,5 +45,29 @@ TEST(EmbeddedTransformTest, RejectsInvalidParentBounds) {
   EXPECT_THROW(document::toParentNormalized({1, 1}, {0, 0, 0, 1}),
                std::domain_error);
   EXPECT_THROW(document::toParentNormalized({1, 1}, {0, 0, 1, -1}),
+               std::domain_error);
+}
+
+TEST(EmbeddedTransformTest, RejectsOverflowDuringNormalization) {
+  EXPECT_THROW(document::toParentNormalized({FLT_MAX, 0},
+                                            {-FLT_MAX, 0, 1, 1}),
+               std::domain_error);
+}
+
+TEST(EmbeddedTransformTest, RejectsOverflowDuringWorldResolution) {
+  EXPECT_THROW(document::fromParentNormalized({FLT_MAX, 0},
+                                              {FLT_MAX, 0, FLT_MAX, 1}),
+               std::domain_error);
+}
+
+TEST(EmbeddedTransformTest, RejectsOverflowDuringRelativeWidthNormalization) {
+  const float tiny = std::numeric_limits<float>::denorm_min();
+  EXPECT_THROW(document::toParentRelativeWidth(FLT_MAX, {0, 0, tiny, 1}),
+               std::domain_error);
+}
+
+TEST(EmbeddedTransformTest, RejectsOverflowDuringWorldWidthResolution) {
+  EXPECT_THROW(document::fromParentRelativeWidth(FLT_MAX,
+                                                 {0, 0, FLT_MAX, FLT_MAX}),
                std::domain_error);
 }

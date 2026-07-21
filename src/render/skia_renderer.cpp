@@ -11,6 +11,7 @@
 #include "include/core/SkSurface.h"
 
 #include <cstddef>
+#include <stdexcept>
 #include <utility>
 
 namespace canvas::render {
@@ -62,7 +63,8 @@ void SkiaRenderer::drawLayer(
     }
 
     const auto& stroke = std::get<document::StrokeNode>(node.payload);
-    document::StrokeNode drawable = stroke;
+    const document::StrokeNode* drawable = &stroke;
+    document::StrokeNode resolved;
     if (stroke.coordinateSpace ==
         document::StrokeCoordinateSpace::ParentNormalized) {
       if (!node.parentId) {
@@ -72,19 +74,24 @@ void SkiaRenderer::drawLayer(
       if (parent == nullptr) {
         continue;
       }
-      drawable = document::resolveAttachedStroke(stroke, parent->bounds);
+      try {
+        resolved = document::resolveAttachedStroke(stroke, parent->bounds);
+      } catch (const std::domain_error&) {
+        continue;
+      }
+      drawable = &resolved;
     }
 
-    if (drawable.points.empty()) {
+    if (drawable->points.empty()) {
       continue;
     }
 
     SkPath path;
-    path.moveTo(drawable.points.front().position.x,
-                drawable.points.front().position.y);
-    for (std::size_t index = 1; index < drawable.points.size(); ++index) {
-      path.lineTo(drawable.points[index].position.x,
-                  drawable.points[index].position.y);
+    path.moveTo(drawable->points.front().position.x,
+                drawable->points.front().position.y);
+    for (std::size_t index = 1; index < drawable->points.size(); ++index) {
+      path.lineTo(drawable->points[index].position.x,
+                  drawable->points[index].position.y);
     }
 
     SkPaint paint;
@@ -92,8 +99,8 @@ void SkiaRenderer::drawLayer(
     paint.setStyle(SkPaint::kStroke_Style);
     paint.setStrokeCap(SkPaint::kRound_Cap);
     paint.setStrokeJoin(SkPaint::kRound_Join);
-    paint.setStrokeWidth(drawable.width);
-    paint.setColor(static_cast<SkColor>(drawable.colorArgb));
+    paint.setStrokeWidth(drawable->width);
+    paint.setColor(static_cast<SkColor>(drawable->colorArgb));
     canvas.drawPath(path, paint);
   }
 
