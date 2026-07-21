@@ -1,0 +1,23 @@
+Task 6 Skia renderer RED
+
+Required Windows preset command (macOS host):
+
+    cmake --preset windows-x64
+
+Result: exit code 1. The preset requests the Visual Studio 17 2022 generator,
+which is not installed on this macOS host:
+
+    CMake Error: Could not create named generator Visual Studio 17 2022
+
+Equivalent native configure command (to check the newly required Skia package):
+
+    cmake -S . -B out/skia-red -G Ninja -DBUILD_TESTING=ON
+
+Result: exit code 1 before compilation because this host has no vcpkg/Skia
+package configuration (VCPKG_ROOT is unset):
+
+    Could not find a package configuration file provided by "unofficial-skia"
+
+Therefore a Skia API-missing compile RED cannot run on this host; the test and
+target are present and the Windows VS2022/vcpkg CI build is the authoritative
+dependency restore and RED/GREEN environment.

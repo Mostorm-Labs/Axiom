@@ -25,3 +25,8 @@ add_executable(canvas_input_router_test unit/input_router_test.cpp)
 target_link_libraries(canvas_input_router_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_input_router_test)
 gtest_discover_tests(canvas_input_router_test)
+
+add_executable(canvas_skia_renderer_test unit/skia_renderer_test.cpp)
+target_link_libraries(canvas_skia_renderer_test PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_skia_renderer_test)
+gtest_discover_tests(canvas_skia_renderer_test)

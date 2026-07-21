@@ -1,0 +1,10 @@
+Task 6 Skia renderer GREEN
+
+Implementation adds Renderer/RasterFrame and a SkiaRenderer raster reference
+pass with layer filtering, optional dirty clipping, anti-aliased round-capped
+strokes, and transparent N32 premultiplied readback.
+
+The macOS host has neither VCPKG_ROOT nor an installed Skia package, so the
+native CMake configure is blocked at find_package(unofficial-skia). No Skia
+test execution is claimed here. Windows VS2022 with the locked vcpkg manifest
+(`skia` features `direct3d,png`) must run the authoritative build and tests.

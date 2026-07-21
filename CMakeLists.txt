@@ -6,6 +6,8 @@ endif()
 
 project(canvas VERSION 0.1.0 LANGUAGES CXX)
 
+find_package(unofficial-skia CONFIG REQUIRED)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -17,9 +19,11 @@ include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
 add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp
-            src/stroke/stroke_builder.cpp src/input/input_router.cpp)
+            src/stroke/stroke_builder.cpp src/input/input_router.cpp
+            src/render/skia_renderer.cpp)
 add_library(canvas::core ALIAS canvas_core)
 target_include_directories(canvas_core PUBLIC include)
+target_link_libraries(canvas_core PUBLIC unofficial::skia::skia)
 canvas_enable_warnings(canvas_core)
 
 if(BUILD_TESTING)
