@@ -7,6 +7,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <array>
+
 using namespace canvas;
 
 TEST(SkiaRendererTest, SeparatesBaseAndAnnotationPixels) {
@@ -78,4 +81,58 @@ TEST(SkiaRendererTest, DirtyClipConfinesRasterOutput) {
       0, 0));
   EXPECT_NE((pixels[8 * 16 + 4] >> 24U) & 0xFFU, 0U);
   EXPECT_EQ((pixels[8 * 16 + 12] >> 24U) & 0xFFU, 0U);
+}
+
+TEST(SkiaRendererTest, ResolvesParentNormalizedStrokeAfterParentMoveAndResize) {
+  document::Document doc;
+  document::Node parent{"embed", document::LayerClass::Embedded,
+                        {10, 10, 40, 20}, {}, document::EmbeddedNode{}};
+  ASSERT_TRUE(doc.add(parent));
+
+  document::StrokeNode attached;
+  attached.points = {{{0.25F, 0.5F}, 1.0F, 1},
+                     {{0.75F, 0.5F}, 1.0F, 2}};
+  attached.width = 0.02F;
+  attached.coordinateSpace = document::StrokeCoordinateSpace::ParentNormalized;
+  attached.colorArgb = 0xFFFF0000;
+  ASSERT_TRUE(doc.add({"annotation", document::LayerClass::Annotation,
+                       {0, 0, 0, 0}, "embed", attached}));
+
+  render::SkiaRenderer renderer;
+  const auto before =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 128, 128);
+  ASSERT_TRUE(doc.setBounds("embed", {20, 20, 80, 40}));
+  const auto after =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 128, 128);
+
+  auto alphaBounds = [](const render::RasterFrame& frame) {
+    int minX = frame.width;
+    int minY = frame.height;
+    int maxX = -1;
+    int maxY = -1;
+    for (int y = 0; y < frame.height; ++y) {
+      for (int x = 0; x < frame.width; ++x) {
+        if (((frame.pixel(x, y) >> 24U) & 0xFFU) == 0U) {
+          continue;
+        }
+        minX = std::min(minX, x);
+        minY = std::min(minY, y);
+        maxX = std::max(maxX, x);
+        maxY = std::max(maxY, y);
+      }
+    }
+    return std::array<int, 4>{minX, minY, maxX, maxY};
+  };
+
+  const auto beforeBounds = alphaBounds(before);
+  const auto afterBounds = alphaBounds(after);
+  EXPECT_LT(beforeBounds[0], 25);
+  EXPECT_LT(beforeBounds[1], 20);
+  EXPECT_GT(beforeBounds[2], 35);
+  EXPECT_GT(afterBounds[0], beforeBounds[0] + 10);
+  EXPECT_GT(afterBounds[1], beforeBounds[1] + 10);
+  EXPECT_GT(afterBounds[2] - afterBounds[0],
+            beforeBounds[2] - beforeBounds[0]);
+  EXPECT_GT(afterBounds[3] - afterBounds[1],
+            beforeBounds[3] - beforeBounds[1]);
 }

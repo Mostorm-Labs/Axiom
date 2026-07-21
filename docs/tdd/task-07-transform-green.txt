@@ -1,0 +1,21 @@
+Task 7 GREEN (macOS, 2026-07-21)
+
+Transform-only verification passed with four tests. Since CMake cannot find
+unofficial-skia on this host, the test was compiled directly for x86_64 with
+the available static GoogleTest libraries:
+
+  c++ -arch x86_64 -std=c++17 -stdlib=libc++ -Iinclude \
+    -I/Users/qing/opt/anaconda3/include -c \
+    tests/unit/embedded_transform_test.cpp -o /tmp/embedded_transform_test_x86.o
+  c++ -arch x86_64 -stdlib=libc++ /tmp/embedded_transform_test_x86.o \
+    -L/Users/qing/opt/anaconda3/lib -Wl,-rpath,/Users/qing/opt/anaconda3/lib \
+    -lgtest_main -lgtest -lpthread -o /tmp/embedded_transform_test_x86
+  /tmp/embedded_transform_test_x86
+
+Result: 4 tests passed (NormalizesAndRestoresAttachedPoints,
+ScalesAttachedStrokeWidthWithParent, AttachAndResolveStrokePreservesRelativeGeometry,
+RejectsInvalidParentBounds).
+
+The Skia renderer regression was added but not executed locally because CMake
+configuration stops at find_package(unofficial-skia). Windows VS2022/vcpkg CI
+must run the full renderer suite.
