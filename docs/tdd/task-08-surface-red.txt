@@ -13,3 +13,13 @@ failed as expected with exit code 1:
 
 This verifies the test target was RED because the requested production API was
 missing, rather than because of the repository's unavailable Skia dependency.
+
+Follow-up review regression (after the initial 7-test implementation) added
+`ActiveRichTextIsNeverLive`. Running that focused test against the old manager
+also reproduced the bug with exit code 1:
+
+  Expected factory.createCalls == 0, which was 1
+  Expected manager.liveCount() == 0, which was 1
+
+The failure identified the overly broad old condition that treated any active
+embedded kind as live.

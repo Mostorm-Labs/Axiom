@@ -192,6 +192,20 @@ TEST(EmbeddedSurfaceManagerTest, SkipsWrongLayerAndWrongPayload) {
   EXPECT_EQ(manager.liveCount(), 0U);
 }
 
+TEST(EmbeddedSurfaceManagerTest, ActiveRichTextIsNeverLive) {
+  Document document;
+  ASSERT_TRUE(document.add(
+      embeddedNode("rich", EmbeddedKind::RichText, {0, 0, 100, 100})));
+  FakeSurfaceFactory factory;
+  EmbeddedSurfaceManager manager(factory);
+
+  manager.sync(document, {0, 0, 100, 100},
+               canvas::document::NodeId{"rich"});
+
+  EXPECT_EQ(factory.createCalls, 0);
+  EXPECT_EQ(manager.liveCount(), 0U);
+}
+
 TEST(EmbeddedSurfaceManagerTest, NullFactoryResultIsSkippedAndCanBeRetried) {
   Document document;
   ASSERT_TRUE(document.add(

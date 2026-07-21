@@ -23,7 +23,10 @@ void EmbeddedSurfaceManager::sync(
     }
 
     const bool isActive = activeNode && *activeNode == node.id;
-    if (embedded->kind != document::EmbeddedKind::Video && !isActive) {
+    const bool shouldLive =
+        embedded->kind == document::EmbeddedKind::Video ||
+        (embedded->kind == document::EmbeddedKind::Web && isActive);
+    if (!shouldLive) {
       continue;
     }
 
