@@ -1,7 +1,7 @@
 Task 7 transform hardening RED (macOS, 2026-07-21)
 
-Added four overflow-result expectations (two point transforms and two relative
-width transforms). Running the direct x86_64 transform suite against the
-pre-fix implementation produced 6 tests total: 4 passed and 2 failed test
-cases (all four new EXPECT_THROW assertions failed because non-finite results
-were returned without throwing).
+Added four overflow-result tests (two point transforms and two relative width
+transforms). Running the direct x86_64 transform suite against the pre-fix
+implementation produced 8 tests total: the original 4 passed, while all 4 new
+overflow tests failed because their EXPECT_THROW assertions returned
+non-finite results without throwing.
