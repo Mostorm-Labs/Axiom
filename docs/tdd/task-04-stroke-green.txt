@@ -1,0 +1,28 @@
+Task 4 incremental stroke builder TDD evidence (GREEN)
+
+Environment: macOS AppleClang 17, CMake 3.21+, C++17.
+
+The default arm64 build cannot link the installed GTest dylibs because they
+are x86_64-only. The Windows VS2022/vcpkg preset is not runnable on this
+macOS host, so native Windows execution remains a Windows-environment check.
+
+Using the established local workaround (x86_64 GTest, no RTTI, and the GTest
+library RPATH), a fresh full configure, build, and regression run used:
+
+    cmake -S . -B out/build/task-04-green-x86-nortti-rpath \
+      -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_CXX_FLAGS=-fno-rtti \
+      -DGTest_DIR=/Users/qing/opt/anaconda3/lib/cmake/GTest \
+      -DCMAKE_BUILD_RPATH=/Users/qing/opt/anaconda3/lib
+    cmake --build out/build/task-04-green-x86-nortti-rpath --parallel
+    ctest --test-dir out/build/task-04-green-x86-nortti-rpath \
+      --output-on-failure
+
+Result: configure, build, and ctest each exited 0. All 27/27 tests passed with
+0 failures: all nine new StrokeBuilder tests and all 18 existing regression
+tests.
+
+The established `out/build/native-x86-nortti-rpath` directory was also
+reconfigured with the same architecture, no-RTTI, GTest, and RPATH settings,
+then fully rebuilt and tested. That compatibility run also exited 0 with
+27/27 tests passed and 0 failures.
