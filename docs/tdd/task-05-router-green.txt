@@ -1,0 +1,11 @@
+Task 5 input router GREEN
+
+Fresh x86_64 workaround build with RTTI disabled and GTest runtime RPATH:
+
+    cmake -S . -B out/build/task-05-green-x86-nortti-rpath -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_CXX_FLAGS='-fno-rtti' -DCMAKE_BUILD_RPATH=/Users/qing/opt/anaconda3/lib -DCMAKE_INSTALL_RPATH=/Users/qing/opt/anaconda3/lib
+    cmake --build out/build/task-05-green-x86-nortti-rpath
+    ctest --test-dir out/build/task-05-green-x86-nortti-rpath --output-on-failure
+
+Result: 37/37 tests passed (30 existing tests plus 7 input-router tests),
+exit code 0. The Windows VS2022/vcpkg configuration is not runnable in this
+macOS environment and was not executed.

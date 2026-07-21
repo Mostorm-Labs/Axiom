@@ -20,3 +20,8 @@ add_executable(canvas_stroke_builder_test unit/stroke_builder_test.cpp)
 target_link_libraries(canvas_stroke_builder_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_stroke_builder_test)
 gtest_discover_tests(canvas_stroke_builder_test)
+
+add_executable(canvas_input_router_test unit/input_router_test.cpp)
+target_link_libraries(canvas_input_router_test PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_input_router_test)
+gtest_discover_tests(canvas_input_router_test)
