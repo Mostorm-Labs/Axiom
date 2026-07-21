@@ -44,6 +44,15 @@ canvas_enable_warnings(canvas_skia_renderer_test)
 gtest_discover_tests(canvas_skia_renderer_test)
 
 if(WIN32)
+    add_executable(canvas_win_pointer_adapter_test
+                   unit/win_pointer_adapter_test.cpp)
+    target_include_directories(canvas_win_pointer_adapter_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_win_pointer_adapter_test
+                          PRIVATE canvas::windows_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_win_pointer_adapter_test)
+    gtest_discover_tests(canvas_win_pointer_adapter_test)
+
     add_executable(canvas_windows_composition_test
                    integration/windows_composition_test.cpp)
     target_link_libraries(canvas_windows_composition_test

@@ -1,6 +1,10 @@
 #include "whiteboard_app.h"
 
+#include "platform/windows/win_pointer_adapter.h"
+
 #include <windows.h>
+
+#include <vector>
 
 namespace canvas::windows {
 
@@ -10,6 +14,20 @@ constexpr wchar_t kWindowClassName[] = L"MostormCanvasWindow";
 
 int hresultExitCode(HRESULT hr) {
   return FAILED(hr) ? static_cast<int>(hr) : 1;
+}
+
+input::PointerPhase pointerPhaseForMessage(UINT message) {
+  switch (message) {
+    case WM_POINTERDOWN:
+      return input::PointerPhase::Down;
+    case WM_POINTERUP:
+      return input::PointerPhase::Up;
+    case WM_POINTERCAPTURECHANGED:
+      return input::PointerPhase::Cancel;
+    case WM_POINTERUPDATE:
+    default:
+      return input::PointerPhase::Move;
+  }
 }
 
 }  // namespace
@@ -76,7 +94,48 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     return 0;
   }
 
+  if (message == WM_POINTERDOWN || message == WM_POINTERUPDATE ||
+      message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+    if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+      ReleaseCapture();
+    }
+    auto* app = reinterpret_cast<WhiteboardApp*>(GetWindowLongPtrW(
+        window, GWLP_USERDATA));
+    if (app == nullptr) {
+      return DefWindowProcW(window, message, wParam, lParam);
+    }
+
+    const UINT32 pointerId = GET_POINTERID_WPARAM(wParam);
+    POINTER_INPUT_TYPE pointerType{};
+    if (!GetPointerType(pointerId, &pointerType)) {
+      return DefWindowProcW(window, message, wParam, lParam);
+    }
+
+    const input::PointerPhase phase = pointerPhaseForMessage(message);
+    std::vector<input::PointerSample> samples;
+    if (pointerType == PT_PEN) {
+      samples = WinPointerAdapter::readPenHistory(window, pointerId, phase);
+    } else if (pointerType == PT_TOUCH) {
+      samples = WinPointerAdapter::readTouchHistory(window, pointerId, phase);
+    } else {
+      return DefWindowProcW(window, message, wParam, lParam);
+    }
+
+    for (const auto& sample : samples) {
+      app->onPointerSample(sample);
+    }
+
+    if (message == WM_POINTERDOWN) {
+      SetCapture(window);
+    }
+    return 0;
+  }
+
   return DefWindowProcW(window, message, wParam, lParam);
+}
+
+void WhiteboardApp::onPointerSample(const input::PointerSample&) {
+  // Intentionally empty until Task 11 wires samples into the stroke loop.
 }
 
 }  // namespace canvas::windows
