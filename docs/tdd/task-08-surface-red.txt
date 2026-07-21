@@ -1,0 +1,15 @@
+Task 8 embedded surface manager RED (macOS, 2026-07-21)
+
+The fake surface/factory tests and their CMake target were added before the
+production interface or implementation. The direct x86_64 compile command:
+
+  arch -x86_64 clang++ -std=c++17 -Iinclude \
+    -c tests/unit/embedded_surface_manager_test.cpp \
+    -o /tmp/canvas_embedded_surface_manager_test.o
+
+failed as expected with exit code 1:
+
+  fatal error: 'canvas/embed/embedded_surface.h' file not found
+
+This verifies the test target was RED because the requested production API was
+missing, rather than because of the repository's unavailable Skia dependency.

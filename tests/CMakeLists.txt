@@ -31,6 +31,13 @@ target_link_libraries(canvas_embedded_transform_test PRIVATE canvas::core GTest:
 canvas_enable_warnings(canvas_embedded_transform_test)
 gtest_discover_tests(canvas_embedded_transform_test)
 
+add_executable(canvas_embedded_surface_manager_test
+               unit/embedded_surface_manager_test.cpp)
+target_link_libraries(canvas_embedded_surface_manager_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_surface_manager_test)
+gtest_discover_tests(canvas_embedded_surface_manager_test)
+
 add_executable(canvas_skia_renderer_test unit/skia_renderer_test.cpp)
 target_link_libraries(canvas_skia_renderer_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_skia_renderer_test)

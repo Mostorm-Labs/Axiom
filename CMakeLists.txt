@@ -20,7 +20,7 @@ include(cmake/CompilerWarnings.cmake)
 
 add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp
             src/stroke/stroke_builder.cpp src/input/input_router.cpp
-            src/render/skia_renderer.cpp)
+            src/render/skia_renderer.cpp src/embed/embedded_surface_manager.cpp)
 add_library(canvas::core ALIAS canvas_core)
 target_include_directories(canvas_core PUBLIC include)
 target_link_libraries(canvas_core PUBLIC unofficial::skia::skia)

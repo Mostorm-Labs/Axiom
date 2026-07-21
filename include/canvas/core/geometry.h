@@ -50,6 +50,11 @@ struct Rect {
            point.y <= y + height;
   }
 
+  constexpr bool intersects(const Rect& other) const noexcept {
+    return x < other.x + other.width && x + width > other.x &&
+           y < other.y + other.height && y + height > other.y;
+  }
+
   friend constexpr bool operator==(const Rect& lhs, const Rect& rhs) noexcept {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width &&
            lhs.height == rhs.height;

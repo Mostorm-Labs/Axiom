@@ -1,0 +1,26 @@
+Task 8 embedded surface manager GREEN (macOS, 2026-07-21)
+
+The manager-only suite was compiled and run directly against the available
+x86_64 GoogleTest static libraries. Those libraries were built without RTTI,
+so the direct build uses the matching `-fno-rtti` flag:
+
+  arch -x86_64 clang++ -std=c++17 -fno-rtti \
+    -Wall -Wextra -Wpedantic -Werror \
+    -Iinclude -I/Users/qing/opt/anaconda3/include \
+    tests/unit/embedded_surface_manager_test.cpp \
+    src/embed/embedded_surface_manager.cpp src/document/document.cpp \
+    /Users/qing/opt/anaconda3/lib/libgtest_main.a \
+    /Users/qing/opt/anaconda3/lib/libgtest.a -pthread \
+    -o /tmp/canvas_embedded_surface_manager_test
+  arch -x86_64 /tmp/canvas_embedded_surface_manager_test \
+    --gtest_color=no
+
+Result: 7/7 tests passed in one suite with 0 failures. The cases cover active
+web and visible video lifetime, reuse and property updates, inactive/offscreen
+removal, strict edge-touch exclusion, layer/payload filtering, null factory
+retry, and exception-safe creation.
+
+The root CMake suite is not claimed: this macOS host has no VCPKG_ROOT or
+unofficial-skia package, so root configuration stops at
+`find_package(unofficial-skia CONFIG REQUIRED)`. Windows vcpkg CI remains the
+authoritative full-project build and test environment.
