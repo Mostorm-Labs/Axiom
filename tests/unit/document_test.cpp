@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 using namespace canvas;
 
 TEST(DocumentTest, ReportsSchemaVersion) {
@@ -123,4 +125,40 @@ TEST(DocumentTest, SupportsUnknownPayloadPlaceholder) {
     const auto& payload = std::get<document::UnknownNode>(found->payload);
     EXPECT_EQ(payload.typeName, "future-type");
     EXPECT_EQ(payload.rawJson, "{\"x\":1}");
+}
+
+TEST(DocumentTest, EraseCopiesAliasedIdBeforeCompactingNodes) {
+    document::Document doc;
+    document::Node root{"root", document::LayerClass::Embedded,
+                        {0, 0, 10, 10}, {}, document::EmbeddedNode{}};
+    document::Node sibling{"sibling", document::LayerClass::Base,
+                           {10, 0, 10, 10}, {}, document::StrokeNode{}};
+    document::Node child{"child", document::LayerClass::Annotation,
+                         {0, 0, 1, 1}, "root", document::StrokeNode{}};
+    ASSERT_TRUE(doc.add(root));
+    ASSERT_TRUE(doc.add(sibling));
+    ASSERT_TRUE(doc.add(child));
+
+    const std::string_view key = doc.find("root")->id;
+    ASSERT_TRUE(doc.erase(key));
+    EXPECT_EQ(doc.find("root"), nullptr);
+    EXPECT_EQ(doc.find("child"), nullptr);
+    EXPECT_NE(doc.find("sibling"), nullptr);
+}
+
+TEST(DocumentTest, RejectsNaNBoundsAndPreservesPreviousBounds) {
+    document::Document doc;
+    document::Node node;
+    node.id = "node";
+    node.bounds = {1, 2, 3, 4};
+    ASSERT_TRUE(doc.add(node));
+    const auto nan = std::numeric_limits<float>::quiet_NaN();
+
+    ASSERT_FALSE(doc.setBounds("node", {10, 20, nan, 40}));
+    ASSERT_NE(doc.find("node"), nullptr);
+    EXPECT_EQ(doc.find("node")->bounds, (core::Rect{1, 2, 3, 4}));
+
+    ASSERT_FALSE(doc.setBounds("node", {10, 20, 30, nan}));
+    ASSERT_NE(doc.find("node"), nullptr);
+    EXPECT_EQ(doc.find("node")->bounds, (core::Rect{1, 2, 3, 4}));
 }

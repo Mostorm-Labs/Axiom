@@ -32,7 +32,8 @@ bool Document::add(Node node) {
 
 bool Document::setBounds(std::string_view id, core::Rect bounds) {
   Node* node = find(id);
-  if (node == nullptr || bounds.width <= 0 || bounds.height <= 0) {
+  if (node == nullptr || !(bounds.width > 0.0F) ||
+      !(bounds.height > 0.0F)) {
     return false;
   }
   node->bounds = bounds;
@@ -40,12 +41,13 @@ bool Document::setBounds(std::string_view id, core::Rect bounds) {
 }
 
 bool Document::erase(std::string_view id) {
+  const NodeId key{id};
   const auto originalSize = nodes_.size();
   nodes_.erase(std::remove_if(nodes_.begin(), nodes_.end(),
-                              [id](const Node& node) {
-                                return std::string_view(node.id) == id ||
+                              [key](const Node& node) {
+                                return node.id == key ||
                                        (node.parentId &&
-                                        std::string_view(*node.parentId) == id);
+                                        *node.parentId == key);
                               }),
                nodes_.end());
   return nodes_.size() != originalSize;
