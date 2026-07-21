@@ -1,0 +1,15 @@
+Task 9 DirectComposition fix RED (macOS, 2026-07-21)
+
+Static review identified two contract regressions in the first Task 9
+implementation:
+
+* `DCompHost::setContent` rejected a null `IUnknown*` before reaching
+  `IDCompositionVisual::SetContent`. DirectComposition uses a null content
+  pointer to detach/clear a layer, so this violated the required API contract.
+* `wWinMain` called `CoUninitialize` while its `WhiteboardApp` (and its
+  `ComPtr` members) was still alive. That could release COM interfaces after
+  the apartment had been torn down.
+
+The Windows preset cannot run on this macOS host (Visual Studio 17 2022
+generator and Windows SDK are unavailable), so these failures were captured
+as bounded static RED findings rather than a fabricated Windows test run.

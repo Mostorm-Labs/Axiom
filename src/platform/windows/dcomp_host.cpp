@@ -80,7 +80,7 @@ IDCompositionVisual* DCompHost::visual(VisualSlot slot) const {
 }
 
 HRESULT DCompHost::setContent(VisualSlot slot, IUnknown* content) {
-  if (!isValidSlot(slot) || content == nullptr) {
+  if (!isValidSlot(slot)) {
     return E_INVALIDARG;
   }
   auto* layer = visual(slot);

@@ -9,8 +9,11 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int commandShow) {
     return static_cast<int>(initResult);
   }
 
-  canvas::windows::WhiteboardApp app;
-  const int result = app.run(instance, commandShow);
+  int result = 0;
+  {
+    canvas::windows::WhiteboardApp app;
+    result = app.run(instance, commandShow);
+  }
   CoUninitialize();
   return result;
 }
