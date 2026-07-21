@@ -23,6 +23,7 @@ struct SurfaceState {
   Rect bounds;
   bool interactive = false;
   bool visible = false;
+  bool throwOnBounds = false;
   int boundsUpdates = 0;
   int interactiveUpdates = 0;
   int visibleUpdates = 0;
@@ -36,6 +37,9 @@ class FakeSurface final : public EmbeddedSurface {
   ~FakeSurface() override { state_->destroyed = true; }
 
   void setBounds(Rect bounds) override {
+    if (state_->throwOnBounds) {
+      throw std::runtime_error("bounds update failed");
+    }
     state_->bounds = bounds;
     ++state_->boundsUpdates;
   }
@@ -66,6 +70,7 @@ class FakeSurfaceFactory final : public EmbeddedSurfaceFactory {
       return nullptr;
     }
     auto state = std::make_shared<SurfaceState>();
+    state->throwOnBounds = throwOnBoundsForCreated;
     states.push_back(state);
     return std::make_unique<FakeSurface>(std::move(state));
   }
@@ -73,6 +78,7 @@ class FakeSurfaceFactory final : public EmbeddedSurfaceFactory {
   int createCalls = 0;
   bool returnNull = false;
   bool throwOnCreate = false;
+  bool throwOnBoundsForCreated = false;
   std::vector<canvas::document::NodeId> createdNodeIds;
   std::vector<std::shared_ptr<SurfaceState>> states;
 };
@@ -204,6 +210,35 @@ TEST(EmbeddedSurfaceManagerTest, ActiveRichTextIsNeverLive) {
 
   EXPECT_EQ(factory.createCalls, 0);
   EXPECT_EQ(manager.liveCount(), 0U);
+}
+
+TEST(EmbeddedSurfaceManagerTest,
+     SetterExceptionDoesNotLeaveNewOrStaleSurfaces) {
+  Document document;
+  ASSERT_TRUE(document.add(
+      embeddedNode("stale", EmbeddedKind::Video, {0, 0, 100, 100})));
+  ASSERT_TRUE(document.add(
+      embeddedNode("existing", EmbeddedKind::Video, {150, 0, 100, 100})));
+  FakeSurfaceFactory factory;
+  EmbeddedSurfaceManager manager(factory);
+
+  manager.sync(document, {0, 0, 400, 200}, std::nullopt);
+  ASSERT_EQ(manager.liveCount(), 2U);
+  ASSERT_EQ(factory.states.size(), 2U);
+
+  ASSERT_TRUE(document.setBounds("stale", {500, 0, 100, 100}));
+  ASSERT_TRUE(document.add(
+      embeddedNode("new", EmbeddedKind::Video, {250, 0, 100, 100})));
+  factory.throwOnBoundsForCreated = true;
+
+  EXPECT_THROW(manager.sync(document, {0, 0, 400, 200}, std::nullopt),
+               std::runtime_error);
+
+  EXPECT_EQ(manager.liveCount(), 1U);
+  EXPECT_TRUE(factory.states[0]->destroyed);
+  EXPECT_FALSE(factory.states[1]->destroyed);
+  ASSERT_EQ(factory.states.size(), 3U);
+  EXPECT_TRUE(factory.states[2]->destroyed);
 }
 
 TEST(EmbeddedSurfaceManagerTest, NullFactoryResultIsSkippedAndCanBeRetried) {

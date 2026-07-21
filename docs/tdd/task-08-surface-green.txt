@@ -15,10 +15,11 @@ so the direct build uses the matching `-fno-rtti` flag:
   arch -x86_64 /tmp/canvas_embedded_surface_manager_test \
     --gtest_color=no
 
-Result: 8/8 tests passed in one suite with 0 failures. The cases cover active
+Result: 9/9 tests passed in one suite with 0 failures. The cases cover active
 web and visible video lifetime, reuse and property updates, inactive/offscreen
 removal, strict edge-touch exclusion, layer/payload filtering, active RichText
-rejection, null factory retry, and exception-safe creation.
+rejection, stale cleanup and failed-new setter exception safety, null factory
+retry, and factory exception safety.
 
 The root CMake suite is not claimed: this macOS host has no VCPKG_ROOT or
 unofficial-skia package, so root configuration stops at
