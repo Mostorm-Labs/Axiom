@@ -33,6 +33,9 @@ class SkiaRenderer final : public Renderer {
 
  private:
   struct CachedStroke {
+    std::uint64_t documentId = 0;
+    std::uint64_t nodeRevision = 0;
+    std::uint64_t nonAppendRevision = 0;
     const document::StrokeNode* source = nullptr;
     std::size_t pointCount = 0;
     core::Vec2 firstPoint{};
@@ -48,6 +51,8 @@ class SkiaRenderer final : public Renderer {
   std::unordered_map<document::NodeId, CachedStroke> pathCache_;
   std::size_t fullPathBuildCount_ = 0;
   std::size_t incrementalAppendCount_ = 0;
+  std::uint64_t cachedDocumentId_ = 0;
+  std::uint64_t cachedDocumentGeneration_ = 0;
 };
 
 }  // namespace canvas::render

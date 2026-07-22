@@ -93,14 +93,70 @@ TEST(SkiaRendererTest, AppendsActiveStrokePathWithoutFullRebuild) {
   (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 32, 32);
   ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
 
-  auto* node = doc.find("active");
-  ASSERT_NE(node, nullptr);
-  std::get<document::StrokeNode>(node->payload)
-      .points.push_back({{16, 8}, 1.0F, 3});
+  ASSERT_TRUE(doc.appendStrokePoint("active", {{16, 8}, 1.0F, 3},
+                                    {14, 6, 4, 4}));
   (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 32, 32);
 
   EXPECT_EQ(renderer.fullPathBuildCount(), 1u);
   EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+}
+
+TEST(SkiaRendererTest, RebuildsWhenMiddlePointChangesAtSameCount) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.points = {{{2, 2}, 1.0F, 1},
+                   {{8, 4}, 1.0F, 2},
+                   {{16, 16}, 1.0F, 3}};
+  ASSERT_TRUE(doc.add({"stroke", document::LayerClass::Base,
+                       {0, 0, 20, 20}, {}, stroke}));
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 32, 32);
+  ASSERT_TRUE(doc.mutate("stroke", [](document::Node& node) {
+    std::get<document::StrokeNode>(node.payload).points[1].position.y = 12;
+  }));
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 32, 32);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
+}
+
+TEST(SkiaRendererTest, GenericMutationAppendingPointForcesRebuild) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.points = {{{2, 2}, 1.0F, 1}, {{8, 8}, 1.0F, 2}};
+  ASSERT_TRUE(doc.add({"stroke", document::LayerClass::Base,
+                       {0, 0, 12, 12}, {}, stroke}));
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 32, 32);
+  ASSERT_TRUE(doc.mutate("stroke", [](document::Node& node) {
+    std::get<document::StrokeNode>(node.payload).points.push_back(
+        {{16, 16}, 1.0F, 3});
+  }));
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 32, 32);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
+}
+
+TEST(SkiaRendererTest, DirtyCullSkipsChangedStrokeOutsideBounds) {
+  document::Document doc;
+  document::StrokeNode nearStroke;
+  nearStroke.points = {{{2, 2}, 1.0F, 1}, {{8, 8}, 1.0F, 2}};
+  document::StrokeNode farStroke;
+  farStroke.points = {{{50, 50}, 1.0F, 1},
+                      {{56, 54}, 1.0F, 2},
+                      {{62, 62}, 1.0F, 3}};
+  ASSERT_TRUE(doc.add({"near", document::LayerClass::Base,
+                       {0, 0, 12, 12}, {}, nearStroke}));
+  ASSERT_TRUE(doc.add({"far", document::LayerClass::Base,
+                       {48, 48, 16, 16}, {}, farStroke}));
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 80, 80);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 2u);
+  ASSERT_TRUE(doc.mutate("far", [](document::Node& node) {
+    std::get<document::StrokeNode>(node.payload).points[1].position.y = 58;
+  }));
+  auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(80, 80));
+  ASSERT_TRUE(static_cast<bool>(surface));
+  renderer.drawLayer(*surface->getCanvas(), doc, document::LayerClass::Base,
+                     core::Rect{0, 0, 16, 16});
+  EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
 }
 
 TEST(SkiaRendererTest, DoesNotReuseSameNodeIdAcrossDocuments) {

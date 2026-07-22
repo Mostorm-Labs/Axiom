@@ -228,6 +228,10 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     if (FAILED(sampleResult)) {
       app->lastError_ = sampleResult;
       PostMessageW(window, WM_CLOSE, 0, 0);
+      if (message == WM_POINTERUP ||
+          message == WM_POINTERCAPTURECHANGED) {
+        ReleaseCapture();
+      }
       return 0;
     }
 
@@ -324,6 +328,9 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
     document::Node previewNode;
     previewNode.id = activeStrokeId_;
     previewNode.layer = activeDocumentLayer();
+    previewNode.bounds =
+        core::Rect{sample.screenPosition.x, sample.screenPosition.y, 0, 0}
+            .inflated(2.0F);
     previewNode.payload = std::move(preview);
     if (!document_.add(std::move(previewNode))) return E_FAIL;
     return S_OK;
@@ -333,12 +340,12 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   if (sample.phase == input::PointerPhase::Move) {
     const stroke::StrokeUpdate update = activeStroke_->append(sample);
     if (update.accepted) {
-      if (auto* previewNode = document_.find(activeStrokeId_)) {
-        if (auto* preview =
-                std::get_if<document::StrokeNode>(&previewNode->payload)) {
-          preview->points.push_back(document::StrokePoint{
-              sample.screenPosition, sample.pressure, sample.timestampMicros});
-        }
+      if (!document_.appendStrokePoint(
+              activeStrokeId_,
+              document::StrokePoint{sample.screenPosition, sample.pressure,
+                                    sample.timestampMicros},
+              update.dirtyBounds)) {
+        return E_FAIL;
       }
     }
     if (update.dirtyBounds.width > 0.0F && update.dirtyBounds.height > 0.0F) {
@@ -374,28 +381,33 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   document::StrokeNode finished = activeStroke_->finish();
   const core::Rect finalDirty = activeStroke_->finishDirtyBounds();
   HRESULT completionResult = S_OK;
-  auto* node = document_.find(activeStrokeId_);
-  if (node == nullptr) {
-    completionResult = E_FAIL;
-  } else {
-    node->payload = finished;
-  }
-  if (node != nullptr && activeRoute_.parentId) {
+  std::optional<document::NodeId> storedParent;
+  if (activeRoute_.parentId) {
     const document::Node* parent = document_.find(*activeRoute_.parentId);
     if (parent == nullptr) {
       completionResult = E_FAIL;
     } else {
       try {
-        node->payload = document::attachStrokeToParent(finished,
-                                                       parent->bounds);
-        node->parentId = activeRoute_.parentId;
+        finished = document::attachStrokeToParent(finished, parent->bounds);
+        storedParent = activeRoute_.parentId;
       } catch (const std::domain_error&) {
-        node->payload = std::move(finished);
-        node->parentId.reset();
         completionResult = E_FAIL;
       }
     }
   }
+  const bool stored = document_.mutate(
+      activeStrokeId_, [&](document::Node& node) {
+        node.payload = std::move(finished);
+        node.parentId = storedParent;
+        if (finalUpdate.dirtyBounds.width > 0.0F &&
+            finalUpdate.dirtyBounds.height > 0.0F) {
+          node.bounds = node.bounds.united(finalUpdate.dirtyBounds);
+        }
+        if (finalDirty.width > 0.0F && finalDirty.height > 0.0F) {
+          node.bounds = node.bounds.united(finalDirty);
+        }
+      });
+  if (!stored) completionResult = E_FAIL;
   const document::LayerClass layer = activeDocumentLayer();
   SkiaSwapChainLayer& swapChainLayer = activeSwapChainLayer();
   swapChainLayer.invalidateNode(activeStrokeId_);

@@ -49,6 +49,12 @@ void SkiaRenderer::drawLayer(
     SkCanvas& canvas, const document::Document& document,
     document::LayerClass layer,
     const std::optional<core::Rect>& dirtyBounds) {
+  if (cachedDocumentId_ != document.instanceId() ||
+      cachedDocumentGeneration_ != document.generation()) {
+    pathCache_.clear();
+    cachedDocumentId_ = document.instanceId();
+    cachedDocumentGeneration_ = document.generation();
+  }
   canvas.save();
   if (dirtyBounds.has_value()) {
     const auto& bounds = *dirtyBounds;
@@ -61,12 +67,19 @@ void SkiaRenderer::drawLayer(
         !std::holds_alternative<document::StrokeNode>(node.payload)) {
       continue;
     }
-    if (dirtyBounds && node.bounds.width > 0.0F && node.bounds.height > 0.0F &&
-        !node.bounds.intersects(*dirtyBounds)) {
+    const auto& stroke = std::get<document::StrokeNode>(node.payload);
+    const document::Node* attachedParent =
+        node.parentId ? document.find(*node.parentId) : nullptr;
+    const core::Rect cullBounds =
+        stroke.coordinateSpace ==
+                    document::StrokeCoordinateSpace::ParentNormalized &&
+                attachedParent != nullptr
+            ? attachedParent->bounds
+            : node.bounds;
+    if (dirtyBounds && cullBounds.width > 0.0F &&
+        cullBounds.height > 0.0F && !cullBounds.intersects(*dirtyBounds)) {
       continue;
     }
-
-    const auto& stroke = std::get<document::StrokeNode>(node.payload);
     const document::StrokeNode* drawable = &stroke;
     document::StrokeNode resolved;
     if (stroke.coordinateSpace ==
@@ -74,12 +87,12 @@ void SkiaRenderer::drawLayer(
       if (!node.parentId) {
         continue;
       }
-      const document::Node* parent = document.find(*node.parentId);
-      if (parent == nullptr) {
+      if (attachedParent == nullptr) {
         continue;
       }
       try {
-        resolved = document::resolveAttachedStroke(stroke, parent->bounds);
+        resolved =
+            document::resolveAttachedStroke(stroke, attachedParent->bounds);
       } catch (const std::domain_error&) {
         continue;
       }
@@ -90,13 +103,15 @@ void SkiaRenderer::drawLayer(
       continue;
     }
 
-    const document::Node* parentNode =
-        node.parentId ? document.find(*node.parentId) : nullptr;
-    const auto parentBounds = parentNode ? parentNode->bounds : core::Rect{};
+    const auto parentBounds =
+        attachedParent ? attachedParent->bounds : core::Rect{};
     const auto lastPoint = drawable->points.back().position;
     const auto firstPoint = drawable->points.front().position;
     auto& cached = pathCache_[node.id];
-    const bool metadataValid = cached.source == &stroke &&
+    const bool identityValid = cached.documentId == document.instanceId() &&
+        cached.source == &stroke;
+    const bool metadataValid = identityValid &&
+        cached.nonAppendRevision == node.nonAppendRevision &&
         cached.width == drawable->width &&
         cached.colorArgb == drawable->colorArgb &&
         cached.coordinateSpace == drawable->coordinateSpace &&
@@ -109,9 +124,12 @@ void SkiaRenderer::drawLayer(
       }
       cached.pointCount = drawable->points.size();
       cached.source = &stroke;
+      cached.nodeRevision = node.revision;
+      cached.nonAppendRevision = node.nonAppendRevision;
       cached.lastPoint = lastPoint;
       ++incrementalAppendCount_;
-    } else if (!(metadataValid && cached.pointCount == drawable->points.size() &&
+    } else if (!(metadataValid && cached.nodeRevision == node.revision &&
+                 cached.pointCount == drawable->points.size() &&
                  cached.lastPoint == lastPoint)) {
       cached.path.reset();
       cached.path.moveTo(drawable->points.front().position.x,
@@ -121,6 +139,9 @@ void SkiaRenderer::drawLayer(
                            drawable->points[index].position.y);
       }
       cached.source = &stroke;
+      cached.documentId = document.instanceId();
+      cached.nodeRevision = node.revision;
+      cached.nonAppendRevision = node.nonAppendRevision;
       cached.pointCount = drawable->points.size();
       cached.firstPoint = firstPoint;
       cached.lastPoint = lastPoint;
