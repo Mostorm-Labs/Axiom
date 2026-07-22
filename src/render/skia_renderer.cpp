@@ -49,6 +49,7 @@ void SkiaRenderer::drawLayer(
     SkCanvas& canvas, const document::Document& document,
     document::LayerClass layer,
     const std::optional<core::Rect>& dirtyBounds) {
+  lastDrawnChunkCount_ = 0;
   canvas.save();
   if (dirtyBounds.has_value()) {
     const auto& bounds = *dirtyBounds;
@@ -102,6 +103,26 @@ void SkiaRenderer::drawLayer(
     const auto lastPoint = stroke.points.back().position;
     const auto firstPoint = stroke.points.front().position;
     auto& cached = pathCache_[node.id];
+    const auto pointBounds = [drawWidth](core::Vec2 point) {
+      return core::Rect{point.x, point.y, 0, 0}.inflated(drawWidth * 0.5F);
+    };
+    const auto startChunk = [&](core::Vec2 point) {
+      cached.chunks.emplace_back();
+      auto& chunk = cached.chunks.back();
+      chunk.path.moveTo(point.x, point.y);
+      chunk.bounds = pointBounds(point);
+    };
+    const auto appendPoint = [&](core::Vec2 previous, core::Vec2 point) {
+      if (cached.chunks.empty() ||
+          cached.chunks.back().segmentCount >= kMaximumSegmentsPerChunk) {
+        startChunk(previous);
+      }
+      auto& chunk = cached.chunks.back();
+      chunk.path.lineTo(point.x, point.y);
+      chunk.bounds = chunk.bounds.united(pointBounds(point));
+      ++chunk.segmentCount;
+      cached.geometryBounds = cached.geometryBounds.united(pointBounds(point));
+    };
     const bool identityValid = cached.documentId == document.instanceId() &&
         cached.nodeIdentity == node.cacheIdentity;
     const bool metadataValid = identityValid &&
@@ -110,45 +131,47 @@ void SkiaRenderer::drawLayer(
         cached.colorArgb == stroke.colorArgb &&
         cached.coordinateSpace == stroke.coordinateSpace &&
         cached.parentBounds == parentBounds && cached.firstPoint == firstPoint;
-    if (metadataValid && stroke.points.size() > cached.pointCount) {
-      for (std::size_t index = cached.pointCount;
-           index < stroke.points.size(); ++index) {
-        const auto point = mapPoint(stroke.points[index].position);
-        cached.path.lineTo(point.x, point.y);
-        cached.geometryBounds = cached.geometryBounds.united(
-            core::Rect{point.x, point.y, 0, 0}.inflated(drawWidth * 0.5F));
+    try {
+      if (metadataValid && stroke.points.size() > cached.pointCount) {
+        for (std::size_t index = cached.pointCount;
+             index < stroke.points.size(); ++index) {
+          const auto previous = mapPoint(stroke.points[index - 1].position);
+          const auto point = mapPoint(stroke.points[index].position);
+          appendPoint(previous, point);
+        }
+        cached.pointCount = stroke.points.size();
+        cached.nodeRevision = node.revision;
+        cached.lastPoint = lastPoint;
+        ++incrementalAppendCount_;
+      } else if (!(metadataValid && cached.nodeRevision == node.revision &&
+                   cached.pointCount == stroke.points.size() &&
+                   cached.lastPoint == lastPoint)) {
+        cached.chunks.clear();
+        const auto first = mapPoint(stroke.points.front().position);
+        startChunk(first);
+        cached.geometryBounds = pointBounds(first);
+        for (std::size_t index = 1; index < stroke.points.size(); ++index) {
+          const auto previous = mapPoint(stroke.points[index - 1].position);
+          const auto point = mapPoint(stroke.points[index].position);
+          appendPoint(previous, point);
+        }
+        cached.documentId = document.instanceId();
+        cached.nodeIdentity = node.cacheIdentity;
+        cached.nodeRevision = node.revision;
+        cached.nonAppendRevision = node.nonAppendRevision;
+        cached.pointCount = stroke.points.size();
+        cached.firstPoint = firstPoint;
+        cached.lastPoint = lastPoint;
+        cached.width = stroke.width;
+        cached.drawWidth = drawWidth;
+        cached.colorArgb = stroke.colorArgb;
+        cached.coordinateSpace = stroke.coordinateSpace;
+        cached.parentBounds = parentBounds;
+        ++fullPathBuildCount_;
       }
-      cached.pointCount = stroke.points.size();
-      cached.nodeRevision = node.revision;
-      cached.lastPoint = lastPoint;
-      ++incrementalAppendCount_;
-    } else if (!(metadataValid && cached.nodeRevision == node.revision &&
-                 cached.pointCount == stroke.points.size() &&
-                 cached.lastPoint == lastPoint)) {
-      cached.path.reset();
-      const auto first = mapPoint(stroke.points.front().position);
-      cached.path.moveTo(first.x, first.y);
-      cached.geometryBounds =
-          core::Rect{first.x, first.y, 0, 0}.inflated(drawWidth * 0.5F);
-      for (std::size_t index = 1; index < stroke.points.size(); ++index) {
-        const auto point = mapPoint(stroke.points[index].position);
-        cached.path.lineTo(point.x, point.y);
-        cached.geometryBounds = cached.geometryBounds.united(
-            core::Rect{point.x, point.y, 0, 0}.inflated(drawWidth * 0.5F));
-      }
-      cached.documentId = document.instanceId();
-      cached.nodeIdentity = node.cacheIdentity;
-      cached.nodeRevision = node.revision;
-      cached.nonAppendRevision = node.nonAppendRevision;
-      cached.pointCount = stroke.points.size();
-      cached.firstPoint = firstPoint;
-      cached.lastPoint = lastPoint;
-      cached.width = stroke.width;
-      cached.drawWidth = drawWidth;
-      cached.colorArgb = stroke.colorArgb;
-      cached.coordinateSpace = stroke.coordinateSpace;
-      cached.parentBounds = parentBounds;
-      ++fullPathBuildCount_;
+    } catch (const std::domain_error&) {
+      pathCache_.erase(node.id);
+      continue;
     }
 
     if (dirtyBounds && cached.geometryBounds.width > 0.0F &&
@@ -164,7 +187,11 @@ void SkiaRenderer::drawLayer(
     paint.setStrokeJoin(SkPaint::kRound_Join);
     paint.setStrokeWidth(cached.drawWidth);
     paint.setColor(static_cast<SkColor>(stroke.colorArgb));
-    canvas.drawPath(cached.path, paint);
+    for (const auto& chunk : cached.chunks) {
+      if (dirtyBounds && !chunk.bounds.intersects(*dirtyBounds)) continue;
+      canvas.drawPath(chunk.path, paint);
+      ++lastDrawnChunkCount_;
+    }
   }
 
   canvas.restore();

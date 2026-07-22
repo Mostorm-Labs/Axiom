@@ -199,6 +199,35 @@ TEST(SkiaRendererTest, UnrelatedNodeAddPreservesExistingPathCache) {
   EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
 }
 
+TEST(SkiaRendererTest, LongStrokeDrawsOnlyDirtyTailChunks) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.width = 4.0F;
+  for (int x = 1; x <= 140; ++x) {
+    stroke.points.push_back(
+        {{static_cast<float>(x), 16.0F}, 1.0F,
+         static_cast<std::uint64_t>(x)});
+  }
+  ASSERT_TRUE(doc.add({"long", document::LayerClass::Annotation,
+                       {0, 12, 144, 8}, {}, stroke}));
+  render::SkiaRenderer renderer;
+  const auto full =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 160, 32);
+  ASSERT_GE(renderer.cachedChunkCount("long"), 3u);
+  EXPECT_NE((full.pixel(65, 16) >> 24U) & 0xFFU, 0U);
+
+  ASSERT_TRUE(doc.appendStrokePoint("long", {{145, 16}, 1.0F, 141},
+                                    {140, 12, 8, 8}));
+  auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(160, 32));
+  ASSERT_TRUE(static_cast<bool>(surface));
+  renderer.drawLayer(*surface->getCanvas(), doc,
+                     document::LayerClass::Annotation,
+                     core::Rect{140, 12, 8, 8});
+  EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+  EXPECT_LE(renderer.lastDrawnChunkCount(), 2u);
+  EXPECT_LT(renderer.lastDrawnChunkCount(), renderer.cachedChunkCount("long"));
+}
+
 TEST(SkiaRendererTest, DoesNotReuseSameNodeIdAcrossDocuments) {
   auto makeDocument = [](float middleY) {
     document::Document doc;
