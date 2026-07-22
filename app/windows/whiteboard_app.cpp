@@ -260,9 +260,10 @@ SkiaSwapChainLayer& WhiteboardApp::activeSwapChainLayer() {
 
 HRESULT WhiteboardApp::cancelActivePointer(std::uint64_t pointerId) {
   if (!activeStroke_) return S_OK;
+  if (!activePointerId_ || *activePointerId_ != pointerId) return S_FALSE;
   input::PointerSample cancel =
       lastPointerSample_.value_or(input::PointerSample{});
-  cancel.pointerId = activePointerId_.value_or(pointerId);
+  cancel.pointerId = pointerId;
   cancel.phase = input::PointerPhase::Cancel;
   return onPointerSample(cancel);
 }
@@ -407,7 +408,9 @@ bool WhiteboardApp::populateSelfTestDocument() {
     return false;
   }
   if (!addStroke("self-test-annotation", document::LayerClass::Annotation,
-                 0xFFFF0000U, {{180, 120}, {1100, 600}}, 12.0F)) {
+                 0xFFFF0000U, {{430, 230}, {850, 490}}, 12.0F) ||
+      !addStroke("self-test-annotation-cross", document::LayerClass::Annotation,
+                 0xFFFF0000U, {{850, 230}, {430, 490}}, 12.0F)) {
     return false;
   }
   constexpr core::Vec2 handles[]{{430, 230}, {850, 230}, {850, 490},

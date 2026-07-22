@@ -66,7 +66,7 @@ TEST(WindowsComposition, CreatesTransparentAnnotationSwapChain) {
     canvas::windows::DCompHost host;
     ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
     canvas::windows::SkiaD3D12Context gpu;
-    ASSERT_TRUE(SUCCEEDED(gpu.initialize()));
+    ASSERT_TRUE(SUCCEEDED(gpu.initialize(true)));
     canvas::windows::SkiaSwapChainLayer annotation;
     ASSERT_TRUE(SUCCEEDED(annotation.initialize(
         gpu, host, canvas::windows::VisualSlot::Annotation, 640, 480, true)));
@@ -85,7 +85,12 @@ TEST(WindowsComposition, CreatesTransparentAnnotationSwapChain) {
     EXPECT_FALSE(annotation.bufferNeedsFullRedraw(0));
     EXPECT_FALSE(annotation.bufferNeedsFullRedraw(1));
     EXPECT_TRUE(annotation.bufferHasPendingDirty(0));
-    EXPECT_EQ(annotation.frameId(), 2u);
+    ASSERT_TRUE(SUCCEEDED(annotation.render(
+        document, canvas::document::LayerClass::Annotation, std::nullopt)));
+    EXPECT_FALSE(annotation.bufferNeedsFullRedraw(0));
+    EXPECT_TRUE(annotation.bufferNeedsFullRedraw(1));
+    EXPECT_FALSE(annotation.bufferHasPendingDirty(0));
+    EXPECT_EQ(annotation.frameId(), 3u);
     if (annotation.mediaPresentCount() != 0) {
       EXPECT_LE(annotation.mediaFrameId(), annotation.frameId());
       EXPECT_GT(annotation.mediaFrameId(), 0u);

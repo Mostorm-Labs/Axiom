@@ -11,7 +11,7 @@ namespace canvas::windows {
 
 class SkiaD3D12Context {
  public:
-  HRESULT initialize();
+  HRESULT initialize(bool allowSoftwareFallback = false);
 
   IDXGIFactory4* factory() const noexcept { return factory_.Get(); }
   IDXGIAdapter1* adapter() const noexcept { return adapter_.Get(); }
@@ -19,6 +19,7 @@ class SkiaD3D12Context {
   ID3D12CommandQueue* queue() const noexcept { return queue_.Get(); }
   GrDirectContext* context() const noexcept { return context_.get(); }
   const sk_sp<GrDirectContext>& skiaContext() const noexcept { return context_; }
+  bool usingSoftwareAdapter() const noexcept { return usingSoftwareAdapter_; }
 
  private:
   Microsoft::WRL::ComPtr<IDXGIFactory4> factory_;
@@ -26,6 +27,7 @@ class SkiaD3D12Context {
   Microsoft::WRL::ComPtr<ID3D12Device> device_;
   Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue_;
   sk_sp<GrDirectContext> context_;
+  bool usingSoftwareAdapter_ = false;
 };
 
 }  // namespace canvas::windows

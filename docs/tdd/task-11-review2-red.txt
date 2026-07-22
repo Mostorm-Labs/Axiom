@@ -1,0 +1,13 @@
+Task 11 second-review RED evidence
+==================================
+
+Review found that an explicit null dirty bounds could be narrowed to a pending
+dirty rectangle, mismatched pointer cancellation could terminate another
+pointer's stroke, unconfirmed local QPC was emitted as presentation telemetry,
+WARP fallback was enabled in production, and the self-test handles did not
+overlap the annotation endpoints.
+
+The Windows integration regression now creates pending dirty state, requests a
+full render, and checks that the current pending state is cleared while the
+other swap-chain buffer becomes full-dirty. These Windows tests cannot be run
+on the current macOS host; Windows CI is authoritative.

@@ -9,8 +9,10 @@ clears the dirty region, draws the requested document layer, flushes Skia, and
 uses `Present1` dirty metadata when available.  A frame-presented callback is
 provided with a monotonic frame id and a QPC-derived microsecond timestamp;
 when the driver exposes `IDXGISwapChainMedia`, the timestamp is taken from
-`GetFrameStatisticsMedia`, otherwise it falls back to the local presentation
-QPC when the media interface/statistics call is unavailable. The submitted
+`GetFrameStatisticsMedia`. No callback is emitted when media statistics are
+unavailable or cannot be mapped; a local post-Present QPC is not presented as
+display timing. `presentationStatisticsAvailable()` and the last statistics
+HRESULT expose that state. The submitted
 DXGI present count is mapped to the layer frame id; delayed media statistics
 therefore report their actual `mediaFrameId()` instead of the newest frame,
 and stale present counts are not reused. Both swap-chain buffers independently
@@ -20,8 +22,9 @@ buffer so flip-sequential presentation cannot lose history.
 
 `canvas_windows --self-test-layers` creates and presents four deterministic
 composition visuals: an opaque green base, a filled gray embedded placeholder,
-a transparent red diagonal annotation, and four blue chrome handles. No PNG or
-hardware screenshot was generated on this macOS machine.
+two transparent red diagonal annotations, and four blue chrome handles at the
+red endpoints. No PNG or hardware screenshot was generated on this macOS
+machine.
 
 The implementation was not claimed as locally passing on this macOS host:
 Visual Studio 2022, Windows SDK, DirectComposition, D3D12, and the vcpkg Skia

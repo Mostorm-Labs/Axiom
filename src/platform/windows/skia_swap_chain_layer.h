@@ -38,6 +38,12 @@ class SkiaSwapChainLayer {
     return mediaPresentCount_;
   }
   std::uint64_t mediaFrameId() const noexcept { return mediaFrameId_; }
+  bool presentationStatisticsAvailable() const noexcept {
+    return presentationStatisticsAvailable_;
+  }
+  HRESULT lastPresentationStatisticsResult() const noexcept {
+    return lastPresentationStatisticsResult_;
+  }
   void setClearColorArgb(std::uint32_t colorArgb) noexcept {
     clearColorArgb_ = colorArgb;
   }
@@ -72,6 +78,8 @@ class SkiaSwapChainLayer {
   std::uint64_t mediaPresentCount_ = 0;
   std::uint64_t mediaFrameId_ = 0;
   std::uint64_t lastCallbackFrameId_ = 0;
+  bool presentationStatisticsAvailable_ = false;
+  HRESULT lastPresentationStatisticsResult_ = E_PENDING;
   bool bufferRendered_ = false;
   std::deque<std::pair<std::uint64_t, std::uint64_t>> submittedFrames_;
   FramePresentedHandler framePresentedHandler_;

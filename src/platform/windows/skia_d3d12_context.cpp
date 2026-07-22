@@ -10,12 +10,13 @@
 
 namespace canvas::windows {
 
-HRESULT SkiaD3D12Context::initialize() {
+HRESULT SkiaD3D12Context::initialize(bool allowSoftwareFallback) {
   context_.reset();
   queue_.Reset();
   device_.Reset();
   adapter_.Reset();
   factory_.Reset();
+  usingSoftwareAdapter_ = false;
 
   HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(factory_.ReleaseAndGetAddressOf()));
   if (FAILED(hr)) return hr;
@@ -49,7 +50,7 @@ HRESULT SkiaD3D12Context::initialize() {
                  converted > 0 ? adapterName : "<unknown>");
     break;
   }
-  if (!device_) {
+  if (!device_ && allowSoftwareFallback) {
     Microsoft::WRL::ComPtr<IDXGIAdapter1> warp;
     hr = factory_->EnumWarpAdapter(IID_PPV_ARGS(warp.ReleaseAndGetAddressOf()));
     if (SUCCEEDED(hr)) {
@@ -60,7 +61,9 @@ HRESULT SkiaD3D12Context::initialize() {
       if (SUCCEEDED(hr)) {
         adapter_ = warp;
         device_ = warpDevice;
-        spdlog::warn("canvas D3D12 adapter: WARP software fallback");
+        usingSoftwareAdapter_ = true;
+        spdlog::warn(
+            "canvas D3D12 adapter: explicitly enabled WARP software fallback");
       } else if (firstFailure == E_FAIL) {
         firstFailure = hr;
       }

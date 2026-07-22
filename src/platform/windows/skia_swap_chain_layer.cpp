@@ -36,6 +36,8 @@ HRESULT SkiaSwapChainLayer::initialize(SkiaD3D12Context& gpu, DCompHost& host,
   mediaPresentCount_ = 0;
   mediaFrameId_ = 0;
   lastCallbackFrameId_ = 0;
+  presentationStatisticsAvailable_ = false;
+  lastPresentationStatisticsResult_ = E_PENDING;
   const HRESULT hr = createSwapChain();
   if (FAILED(hr)) cleanup();
   return hr;
@@ -107,7 +109,8 @@ HRESULT SkiaSwapChainLayer::render(const document::Document& document,
   }
   renderedInvalidation_ = normalizedDirty;
   std::optional<core::Rect> effectiveDirty;
-  if (!needsFullRedraw_[renderedBufferIndex_]) {
+  if (!renderedFullInvalidation_ &&
+      !needsFullRedraw_[renderedBufferIndex_]) {
     effectiveDirty = normalizedDirty;
     if (pendingDirty_[renderedBufferIndex_]) {
       effectiveDirty = effectiveDirty
@@ -200,6 +203,9 @@ HRESULT SkiaSwapChainLayer::present(const std::optional<core::Rect>& dirtyBounds
     const HRESULT statsResult = SUCCEEDED(mediaResult)
                                     ? media->GetFrameStatisticsMedia(&stats)
                                     : mediaResult;
+    presentationStatisticsAvailable_ = false;
+    lastPresentationStatisticsResult_ =
+        SUCCEEDED(statsResult) ? S_FALSE : statsResult;
     if (SUCCEEDED(statsResult) &&
         stats.SyncQPCTime.QuadPart > 0 &&
         stats.PresentCount > mediaPresentCount_) {
@@ -215,20 +221,15 @@ HRESULT SkiaSwapChainLayer::present(const std::optional<core::Rect>& dirtyBounds
         micros = qpcTicksToMicros(
             static_cast<std::uint64_t>(stats.SyncQPCTime.QuadPart),
             static_cast<std::uint64_t>(frequency.QuadPart));
+        presentationStatisticsAvailable_ = true;
+        lastPresentationStatisticsResult_ = S_OK;
+      } else {
+        lastPresentationStatisticsResult_ = S_FALSE;
       }
     }
-    // Unsupported/disjoint media statistics fall back to the local QPC for
-    // the frame just submitted. Stale media statistics do not emit a second
-    // callback for a frame already observed.
-    if (FAILED(statsResult)) {
-      callbackFrameId = frameId_;
-      LARGE_INTEGER now{};
-      if (QueryPerformanceCounter(&now)) {
-        micros = qpcTicksToMicros(
-            static_cast<std::uint64_t>(now.QuadPart),
-            static_cast<std::uint64_t>(frequency.QuadPart));
-      }
-    }
+    // A presented callback is emitted only for a DXGI media statistic whose
+    // PresentCount maps to a submitted layer frame. Local post-Present QPC is
+    // intentionally not reported as display timing.
     if (framePresentedHandler_ && callbackFrameId > lastCallbackFrameId_) {
       lastCallbackFrameId_ = callbackFrameId;
       framePresentedHandler_(callbackFrameId, micros);
@@ -255,6 +256,8 @@ HRESULT SkiaSwapChainLayer::resize(int width, int height) {
     bufferRendered_ = false;
     mediaPresentCount_ = 0;
     mediaFrameId_ = 0;
+    presentationStatisticsAvailable_ = false;
+    lastPresentationStatisticsResult_ = E_PENDING;
     submittedFrames_.clear();
   }
   return hr;
@@ -273,6 +276,8 @@ void SkiaSwapChainLayer::cleanup() noexcept {
   renderedFullInvalidation_ = false;
   bufferRendered_ = false;
   submittedFrames_.clear();
+  presentationStatisticsAvailable_ = false;
+  lastPresentationStatisticsResult_ = E_PENDING;
 }
 
 }  // namespace canvas::windows
