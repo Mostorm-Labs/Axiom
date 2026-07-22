@@ -120,6 +120,7 @@ void SkiaRenderer::drawLayer(
         cached.path.lineTo(drawable->points[index].position.x,
                            drawable->points[index].position.y);
       }
+      cached.source = &stroke;
       cached.pointCount = drawable->points.size();
       cached.firstPoint = firstPoint;
       cached.lastPoint = lastPoint;
