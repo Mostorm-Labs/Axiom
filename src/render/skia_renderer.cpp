@@ -104,7 +104,9 @@ void SkiaRenderer::drawLayer(
     const auto firstPoint = stroke.points.front().position;
     auto& cached = pathCache_[node.id];
     const auto pointBounds = [drawWidth](core::Vec2 point) {
-      return core::Rect{point.x, point.y, 0, 0}.inflated(drawWidth * 0.5F);
+      constexpr float kAntialiasMargin = 1.0F;
+      return core::Rect{point.x, point.y, 0, 0}.inflated(
+          drawWidth * 0.5F + kAntialiasMargin);
     };
     const auto startChunk = [&](core::Vec2 point) {
       cached.chunks.emplace_back();
