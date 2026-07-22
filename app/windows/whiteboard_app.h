@@ -8,8 +8,10 @@
 #include "canvas/stroke/stroke_builder.h"
 #include "platform/windows/skia_d3d12_context.h"
 #include "platform/windows/skia_swap_chain_layer.h"
+#include "platform/windows/webview2_surface.h"
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -29,6 +31,10 @@ class WhiteboardApp {
   HRESULT onPointerSample(const input::PointerSample& sample);
   HRESULT onPointerSamples(std::vector<input::PointerSample> samples);
   HRESULT cancelActivePointer(std::uint64_t pointerId);
+  HRESULT forwardMouseToEmbedded(HWND window, UINT message, WPARAM wParam,
+                                 LPARAM lParam);
+  HRESULT forwardTouchToEmbedded(UINT message, UINT32 pointerId,
+                                 const input::PointerSample& sample);
   std::optional<document::NodeId> hitEmbedded(core::Vec2 point) const;
   document::LayerClass activeDocumentLayer() const;
   SkiaSwapChainLayer& activeSwapChainLayer();
@@ -40,9 +46,11 @@ class WhiteboardApp {
   SkiaSwapChainLayer embeddedLayer_;
   SkiaSwapChainLayer annotationLayer_;
   SkiaSwapChainLayer chromeLayer_;
+  std::unique_ptr<WebView2Surface> embeddedWebView_;
   input::InputRouter inputRouter_;
   std::optional<stroke::StrokeBuilder> activeStroke_;
   std::optional<std::uint64_t> activePointerId_;
+  std::optional<UINT32> activeEmbeddedPointerId_;
   std::optional<input::PointerSample> lastPointerSample_;
   input::RouteResult activeRoute_;
   document::NodeId activeStrokeId_;

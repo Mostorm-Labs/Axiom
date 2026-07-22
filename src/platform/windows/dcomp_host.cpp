@@ -91,6 +91,46 @@ HRESULT DCompHost::setContent(VisualSlot slot, IUnknown* content) {
   return FAILED(hr) ? hr : commit();
 }
 
+HRESULT DCompHost::createChildVisual(VisualSlot parent,
+                                     IDCompositionVisual** child) {
+  if (child == nullptr) {
+    return E_POINTER;
+  }
+  *child = nullptr;
+  if (!isValidSlot(parent)) {
+    return E_INVALIDARG;
+  }
+  if (!device_) {
+    return E_UNEXPECTED;
+  }
+
+  auto* parentVisual = visual(parent);
+  if (parentVisual == nullptr) {
+    return E_UNEXPECTED;
+  }
+
+  Microsoft::WRL::ComPtr<IDCompositionVisual> created;
+  HRESULT hr = device_->CreateVisual(created.GetAddressOf());
+  if (FAILED(hr)) {
+    return hr;
+  }
+  hr = parentVisual->AddVisual(created.Get(), TRUE, nullptr);
+  if (FAILED(hr)) {
+    return hr;
+  }
+  hr = device_->Commit();
+  if (FAILED(hr)) {
+    // Keep the caller's out parameter null and roll back our graph ownership.
+    // A best-effort commit of the rollback must not hide the original error.
+    parentVisual->RemoveVisual(created.Get());
+    device_->Commit();
+    return hr;
+  }
+
+  *child = created.Detach();
+  return S_OK;
+}
+
 HRESULT DCompHost::commit() {
   return device_ ? device_->Commit() : E_UNEXPECTED;
 }

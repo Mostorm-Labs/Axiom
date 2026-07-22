@@ -58,5 +58,18 @@ if(WIN32)
     target_link_libraries(canvas_windows_composition_test
                           PRIVATE canvas::windows_platform GTest::gtest_main)
     canvas_enable_warnings(canvas_windows_composition_test)
-    gtest_discover_tests(canvas_windows_composition_test)
+    gtest_discover_tests(canvas_windows_composition_test
+                         TEST_PREFIX "canvas_windows_composition_test.")
+
+    add_executable(canvas_webview2_surface_test
+                   integration/webview2_surface_test.cpp)
+    target_include_directories(canvas_webview2_surface_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_surface_test
+                          PRIVATE canvas::windows_platform
+                                  canvas::webview2_loader
+                                  GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_surface_test)
+    gtest_discover_tests(canvas_webview2_surface_test
+                         TEST_PREFIX "canvas_webview2_surface_test.")
 endif()

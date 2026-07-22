@@ -25,6 +25,7 @@ class DCompHost {
 
   HRESULT initialize(HWND window);
   HRESULT setContent(VisualSlot slot, IUnknown* content);
+  HRESULT createChildVisual(VisualSlot parent, IDCompositionVisual** child);
   HRESULT commit();
 
   IDCompositionDevice* device() const { return device_.Get(); }

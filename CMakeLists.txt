@@ -27,9 +27,11 @@ target_link_libraries(canvas_core PUBLIC unofficial::skia::skia)
 canvas_enable_warnings(canvas_core)
 
 if(WIN32)
+    include(cmake/WebView2.cmake)
     find_package(spdlog CONFIG REQUIRED)
     add_library(canvas_windows_platform STATIC
                 src/platform/windows/dcomp_host.cpp
+                src/platform/windows/webview2_surface.cpp
                 src/platform/windows/win_pointer_adapter.cpp
                 src/platform/windows/qpc_clock.cpp
                 src/platform/windows/skia_d3d12_context.cpp
@@ -42,7 +44,10 @@ if(WIN32)
                                                          user32 ole32
                                                          unofficial::skia::skia
                                                          canvas::core
-                                                         PRIVATE spdlog::spdlog)
+                                                         PRIVATE
+                                                         canvas::webview2_loader
+                                                         shlwapi version
+                                                         spdlog::spdlog)
     canvas_enable_warnings(canvas_windows_platform)
 
     add_subdirectory(app/windows)

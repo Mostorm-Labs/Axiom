@@ -4,6 +4,7 @@
 #include "platform/windows/win_pointer_adapter.h"
 
 #include <windows.h>
+#include <windowsx.h>
 
 #include <cstddef>
 #include <initializer_list>
@@ -83,6 +84,8 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   constexpr int kCanvasWidth = 1280;
   constexpr int kCanvasHeight = 720;
   inputRouter_.setFingerDrawEnabled(true);
+  inputRouter_.setMode(selfTestLayers ? input::InputMode::Interact
+                                     : input::InputMode::Draw);
   HRESULT layerResult = baseLayer_.initialize(
       gpu_, composition_, VisualSlot::BaseCanvas, kCanvasWidth, kCanvasHeight,
       false);
@@ -112,6 +115,26 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       DestroyWindow(window);
       UnregisterClassW(kWindowClassName, instance);
       return hresultExitCode(E_FAIL);
+    }
+    embeddedWebView_ =
+        std::make_unique<WebView2Surface>(composition_, window);
+    embeddedWebView_->setBounds(
+        core::Rect{440.0F, 240.0F, 400.0F, 240.0F});
+    embeddedWebView_->setInteractive(true);
+    embeddedWebView_->setVisible(true);
+    layerResult = embeddedWebView_->initialize();
+    if (SUCCEEDED(layerResult)) {
+      constexpr auto kSelfTestPage =
+          L"data:text/html,%3C!doctype%20html%3E%3Cmeta%20charset=utf-8%3E"
+          L"%3Cstyle%3Ehtml,body%7Bmargin:0;width:100%25;height:100%25;"
+          L"display:grid;place-items:center;background:%23ddd;font:24px%20"
+          L"sans-serif%7D%3C/style%3EEmbedded%20WebView2";
+      layerResult = embeddedWebView_->navigate(kSelfTestPage);
+    }
+    if (FAILED(layerResult)) {
+      DestroyWindow(window);
+      UnregisterClassW(kWindowClassName, instance);
+      return hresultExitCode(layerResult);
     }
   }
   HRESULT renderResult =
@@ -158,8 +181,33 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
   }
 
   if (message == WM_DESTROY) {
+    auto* app = reinterpret_cast<WhiteboardApp*>(
+        GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (app != nullptr) app->embeddedWebView_.reset();
     PostQuitMessage(0);
     return 0;
+  }
+
+  if (message == WM_MOUSEMOVE || message == WM_MOUSELEAVE ||
+      message == WM_LBUTTONDOWN || message == WM_LBUTTONUP ||
+      message == WM_LBUTTONDBLCLK || message == WM_RBUTTONDOWN ||
+      message == WM_RBUTTONUP || message == WM_RBUTTONDBLCLK ||
+      message == WM_MBUTTONDOWN || message == WM_MBUTTONUP ||
+      message == WM_MBUTTONDBLCLK || message == WM_XBUTTONDOWN ||
+      message == WM_XBUTTONUP || message == WM_XBUTTONDBLCLK ||
+      message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
+    auto* app = reinterpret_cast<WhiteboardApp*>(
+        GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (app != nullptr) {
+      const HRESULT forwardResult =
+          app->forwardMouseToEmbedded(window, message, wParam, lParam);
+      if (forwardResult == S_OK) return 0;
+      if (FAILED(forwardResult) && forwardResult != E_PENDING) {
+        app->lastError_ = forwardResult;
+        PostMessageW(window, WM_CLOSE, 0, 0);
+        return 0;
+      }
+    }
   }
 
   if (message == WM_POINTERDOWN || message == WM_POINTERUPDATE ||
@@ -224,6 +272,23 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
         samples[index].phase = input::PointerPhase::Move;
       }
     }
+    if (pointerType == PT_TOUCH) {
+      const HRESULT forwardResult = app->forwardTouchToEmbedded(
+          message, pointerId, samples.back());
+      if (forwardResult != S_FALSE) {
+        if (FAILED(forwardResult) && forwardResult != E_PENDING) {
+          app->lastError_ = forwardResult;
+          PostMessageW(window, WM_CLOSE, 0, 0);
+        }
+        if (message == WM_POINTERDOWN) {
+          SetCapture(window);
+        } else if (message == WM_POINTERUP ||
+                   message == WM_POINTERCAPTURECHANGED) {
+          ReleaseCapture();
+        }
+        return 0;
+      }
+    }
     const HRESULT sampleResult = app->onPointerSamples(std::move(samples));
     if (FAILED(sampleResult)) {
       app->lastError_ = sampleResult;
@@ -245,6 +310,56 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
   }
 
   return DefWindowProcW(window, message, wParam, lParam);
+}
+
+HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
+                                               WPARAM wParam, LPARAM lParam) {
+  if (!embeddedWebView_) return S_FALSE;
+  POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+  if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
+    if (!ScreenToClient(window, &point)) return S_FALSE;
+  }
+  const auto hit = hitEmbedded(
+      core::Vec2{static_cast<float>(point.x), static_cast<float>(point.y)});
+  if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
+      message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN) {
+    inputRouter_.setActiveEmbeddedNode(hit);
+  }
+  const auto route = inputRouter_.route(input::PointerKind::Mouse, hit);
+  const bool shouldForward =
+      route.target == input::InputTarget::EmbeddedSurface;
+  embeddedWebView_->setInteractive(shouldForward);
+  return shouldForward
+             ? embeddedWebView_->forwardMouseMessage(message, wParam, lParam)
+             : S_FALSE;
+}
+
+HRESULT WhiteboardApp::forwardTouchToEmbedded(
+    UINT message, UINT32 pointerId, const input::PointerSample& sample) {
+  if (!embeddedWebView_) return S_FALSE;
+  if (activeEmbeddedPointerId_ && *activeEmbeddedPointerId_ != pointerId) {
+    return S_FALSE;
+  }
+
+  if (!activeEmbeddedPointerId_) {
+    if (message != WM_POINTERDOWN) return S_FALSE;
+    const auto hit = hitEmbedded(sample.screenPosition);
+    inputRouter_.setActiveEmbeddedNode(hit);
+    const auto route = inputRouter_.route(input::PointerKind::Touch, hit);
+    if (route.target != input::InputTarget::EmbeddedSurface) {
+      embeddedWebView_->setInteractive(false);
+      return S_FALSE;
+    }
+    activeEmbeddedPointerId_ = pointerId;
+    embeddedWebView_->setInteractive(true);
+  }
+
+  const HRESULT result =
+      embeddedWebView_->forwardTouchMessage(message, pointerId);
+  if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+    activeEmbeddedPointerId_.reset();
+  }
+  return result;
 }
 
 std::optional<document::NodeId> WhiteboardApp::hitEmbedded(
