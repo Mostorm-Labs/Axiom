@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace canvas::windows {
 
@@ -32,6 +33,9 @@ class WhiteboardApp {
   SkiaSwapChainLayer annotationLayer_;
   input::InputRouter inputRouter_;
   std::optional<stroke::StrokeBuilder> activeStroke_;
+  std::optional<std::uint64_t> activePointerId_;
+  document::StrokeNode activePreview_;
+  document::NodeId activeStrokeId_;
   document::Document document_;
   std::uint64_t strokeSerial_ = 0;
 };

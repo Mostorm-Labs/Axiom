@@ -4,6 +4,7 @@
 
 #include <windows.h>
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -157,8 +158,16 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
       return DefWindowProcW(window, message, wParam, lParam);
     }
 
-    for (const auto& sample : samples) {
-      app->onPointerSample(sample);
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+      // Win32 returns history oldest-first after normalization. Only the
+      // newest record represents the DOWN/UP edge; preceding records are
+      // coalesced movement and must not begin/finish the stroke repeatedly.
+      if (index + 1 < samples.size() &&
+          (phase == input::PointerPhase::Down ||
+           phase == input::PointerPhase::Up)) {
+        samples[index].phase = input::PointerPhase::Move;
+      }
+      app->onPointerSample(samples[index]);
     }
 
     if (message == WM_POINTERDOWN) {
@@ -177,30 +186,68 @@ void WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
     return;
   }
   if (sample.phase == input::PointerPhase::Down) {
+    if (activeStroke_) return;
     activeStroke_.emplace(4.0F);
+    activePointerId_ = sample.pointerId;
     activeStroke_->begin(sample);
+    activePreview_ = {};
+    activePreview_.width = 4.0F;
+    activePreview_.points.push_back(document::StrokePoint{
+        sample.screenPosition, sample.pressure, sample.timestampMicros});
+    activeStrokeId_ = "stroke-" + std::to_string(++strokeSerial_);
+    document::Node previewNode;
+    previewNode.id = activeStrokeId_;
+    previewNode.layer = document::LayerClass::Annotation;
+    previewNode.payload = activePreview_;
+    document_.add(std::move(previewNode));
     return;
   }
-  if (!activeStroke_) return;
+  if (!activeStroke_ || activePointerId_ != sample.pointerId) return;
   if (sample.phase == input::PointerPhase::Move) {
     const stroke::StrokeUpdate update = activeStroke_->append(sample);
+    if (update.accepted) {
+      activePreview_.points.push_back(document::StrokePoint{
+          sample.screenPosition, sample.pressure, sample.timestampMicros});
+    }
     if (update.dirtyBounds.width > 0.0F && update.dirtyBounds.height > 0.0F) {
-      (void)annotationLayer_.render(document_, document::LayerClass::Annotation,
-                                     update.dirtyBounds);
+      if (auto* previewNode = document_.find(activeStrokeId_)) {
+        previewNode->payload = activePreview_;
+      }
+      (void)annotationLayer_.render(document_,
+                                    document::LayerClass::Annotation,
+                                    update.dirtyBounds);
     }
     return;
   }
-  document::Node node;
-  node.id = "stroke-" + std::to_string(++strokeSerial_);
-  node.layer = document::LayerClass::Annotation;
-  node.payload = activeStroke_->finish();
+  if (sample.phase == input::PointerPhase::Cancel) {
+    document_.erase(activeStrokeId_);
+    activeStroke_.reset();
+    activePointerId_.reset();
+    activePreview_ = {};
+    activeStrokeId_.clear();
+    (void)annotationLayer_.render(document_, document::LayerClass::Annotation);
+    return;
+  }
+  const stroke::StrokeUpdate finalUpdate = activeStroke_->append(sample);
+  document::StrokeNode finished = activeStroke_->finish();
   const core::Rect finalDirty = activeStroke_->finishDirtyBounds();
-  document_.add(std::move(node));
+  if (auto* node = document_.find(activeStrokeId_)) {
+    node->payload = std::move(finished);
+  }
   activeStroke_.reset();
+  activePointerId_.reset();
+  activePreview_ = {};
+  activeStrokeId_.clear();
+  std::optional<core::Rect> redraw;
+  if (finalUpdate.dirtyBounds.width > 0.0F &&
+      finalUpdate.dirtyBounds.height > 0.0F) {
+    redraw = finalUpdate.dirtyBounds;
+  }
+  if (finalDirty.width > 0.0F && finalDirty.height > 0.0F) {
+    redraw = redraw ? redraw->united(finalDirty) : finalDirty;
+  }
   (void)annotationLayer_.render(document_, document::LayerClass::Annotation,
-                                finalDirty.width > 0.0F && finalDirty.height > 0.0F
-                                    ? std::optional<core::Rect>(finalDirty)
-                                    : std::nullopt);
+                                redraw);
 }
 
 }  // namespace canvas::windows
