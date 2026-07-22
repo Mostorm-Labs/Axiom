@@ -50,6 +50,7 @@ struct Node {
   NodePayload payload = StrokeNode{};
   std::uint64_t revision = 0;
   std::uint64_t nonAppendRevision = 0;
+  std::uint64_t cacheIdentity = 0;
 };
 
 }  // namespace canvas::document

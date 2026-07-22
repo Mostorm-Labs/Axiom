@@ -34,9 +34,9 @@ class SkiaRenderer final : public Renderer {
  private:
   struct CachedStroke {
     std::uint64_t documentId = 0;
+    std::uint64_t nodeIdentity = 0;
     std::uint64_t nodeRevision = 0;
     std::uint64_t nonAppendRevision = 0;
-    const document::StrokeNode* source = nullptr;
     std::size_t pointCount = 0;
     core::Vec2 firstPoint{};
     core::Vec2 lastPoint{};
@@ -45,14 +45,14 @@ class SkiaRenderer final : public Renderer {
     document::StrokeCoordinateSpace coordinateSpace =
         document::StrokeCoordinateSpace::World;
     core::Rect parentBounds{};
+    core::Rect geometryBounds{};
+    float drawWidth = 0.0F;
     SkPath path;
   };
 
   std::unordered_map<document::NodeId, CachedStroke> pathCache_;
   std::size_t fullPathBuildCount_ = 0;
   std::size_t incrementalAppendCount_ = 0;
-  std::uint64_t cachedDocumentId_ = 0;
-  std::uint64_t cachedDocumentGeneration_ = 0;
 };
 
 }  // namespace canvas::render

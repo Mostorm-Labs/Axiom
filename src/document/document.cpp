@@ -11,32 +11,32 @@ std::uint64_t nextDocumentId() {
   static std::atomic<std::uint64_t> next{1};
   return next.fetch_add(1, std::memory_order_relaxed);
 }
+std::uint64_t nextNodeIdentity() {
+  static std::atomic<std::uint64_t> next{1};
+  return next.fetch_add(1, std::memory_order_relaxed);
+}
 }  // namespace
 
 Document::Document() : instanceId_(nextDocumentId()) {}
 
 Document::Document(const Document& other)
-    : nodes_(other.nodes_), instanceId_(nextDocumentId()),
-      generation_(other.generation_) {}
+    : nodes_(other.nodes_), instanceId_(nextDocumentId()) {}
 
 Document& Document::operator=(const Document& other) {
   if (this != &other) {
     nodes_ = other.nodes_;
     instanceId_ = nextDocumentId();
-    generation_ = other.generation_;
   }
   return *this;
 }
 
 Document::Document(Document&& other) noexcept
-    : nodes_(std::move(other.nodes_)), instanceId_(nextDocumentId()),
-      generation_(other.generation_) {}
+    : nodes_(std::move(other.nodes_)), instanceId_(nextDocumentId()) {}
 
 Document& Document::operator=(Document&& other) noexcept {
   if (this != &other) {
     nodes_ = std::move(other.nodes_);
     instanceId_ = nextDocumentId();
-    generation_ = other.generation_;
   }
   return *this;
 }
@@ -83,8 +83,8 @@ bool Document::add(Node node) {
   if (node.parentId && find(*node.parentId) == nullptr) {
     return false;
   }
+  node.cacheIdentity = nextNodeIdentity();
   nodes_.push_back(std::move(node));
-  ++generation_;
   return true;
 }
 
@@ -105,7 +105,6 @@ bool Document::erase(std::string_view id) {
                                         *node.parentId == key);
                               }),
                nodes_.end());
-  if (nodes_.size() != originalSize) ++generation_;
   return nodes_.size() != originalSize;
 }
 

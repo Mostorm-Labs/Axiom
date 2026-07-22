@@ -49,12 +49,6 @@ void SkiaRenderer::drawLayer(
     SkCanvas& canvas, const document::Document& document,
     document::LayerClass layer,
     const std::optional<core::Rect>& dirtyBounds) {
-  if (cachedDocumentId_ != document.instanceId() ||
-      cachedDocumentGeneration_ != document.generation()) {
-    pathCache_.clear();
-    cachedDocumentId_ = document.instanceId();
-    cachedDocumentGeneration_ = document.generation();
-  }
   canvas.save();
   if (dirtyBounds.has_value()) {
     const auto& bounds = *dirtyBounds;
@@ -70,86 +64,97 @@ void SkiaRenderer::drawLayer(
     const auto& stroke = std::get<document::StrokeNode>(node.payload);
     const document::Node* attachedParent =
         node.parentId ? document.find(*node.parentId) : nullptr;
-    const core::Rect cullBounds =
-        stroke.coordinateSpace ==
-                    document::StrokeCoordinateSpace::ParentNormalized &&
-                attachedParent != nullptr
-            ? attachedParent->bounds
-            : node.bounds;
-    if (dirtyBounds && cullBounds.width > 0.0F &&
-        cullBounds.height > 0.0F && !cullBounds.intersects(*dirtyBounds)) {
-      continue;
-    }
-    const document::StrokeNode* drawable = &stroke;
-    document::StrokeNode resolved;
-    if (stroke.coordinateSpace ==
-        document::StrokeCoordinateSpace::ParentNormalized) {
-      if (!node.parentId) {
-        continue;
-      }
-      if (attachedParent == nullptr) {
-        continue;
-      }
-      try {
-        resolved =
-            document::resolveAttachedStroke(stroke, attachedParent->bounds);
-      } catch (const std::domain_error&) {
-        continue;
-      }
-      drawable = &resolved;
-    }
-
-    if (drawable->points.empty()) {
+    if (stroke.points.empty() ||
+        (stroke.coordinateSpace ==
+             document::StrokeCoordinateSpace::ParentNormalized &&
+         attachedParent == nullptr)) {
       continue;
     }
 
     const auto parentBounds =
         attachedParent ? attachedParent->bounds : core::Rect{};
-    const auto lastPoint = drawable->points.back().position;
-    const auto firstPoint = drawable->points.front().position;
+    const core::Rect conservativeBounds =
+        stroke.coordinateSpace ==
+                    document::StrokeCoordinateSpace::ParentNormalized
+            ? parentBounds
+            : node.bounds;
+    if (dirtyBounds && conservativeBounds.width > 0.0F &&
+        conservativeBounds.height > 0.0F &&
+        !conservativeBounds.intersects(*dirtyBounds)) {
+      continue;
+    }
+    float drawWidth = stroke.width;
+    if (stroke.coordinateSpace ==
+        document::StrokeCoordinateSpace::ParentNormalized) {
+      try {
+        drawWidth = document::fromParentRelativeWidth(stroke.width,
+                                                      parentBounds);
+      } catch (const std::domain_error&) {
+        continue;
+      }
+    }
+    const auto mapPoint = [&](core::Vec2 point) {
+      return stroke.coordinateSpace ==
+                     document::StrokeCoordinateSpace::ParentNormalized
+                 ? document::fromParentNormalized(point, parentBounds)
+                 : point;
+    };
+    const auto lastPoint = stroke.points.back().position;
+    const auto firstPoint = stroke.points.front().position;
     auto& cached = pathCache_[node.id];
     const bool identityValid = cached.documentId == document.instanceId() &&
-        cached.source == &stroke;
+        cached.nodeIdentity == node.cacheIdentity;
     const bool metadataValid = identityValid &&
         cached.nonAppendRevision == node.nonAppendRevision &&
-        cached.width == drawable->width &&
-        cached.colorArgb == drawable->colorArgb &&
-        cached.coordinateSpace == drawable->coordinateSpace &&
+        cached.width == stroke.width && cached.drawWidth == drawWidth &&
+        cached.colorArgb == stroke.colorArgb &&
+        cached.coordinateSpace == stroke.coordinateSpace &&
         cached.parentBounds == parentBounds && cached.firstPoint == firstPoint;
-    if (metadataValid && drawable->points.size() > cached.pointCount) {
+    if (metadataValid && stroke.points.size() > cached.pointCount) {
       for (std::size_t index = cached.pointCount;
-           index < drawable->points.size(); ++index) {
-        cached.path.lineTo(drawable->points[index].position.x,
-                           drawable->points[index].position.y);
+           index < stroke.points.size(); ++index) {
+        const auto point = mapPoint(stroke.points[index].position);
+        cached.path.lineTo(point.x, point.y);
+        cached.geometryBounds = cached.geometryBounds.united(
+            core::Rect{point.x, point.y, 0, 0}.inflated(drawWidth * 0.5F));
       }
-      cached.pointCount = drawable->points.size();
-      cached.source = &stroke;
+      cached.pointCount = stroke.points.size();
       cached.nodeRevision = node.revision;
-      cached.nonAppendRevision = node.nonAppendRevision;
       cached.lastPoint = lastPoint;
       ++incrementalAppendCount_;
     } else if (!(metadataValid && cached.nodeRevision == node.revision &&
-                 cached.pointCount == drawable->points.size() &&
+                 cached.pointCount == stroke.points.size() &&
                  cached.lastPoint == lastPoint)) {
       cached.path.reset();
-      cached.path.moveTo(drawable->points.front().position.x,
-                         drawable->points.front().position.y);
-      for (std::size_t index = 1; index < drawable->points.size(); ++index) {
-        cached.path.lineTo(drawable->points[index].position.x,
-                           drawable->points[index].position.y);
+      const auto first = mapPoint(stroke.points.front().position);
+      cached.path.moveTo(first.x, first.y);
+      cached.geometryBounds =
+          core::Rect{first.x, first.y, 0, 0}.inflated(drawWidth * 0.5F);
+      for (std::size_t index = 1; index < stroke.points.size(); ++index) {
+        const auto point = mapPoint(stroke.points[index].position);
+        cached.path.lineTo(point.x, point.y);
+        cached.geometryBounds = cached.geometryBounds.united(
+            core::Rect{point.x, point.y, 0, 0}.inflated(drawWidth * 0.5F));
       }
-      cached.source = &stroke;
       cached.documentId = document.instanceId();
+      cached.nodeIdentity = node.cacheIdentity;
       cached.nodeRevision = node.revision;
       cached.nonAppendRevision = node.nonAppendRevision;
-      cached.pointCount = drawable->points.size();
+      cached.pointCount = stroke.points.size();
       cached.firstPoint = firstPoint;
       cached.lastPoint = lastPoint;
-      cached.width = drawable->width;
-      cached.colorArgb = drawable->colorArgb;
-      cached.coordinateSpace = drawable->coordinateSpace;
+      cached.width = stroke.width;
+      cached.drawWidth = drawWidth;
+      cached.colorArgb = stroke.colorArgb;
+      cached.coordinateSpace = stroke.coordinateSpace;
       cached.parentBounds = parentBounds;
       ++fullPathBuildCount_;
+    }
+
+    if (dirtyBounds && cached.geometryBounds.width > 0.0F &&
+        cached.geometryBounds.height > 0.0F &&
+        !cached.geometryBounds.intersects(*dirtyBounds)) {
+      continue;
     }
 
     SkPaint paint;
@@ -157,8 +162,8 @@ void SkiaRenderer::drawLayer(
     paint.setStyle(SkPaint::kStroke_Style);
     paint.setStrokeCap(SkPaint::kRound_Cap);
     paint.setStrokeJoin(SkPaint::kRound_Join);
-    paint.setStrokeWidth(drawable->width);
-    paint.setColor(static_cast<SkColor>(drawable->colorArgb));
+    paint.setStrokeWidth(cached.drawWidth);
+    paint.setColor(static_cast<SkColor>(stroke.colorArgb));
     canvas.drawPath(cached.path, paint);
   }
 

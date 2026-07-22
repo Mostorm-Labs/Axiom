@@ -159,6 +159,46 @@ TEST(SkiaRendererTest, DirtyCullSkipsChangedStrokeOutsideBounds) {
   EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
 }
 
+TEST(SkiaRendererTest, ParentNormalizedAppendUsesCachedWorldPath) {
+  document::Document doc;
+  ASSERT_TRUE(doc.add({"parent", document::LayerClass::Embedded,
+                       {10, 10, 40, 40}, {}, document::EmbeddedNode{}}));
+  document::StrokeNode stroke;
+  stroke.coordinateSpace = document::StrokeCoordinateSpace::ParentNormalized;
+  stroke.width = 0.1F;
+  stroke.points = {{{0.1F, 0.2F}, 1.0F, 1}, {{0.8F, 0.8F}, 1.0F, 2}};
+  ASSERT_TRUE(doc.add({"attached", document::LayerClass::Annotation,
+                       {10, 10, 40, 40}, "parent", stroke}));
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 80, 80);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
+  ASSERT_TRUE(doc.appendStrokePoint("attached", {{0.9F, 0.1F}, 1.0F, 3},
+                                    {0, 0, 0, 0}));
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 80, 80);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 1u);
+  EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+  ASSERT_TRUE(doc.setBounds("parent", {20, 20, 80, 40}));
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 128, 128);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
+}
+
+TEST(SkiaRendererTest, UnrelatedNodeAddPreservesExistingPathCache) {
+  document::Document doc;
+  document::StrokeNode first;
+  first.points = {{{2, 2}, 1.0F, 1}, {{8, 8}, 1.0F, 2}};
+  ASSERT_TRUE(doc.add({"first", document::LayerClass::Base,
+                       {0, 0, 10, 10}, {}, first}));
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 32, 32);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
+  document::StrokeNode unrelated;
+  unrelated.points = {{{20, 20}, 1.0F, 1}, {{24, 24}, 1.0F, 2}};
+  ASSERT_TRUE(doc.add({"unrelated", document::LayerClass::Base,
+                       {18, 18, 10, 10}, {}, unrelated}));
+  (void)renderer.renderRaster(doc, document::LayerClass::Base, 32, 32);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
+}
+
 TEST(SkiaRendererTest, DoesNotReuseSameNodeIdAcrossDocuments) {
   auto makeDocument = [](float middleY) {
     document::Document doc;
