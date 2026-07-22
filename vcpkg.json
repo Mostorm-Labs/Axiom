@@ -4,6 +4,7 @@
   "builtin-baseline": "a51bb4d1434e6d0927ff79db8033bed8522b85df",
   "dependencies": [
     "gtest",
+    "spdlog",
     {
       "name": "skia",
       "default-features": false,

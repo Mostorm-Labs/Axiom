@@ -27,15 +27,21 @@ target_link_libraries(canvas_core PUBLIC unofficial::skia::skia)
 canvas_enable_warnings(canvas_core)
 
 if(WIN32)
+    find_package(spdlog CONFIG REQUIRED)
     add_library(canvas_windows_platform STATIC
                 src/platform/windows/dcomp_host.cpp
-                src/platform/windows/win_pointer_adapter.cpp)
+                src/platform/windows/win_pointer_adapter.cpp
+                src/platform/windows/skia_d3d12_context.cpp
+                src/platform/windows/skia_swap_chain_layer.cpp)
     add_library(canvas::windows_platform ALIAS canvas_windows_platform)
     target_include_directories(canvas_windows_platform PUBLIC
                                ${PROJECT_SOURCE_DIR}/include
                                ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(canvas_windows_platform PUBLIC dcomp dxgi d3d12
-                                                         user32 ole32)
+                                                         user32 ole32
+                                                         PRIVATE spdlog::spdlog
+                                                                 unofficial::skia::skia
+                                                                 canvas::core)
     canvas_enable_warnings(canvas_windows_platform)
 
     add_subdirectory(app/windows)

@@ -1,0 +1,25 @@
+Task 11 implementation and verification
+========================================
+
+The implementation adds a D3D12-backed Skia context and two
+flip-sequential composition swap-chain layers.  The annotation layer uses
+`DXGI_ALPHA_MODE_PREMULTIPLIED`; the base layer uses opaque alpha.  Rendering
+wraps the current BGRA8 back buffer as a Ganesh D3D render target, clips and
+clears the dirty region, draws the requested document layer, flushes Skia, and
+uses `Present1` dirty metadata when available.  A frame-presented callback is
+provided with a monotonic frame id and a QPC-derived microsecond timestamp;
+when the driver exposes `IDXGISwapChainMedia`, the timestamp is taken from
+`GetFrameStatisticsMedia`, otherwise it falls back to the local presentation
+QPC (the seam remains deterministic for telemetry consumers).
+
+The implementation was not claimed as locally passing on this macOS host:
+Visual Studio 2022, Windows SDK, DirectComposition, D3D12, and the vcpkg Skia
+Direct3D feature are unavailable.  The intended Windows verification commands
+are:
+
+    cmake --preset windows-x64
+    cmake --build --preset windows-x64-release
+    ctest --preset windows-x64-release
+
+Windows CI is the authoritative environment for compiling and running
+`canvas_windows_composition_test` and the other Windows targets.

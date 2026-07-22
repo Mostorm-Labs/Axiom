@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace canvas::windows {
@@ -64,6 +66,40 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow) {
     DestroyWindow(window);
     UnregisterClassW(kWindowClassName, instance);
     return hresultExitCode(compositionResult);
+  }
+
+  const HRESULT gpuResult = gpu_.initialize();
+  if (FAILED(gpuResult)) {
+    DestroyWindow(window);
+    UnregisterClassW(kWindowClassName, instance);
+    return hresultExitCode(gpuResult);
+  }
+  constexpr int kCanvasWidth = 1280;
+  constexpr int kCanvasHeight = 720;
+  inputRouter_.setFingerDrawEnabled(true);
+  HRESULT layerResult = baseLayer_.initialize(
+      gpu_, composition_, VisualSlot::BaseCanvas, kCanvasWidth, kCanvasHeight,
+      false);
+  if (SUCCEEDED(layerResult)) {
+    layerResult = annotationLayer_.initialize(
+        gpu_, composition_, VisualSlot::Annotation, kCanvasWidth,
+        kCanvasHeight, true);
+  }
+  if (FAILED(layerResult)) {
+    DestroyWindow(window);
+    UnregisterClassW(kWindowClassName, instance);
+    return hresultExitCode(layerResult);
+  }
+  HRESULT renderResult =
+      baseLayer_.render(document_, document::LayerClass::Base);
+  if (SUCCEEDED(renderResult)) {
+    renderResult = annotationLayer_.render(
+        document_, document::LayerClass::Annotation);
+  }
+  if (FAILED(renderResult)) {
+    DestroyWindow(window);
+    UnregisterClassW(kWindowClassName, instance);
+    return hresultExitCode(renderResult);
   }
 
   ShowWindow(window, commandShow);
@@ -134,8 +170,37 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
   return DefWindowProcW(window, message, wParam, lParam);
 }
 
-void WhiteboardApp::onPointerSample(const input::PointerSample&) {
-  // Intentionally empty until Task 11 wires samples into the stroke loop.
+void WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
+  const auto route = inputRouter_.route(sample.kind, std::nullopt);
+  if (route.target != input::InputTarget::BaseCanvas &&
+      route.target != input::InputTarget::Annotation) {
+    return;
+  }
+  if (sample.phase == input::PointerPhase::Down) {
+    activeStroke_.emplace(4.0F);
+    activeStroke_->begin(sample);
+    return;
+  }
+  if (!activeStroke_) return;
+  if (sample.phase == input::PointerPhase::Move) {
+    const stroke::StrokeUpdate update = activeStroke_->append(sample);
+    if (update.dirtyBounds.width > 0.0F && update.dirtyBounds.height > 0.0F) {
+      (void)annotationLayer_.render(document_, document::LayerClass::Annotation,
+                                     update.dirtyBounds);
+    }
+    return;
+  }
+  document::Node node;
+  node.id = "stroke-" + std::to_string(++strokeSerial_);
+  node.layer = document::LayerClass::Annotation;
+  node.payload = activeStroke_->finish();
+  const core::Rect finalDirty = activeStroke_->finishDirtyBounds();
+  document_.add(std::move(node));
+  activeStroke_.reset();
+  (void)annotationLayer_.render(document_, document::LayerClass::Annotation,
+                                finalDirty.width > 0.0F && finalDirty.height > 0.0F
+                                    ? std::optional<core::Rect>(finalDirty)
+                                    : std::nullopt);
 }
 
 }  // namespace canvas::windows
