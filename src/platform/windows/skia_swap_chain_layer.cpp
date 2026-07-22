@@ -152,6 +152,7 @@ HRESULT SkiaSwapChainLayer::render(const document::Document& document,
   canvas::render::SkiaRenderer renderer;
   renderer.drawLayer(*canvas, document, layer, effectiveDirty);
   canvas->restore();
+  lastRenderWasFull_ = !effectiveDirty.has_value();
   gpu_->context()->flushAndSubmit(GrSyncCpu::kNo);
   bufferRendered_ = true;
   return present(effectiveDirty);
@@ -162,11 +163,13 @@ HRESULT SkiaSwapChainLayer::present(const std::optional<core::Rect>& dirtyBounds
   RECT dirty{};
   HRESULT hr = S_OK;
   if (dirtyBounds.has_value() && toRect(*dirtyBounds, &dirty, width_, height_)) {
+    lastPresentWasFull_ = false;
     DXGI_PRESENT_PARAMETERS parameters{};
     parameters.DirtyRectsCount = 1;
     parameters.pDirtyRects = &dirty;
     hr = swapChain_->Present1(1, 0, &parameters);
   } else {
+    lastPresentWasFull_ = true;
     hr = swapChain_->Present(1, 0);
   }
   if (SUCCEEDED(hr)) {
@@ -274,6 +277,8 @@ void SkiaSwapChainLayer::cleanup() noexcept {
   pendingDirty_.fill(std::nullopt);
   renderedInvalidation_.reset();
   renderedFullInvalidation_ = false;
+  lastRenderWasFull_ = false;
+  lastPresentWasFull_ = false;
   bufferRendered_ = false;
   submittedFrames_.clear();
   presentationStatisticsAvailable_ = false;

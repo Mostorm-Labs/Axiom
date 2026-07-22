@@ -53,6 +53,8 @@ class SkiaSwapChainLayer {
   bool bufferHasPendingDirty(UINT index) const noexcept {
     return index < pendingDirty_.size() && pendingDirty_[index].has_value();
   }
+  bool lastRenderWasFull() const noexcept { return lastRenderWasFull_; }
+  bool lastPresentWasFull() const noexcept { return lastPresentWasFull_; }
   void setFramePresentedHandler(FramePresentedHandler handler) {
     framePresentedHandler_ = std::move(handler);
   }
@@ -73,6 +75,8 @@ class SkiaSwapChainLayer {
   std::array<std::optional<core::Rect>, 2> pendingDirty_{};
   std::optional<core::Rect> renderedInvalidation_;
   bool renderedFullInvalidation_ = false;
+  bool lastRenderWasFull_ = false;
+  bool lastPresentWasFull_ = false;
   UINT renderedBufferIndex_ = 0;
   std::uint64_t frameId_ = 0;
   std::uint64_t mediaPresentCount_ = 0;

@@ -1,0 +1,11 @@
+Task 11 third-review RED evidence
+=================================
+
+The prior regression observed only the resulting buffer flags. It could not
+prove that `render(..., std::nullopt)` actually ignored an existing pending
+dirty rectangle and used a full Skia draw plus full DXGI Present. Under the old
+bug those operations remained clipped and used Present1.
+
+The Windows integration test now asserts the actual effective render and
+present modes through read-only diagnostic state. The test was not executed on
+this macOS host because Windows SDK, D3D12, and DirectComposition are absent.

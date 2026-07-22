@@ -87,6 +87,8 @@ TEST(WindowsComposition, CreatesTransparentAnnotationSwapChain) {
     EXPECT_TRUE(annotation.bufferHasPendingDirty(0));
     ASSERT_TRUE(SUCCEEDED(annotation.render(
         document, canvas::document::LayerClass::Annotation, std::nullopt)));
+    EXPECT_TRUE(annotation.lastRenderWasFull());
+    EXPECT_TRUE(annotation.lastPresentWasFull());
     EXPECT_FALSE(annotation.bufferNeedsFullRedraw(0));
     EXPECT_TRUE(annotation.bufferNeedsFullRedraw(1));
     EXPECT_FALSE(annotation.bufferHasPendingDirty(0));

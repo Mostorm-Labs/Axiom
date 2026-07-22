@@ -1,0 +1,11 @@
+Task 11 third-review GREEN implementation
+==========================================
+
+`SkiaSwapChainLayer::lastRenderWasFull()` records whether the effective dirty
+region was null and the frame therefore used a full clear/draw.
+`lastPresentWasFull()` records whether the frame used `Present` rather than
+dirty-rect `Present1`. The pending-dirty then explicit-full integration flow
+asserts both values are true.
+
+`git diff --check` is run locally. No Windows test result is claimed from this
+macOS host; Windows CI remains authoritative.
