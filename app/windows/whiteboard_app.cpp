@@ -1,11 +1,14 @@
 #include "whiteboard_app.h"
 
+#include "canvas/document/embedded_transform.h"
 #include "platform/windows/win_pointer_adapter.h"
 
 #include <windows.h>
 
 #include <cstddef>
+#include <initializer_list>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -35,7 +38,9 @@ input::PointerPhase pointerPhaseForMessage(UINT message) {
 
 }  // namespace
 
-int WhiteboardApp::run(HINSTANCE instance, int commandShow) {
+int WhiteboardApp::run(HINSTANCE instance, int commandShow,
+                       bool selfTestLayers) {
+  lastError_ = S_OK;
   if (instance == nullptr) {
     return hresultExitCode(E_INVALIDARG);
   }
@@ -86,16 +91,41 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow) {
         gpu_, composition_, VisualSlot::Annotation, kCanvasWidth,
         kCanvasHeight, true);
   }
+  if (SUCCEEDED(layerResult) && selfTestLayers) {
+    layerResult = embeddedLayer_.initialize(
+        gpu_, composition_, VisualSlot::EmbeddedContent, kCanvasWidth,
+        kCanvasHeight, true);
+  }
+  if (SUCCEEDED(layerResult) && selfTestLayers) {
+    layerResult = chromeLayer_.initialize(
+        gpu_, composition_, VisualSlot::InteractionChrome, kCanvasWidth,
+        kCanvasHeight, true);
+  }
   if (FAILED(layerResult)) {
     DestroyWindow(window);
     UnregisterClassW(kWindowClassName, instance);
     return hresultExitCode(layerResult);
   }
+  if (selfTestLayers) {
+    baseLayer_.setClearColorArgb(0xFF00AA00U);
+    if (!populateSelfTestDocument()) {
+      DestroyWindow(window);
+      UnregisterClassW(kWindowClassName, instance);
+      return hresultExitCode(E_FAIL);
+    }
+  }
   HRESULT renderResult =
       baseLayer_.render(document_, document::LayerClass::Base);
+  if (SUCCEEDED(renderResult) && selfTestLayers) {
+    renderResult = embeddedLayer_.render(
+        document_, document::LayerClass::Embedded);
+  }
   if (SUCCEEDED(renderResult)) {
     renderResult = annotationLayer_.render(
         document_, document::LayerClass::Annotation);
+  }
+  if (SUCCEEDED(renderResult) && selfTestLayers) {
+    renderResult = chromeLayer_.render(document_, document::LayerClass::Chrome);
   }
   if (FAILED(renderResult)) {
     DestroyWindow(window);
@@ -114,6 +144,7 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow) {
   }
 
   UnregisterClassW(kWindowClassName, instance);
+  if (FAILED(lastError_)) return hresultExitCode(lastError_);
   return messageResult < 0 ? hresultExitCode(HRESULT_FROM_WIN32(GetLastError()))
                            : static_cast<int>(message.wParam);
 }
@@ -145,6 +176,11 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     const UINT32 pointerId = GET_POINTERID_WPARAM(wParam);
     POINTER_INPUT_TYPE pointerType{};
     if (!GetPointerType(pointerId, &pointerType)) {
+      const HRESULT cancelResult = app->cancelActivePointer(pointerId);
+      if (FAILED(cancelResult)) {
+        app->lastError_ = cancelResult;
+        PostMessageW(window, WM_CLOSE, 0, 0);
+      }
       return DefWindowProcW(window, message, wParam, lParam);
     }
 
@@ -155,7 +191,21 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     } else if (pointerType == PT_TOUCH) {
       samples = WinPointerAdapter::readTouchHistory(window, pointerId, phase);
     } else {
+      const HRESULT cancelResult = app->cancelActivePointer(pointerId);
+      if (FAILED(cancelResult)) {
+        app->lastError_ = cancelResult;
+        PostMessageW(window, WM_CLOSE, 0, 0);
+      }
       return DefWindowProcW(window, message, wParam, lParam);
+    }
+
+    if (samples.empty()) {
+      const HRESULT cancelResult = app->cancelActivePointer(pointerId);
+      if (FAILED(cancelResult)) {
+        app->lastError_ = cancelResult;
+        PostMessageW(window, WM_CLOSE, 0, 0);
+      }
+      return 0;
     }
 
     for (std::size_t index = 0; index < samples.size(); ++index) {
@@ -167,7 +217,12 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
            phase == input::PointerPhase::Up)) {
         samples[index].phase = input::PointerPhase::Move;
       }
-      app->onPointerSample(samples[index]);
+      const HRESULT sampleResult = app->onPointerSample(samples[index]);
+      if (FAILED(sampleResult)) {
+        app->lastError_ = sampleResult;
+        PostMessageW(window, WM_CLOSE, 0, 0);
+        return 0;
+      }
     }
 
     if (message == WM_POINTERDOWN) {
@@ -179,16 +234,52 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
   return DefWindowProcW(window, message, wParam, lParam);
 }
 
-void WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
-  const auto route = inputRouter_.route(sample.kind, std::nullopt);
-  if (route.target != input::InputTarget::BaseCanvas &&
-      route.target != input::InputTarget::Annotation) {
-    return;
+std::optional<document::NodeId> WhiteboardApp::hitEmbedded(
+    core::Vec2 point) const {
+  for (auto it = document_.nodes().rbegin(); it != document_.nodes().rend();
+       ++it) {
+    if (std::holds_alternative<document::EmbeddedNode>(it->payload) &&
+        it->bounds.contains(point)) {
+      return it->id;
+    }
   }
+  return std::nullopt;
+}
+
+document::LayerClass WhiteboardApp::activeDocumentLayer() const {
+  return activeRoute_.target == input::InputTarget::Annotation
+             ? document::LayerClass::Annotation
+             : document::LayerClass::Base;
+}
+
+SkiaSwapChainLayer& WhiteboardApp::activeSwapChainLayer() {
+  return activeRoute_.target == input::InputTarget::Annotation
+             ? annotationLayer_
+             : baseLayer_;
+}
+
+HRESULT WhiteboardApp::cancelActivePointer(std::uint64_t pointerId) {
+  if (!activeStroke_) return S_OK;
+  input::PointerSample cancel =
+      lastPointerSample_.value_or(input::PointerSample{});
+  cancel.pointerId = activePointerId_.value_or(pointerId);
+  cancel.phase = input::PointerPhase::Cancel;
+  return onPointerSample(cancel);
+}
+
+HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   if (sample.phase == input::PointerPhase::Down) {
-    if (activeStroke_) return;
+    if (activeStroke_) return S_FALSE;
+    const auto hit = hitEmbedded(sample.screenPosition);
+    inputRouter_.setActiveEmbeddedNode(hit);
+    activeRoute_ = inputRouter_.route(sample.kind, hit);
+    if (activeRoute_.target != input::InputTarget::BaseCanvas &&
+        activeRoute_.target != input::InputTarget::Annotation) {
+      return S_FALSE;
+    }
     activeStroke_.emplace(4.0F);
     activePointerId_ = sample.pointerId;
+    lastPointerSample_ = sample;
     activeStroke_->begin(sample);
     activePreview_ = {};
     activePreview_.width = 4.0F;
@@ -197,12 +288,13 @@ void WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
     activeStrokeId_ = "stroke-" + std::to_string(++strokeSerial_);
     document::Node previewNode;
     previewNode.id = activeStrokeId_;
-    previewNode.layer = document::LayerClass::Annotation;
+    previewNode.layer = activeDocumentLayer();
     previewNode.payload = activePreview_;
-    document_.add(std::move(previewNode));
-    return;
+    if (!document_.add(std::move(previewNode))) return E_FAIL;
+    return S_OK;
   }
-  if (!activeStroke_ || activePointerId_ != sample.pointerId) return;
+  if (!activeStroke_ || activePointerId_ != sample.pointerId) return S_FALSE;
+  lastPointerSample_ = sample;
   if (sample.phase == input::PointerPhase::Move) {
     const stroke::StrokeUpdate update = activeStroke_->append(sample);
     if (update.accepted) {
@@ -213,31 +305,56 @@ void WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
       if (auto* previewNode = document_.find(activeStrokeId_)) {
         previewNode->payload = activePreview_;
       }
-      (void)annotationLayer_.render(document_,
-                                    document::LayerClass::Annotation,
-                                    update.dirtyBounds);
+      const HRESULT hr = activeSwapChainLayer().render(
+          document_, activeDocumentLayer(), update.dirtyBounds);
+      if (FAILED(hr)) return hr;
     }
-    return;
+    return S_OK;
   }
   if (sample.phase == input::PointerPhase::Cancel) {
+    const document::LayerClass layer = activeDocumentLayer();
+    SkiaSwapChainLayer& swapChainLayer = activeSwapChainLayer();
     document_.erase(activeStrokeId_);
     activeStroke_.reset();
     activePointerId_.reset();
     activePreview_ = {};
     activeStrokeId_.clear();
-    (void)annotationLayer_.render(document_, document::LayerClass::Annotation);
-    return;
+    lastPointerSample_.reset();
+    return swapChainLayer.render(document_, layer);
   }
   const stroke::StrokeUpdate finalUpdate = activeStroke_->append(sample);
   document::StrokeNode finished = activeStroke_->finish();
   const core::Rect finalDirty = activeStroke_->finishDirtyBounds();
-  if (auto* node = document_.find(activeStrokeId_)) {
-    node->payload = std::move(finished);
+  HRESULT completionResult = S_OK;
+  auto* node = document_.find(activeStrokeId_);
+  if (node == nullptr) {
+    completionResult = E_FAIL;
+  } else {
+    node->payload = finished;
   }
+  if (node != nullptr && activeRoute_.parentId) {
+    const document::Node* parent = document_.find(*activeRoute_.parentId);
+    if (parent == nullptr) {
+      completionResult = E_FAIL;
+    } else {
+      try {
+        node->payload = document::attachStrokeToParent(finished,
+                                                       parent->bounds);
+        node->parentId = activeRoute_.parentId;
+      } catch (const std::domain_error&) {
+        node->payload = std::move(finished);
+        node->parentId.reset();
+        completionResult = E_FAIL;
+      }
+    }
+  }
+  const document::LayerClass layer = activeDocumentLayer();
+  SkiaSwapChainLayer& swapChainLayer = activeSwapChainLayer();
   activeStroke_.reset();
   activePointerId_.reset();
   activePreview_ = {};
   activeStrokeId_.clear();
+  lastPointerSample_.reset();
   std::optional<core::Rect> redraw;
   if (finalUpdate.dirtyBounds.width > 0.0F &&
       finalUpdate.dirtyBounds.height > 0.0F) {
@@ -246,8 +363,66 @@ void WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   if (finalDirty.width > 0.0F && finalDirty.height > 0.0F) {
     redraw = redraw ? redraw->united(finalDirty) : finalDirty;
   }
-  (void)annotationLayer_.render(document_, document::LayerClass::Annotation,
-                                redraw);
+  const HRESULT renderResult = swapChainLayer.render(document_, layer, redraw);
+  return FAILED(renderResult) ? renderResult : completionResult;
+}
+
+bool WhiteboardApp::populateSelfTestDocument() {
+  auto addStroke = [this](std::string id, document::LayerClass layer,
+                          std::uint32_t color,
+                          std::initializer_list<core::Vec2> positions,
+                          float width = 8.0F) {
+    document::StrokeNode stroke;
+    stroke.colorArgb = color;
+    stroke.width = width;
+    for (const auto position : positions) {
+      stroke.points.push_back(document::StrokePoint{position, 1.0F, 0});
+    }
+    document::Node node;
+    node.id = std::move(id);
+    node.layer = layer;
+    node.payload = std::move(stroke);
+    return document_.add(std::move(node));
+  };
+
+  document::Node embedded;
+  embedded.id = "self-test-embedded";
+  embedded.layer = document::LayerClass::Embedded;
+  embedded.bounds = core::Rect{440.0F, 240.0F, 400.0F, 240.0F};
+  embedded.payload = document::EmbeddedNode{
+      document::EmbeddedKind::Web, "about:blank", "Embedded placeholder"};
+  if (!document_.add(std::move(embedded))) return false;
+  for (std::size_t row = 0; row < 10; ++row) {
+    const float y = 260.0F + static_cast<float>(row) * 22.0F;
+    if (!addStroke("self-test-embedded-fill-" + std::to_string(row),
+                   document::LayerClass::Embedded, 0xFFDDDDDDU,
+                   {{460, y}, {820, y}}, 24.0F)) {
+      return false;
+    }
+  }
+  if (!addStroke("self-test-embedded-outline", document::LayerClass::Embedded,
+                 0xFF666666U,
+                 {{440, 240}, {840, 240}, {840, 480}, {440, 480}, {440, 240}},
+                 12.0F)) {
+    return false;
+  }
+  if (!addStroke("self-test-annotation", document::LayerClass::Annotation,
+                 0xFFFF0000U, {{180, 120}, {1100, 600}}, 12.0F)) {
+    return false;
+  }
+  constexpr core::Vec2 handles[]{{430, 230}, {850, 230}, {850, 490},
+                                 {430, 490}};
+  for (std::size_t index = 0; index < 4; ++index) {
+    const auto p = handles[index];
+    if (!addStroke("self-test-handle-" + std::to_string(index),
+                   document::LayerClass::Chrome, 0xFF0066FFU,
+                   {{p.x - 10, p.y}, {p.x + 10, p.y},
+                    {p.x, p.y - 10}, {p.x, p.y + 10}},
+                   8.0F)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace canvas::windows

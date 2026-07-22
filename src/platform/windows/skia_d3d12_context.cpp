@@ -49,6 +49,25 @@ HRESULT SkiaD3D12Context::initialize() {
                  converted > 0 ? adapterName : "<unknown>");
     break;
   }
+  if (!device_) {
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> warp;
+    hr = factory_->EnumWarpAdapter(IID_PPV_ARGS(warp.ReleaseAndGetAddressOf()));
+    if (SUCCEEDED(hr)) {
+      Microsoft::WRL::ComPtr<ID3D12Device> warpDevice;
+      hr = D3D12CreateDevice(
+          warp.Get(), D3D_FEATURE_LEVEL_11_0,
+          IID_PPV_ARGS(warpDevice.ReleaseAndGetAddressOf()));
+      if (SUCCEEDED(hr)) {
+        adapter_ = warp;
+        device_ = warpDevice;
+        spdlog::warn("canvas D3D12 adapter: WARP software fallback");
+      } else if (firstFailure == E_FAIL) {
+        firstFailure = hr;
+      }
+    } else if (firstFailure == E_FAIL) {
+      firstFailure = hr;
+    }
+  }
   if (!device_ || !adapter_) return firstFailure;
 
   D3D12_COMMAND_QUEUE_DESC queueDesc{};
@@ -63,8 +82,7 @@ HRESULT SkiaD3D12Context::initialize() {
   backend.fQueue.retain(queue_.Get());
   context_ = GrDirectContexts::MakeD3D(backend);
   if (!context_) {
-    const HRESULT failure = firstFailure == E_FAIL ? E_FAIL : firstFailure;
-    return failure;
+    return E_FAIL;
   }
   return S_OK;
 }

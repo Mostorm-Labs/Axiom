@@ -4,7 +4,9 @@
 #include <wrl/client.h>
 
 #include <cstdint>
+#include <array>
 #include <functional>
+#include <deque>
 #include <optional>
 #include <utility>
 
@@ -32,6 +34,19 @@ class SkiaSwapChainLayer {
   DXGI_ALPHA_MODE alphaMode() const noexcept { return alphaMode_; }
   IDXGISwapChain3* swapChain() const noexcept { return swapChain_.Get(); }
   std::uint64_t frameId() const noexcept { return frameId_; }
+  std::uint64_t mediaPresentCount() const noexcept {
+    return mediaPresentCount_;
+  }
+  std::uint64_t mediaFrameId() const noexcept { return mediaFrameId_; }
+  void setClearColorArgb(std::uint32_t colorArgb) noexcept {
+    clearColorArgb_ = colorArgb;
+  }
+  bool bufferNeedsFullRedraw(UINT index) const noexcept {
+    return index < needsFullRedraw_.size() ? needsFullRedraw_[index] : true;
+  }
+  bool bufferHasPendingDirty(UINT index) const noexcept {
+    return index < pendingDirty_.size() && pendingDirty_[index].has_value();
+  }
   void setFramePresentedHandler(FramePresentedHandler handler) {
     framePresentedHandler_ = std::move(handler);
   }
@@ -46,9 +61,19 @@ class SkiaSwapChainLayer {
   int width_ = 0;
   int height_ = 0;
   bool transparent_ = false;
+  std::uint32_t clearColorArgb_ = 0;
   DXGI_ALPHA_MODE alphaMode_ = DXGI_ALPHA_MODE_IGNORE;
-  bool needsFullRedraw_ = true;
+  std::array<bool, 2> needsFullRedraw_{{true, true}};
+  std::array<std::optional<core::Rect>, 2> pendingDirty_{};
+  std::optional<core::Rect> renderedInvalidation_;
+  bool renderedFullInvalidation_ = false;
+  UINT renderedBufferIndex_ = 0;
   std::uint64_t frameId_ = 0;
+  std::uint64_t mediaPresentCount_ = 0;
+  std::uint64_t mediaFrameId_ = 0;
+  std::uint64_t lastCallbackFrameId_ = 0;
+  bool bufferRendered_ = false;
+  std::deque<std::pair<std::uint64_t, std::uint64_t>> submittedFrames_;
   FramePresentedHandler framePresentedHandler_;
   Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain_;
 };

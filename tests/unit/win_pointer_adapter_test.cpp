@@ -1,4 +1,5 @@
 #include "platform/windows/win_pointer_adapter.h"
+#include "platform/windows/qpc_clock.h"
 
 #include <gtest/gtest.h>
 
@@ -63,6 +64,11 @@ TEST(WinPointerAdapterTest, HandlesZeroQpcFrequencySafely) {
       input::PointerPhase::Move);
 
   EXPECT_EQ(sample.timestampMicros, 0U);
+}
+
+TEST(WinPointerAdapterTest, SharedQpcConversionSaturates) {
+  EXPECT_EQ(qpcTicksToMicros(std::numeric_limits<std::uint64_t>::max(), 1),
+            std::numeric_limits<std::uint64_t>::max());
 }
 
 TEST(WinPointerAdapterTest, PreservesSuppliedTouchKindWithoutPrediction) {

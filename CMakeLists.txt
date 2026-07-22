@@ -31,6 +31,7 @@ if(WIN32)
     add_library(canvas_windows_platform STATIC
                 src/platform/windows/dcomp_host.cpp
                 src/platform/windows/win_pointer_adapter.cpp
+                src/platform/windows/qpc_clock.cpp
                 src/platform/windows/skia_d3d12_context.cpp
                 src/platform/windows/skia_swap_chain_layer.cpp)
     add_library(canvas::windows_platform ALIAS canvas_windows_platform)

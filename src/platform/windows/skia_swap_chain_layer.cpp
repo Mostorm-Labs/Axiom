@@ -1,4 +1,5 @@
 #include "platform/windows/skia_swap_chain_layer.h"
+#include "platform/windows/qpc_clock.h"
 
 #include "canvas/render/skia_renderer.h"
 #include "include/core/SkCanvas.h"
@@ -11,19 +12,6 @@
 
 #include <algorithm>
 #include <cmath>
-
-namespace {
-
-std::uint64_t qpcToMicros(LONGLONG ticks, LONGLONG frequency) {
-  if (ticks <= 0 || frequency <= 0) return 0;
-  const auto whole = static_cast<std::uint64_t>(ticks / frequency);
-  const auto remainder = static_cast<std::uint64_t>(ticks % frequency);
-  return whole * 1000000ULL +
-         (remainder * 1000000ULL) / static_cast<std::uint64_t>(frequency);
-}
-
-}  // namespace
-
 namespace canvas::windows {
 
 SkiaSwapChainLayer::~SkiaSwapChainLayer() { cleanup(); }
@@ -42,7 +30,12 @@ HRESULT SkiaSwapChainLayer::initialize(SkiaD3D12Context& gpu, DCompHost& host,
   width_ = width;
   height_ = height;
   transparent_ = transparent;
+  clearColorArgb_ = transparent ? SK_ColorTRANSPARENT : SK_ColorWHITE;
   alphaMode_ = transparent ? DXGI_ALPHA_MODE_PREMULTIPLIED : DXGI_ALPHA_MODE_IGNORE;
+  frameId_ = 0;
+  mediaPresentCount_ = 0;
+  mediaFrameId_ = 0;
+  lastCallbackFrameId_ = 0;
   const HRESULT hr = createSwapChain();
   if (FAILED(hr)) cleanup();
   return hr;
@@ -70,7 +63,7 @@ HRESULT SkiaSwapChainLayer::createSwapChain() {
   if (FAILED(hr)) return hr;
   hr = host_->setContent(slot_, swapChain_.Get());
   if (FAILED(hr)) return hr;
-  needsFullRedraw_ = true;
+  needsFullRedraw_.fill(true);
   return S_OK;
 }
 
@@ -98,7 +91,32 @@ HRESULT SkiaSwapChainLayer::render(const document::Document& document,
                                    const std::optional<core::Rect>& dirtyBounds) {
   if (!swapChain_ || gpu_ == nullptr || gpu_->context() == nullptr) return E_UNEXPECTED;
   Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-  HRESULT hr = swapChain_->GetBuffer(swapChain_->GetCurrentBackBufferIndex(),
+  renderedBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
+  if (renderedBufferIndex_ >= needsFullRedraw_.size()) return E_FAIL;
+  renderedFullInvalidation_ = !dirtyBounds.has_value();
+  std::optional<core::Rect> normalizedDirty = dirtyBounds;
+  RECT validatedDirty{};
+  if (normalizedDirty &&
+      !toRect(*normalizedDirty, &validatedDirty, width_, height_)) {
+    renderedFullInvalidation_ = false;
+    normalizedDirty.reset();
+    if (!needsFullRedraw_[renderedBufferIndex_] &&
+        !pendingDirty_[renderedBufferIndex_]) {
+      return S_FALSE;
+    }
+  }
+  renderedInvalidation_ = normalizedDirty;
+  std::optional<core::Rect> effectiveDirty;
+  if (!needsFullRedraw_[renderedBufferIndex_]) {
+    effectiveDirty = normalizedDirty;
+    if (pendingDirty_[renderedBufferIndex_]) {
+      effectiveDirty = effectiveDirty
+                           ? effectiveDirty->united(
+                                 *pendingDirty_[renderedBufferIndex_])
+                           : pendingDirty_[renderedBufferIndex_];
+    }
+  }
+  HRESULT hr = swapChain_->GetBuffer(renderedBufferIndex_,
                                      IID_PPV_ARGS(resource.ReleaseAndGetAddressOf()));
   if (FAILED(hr)) return hr;
 
@@ -118,26 +136,22 @@ HRESULT SkiaSwapChainLayer::render(const document::Document& document,
 
   SkCanvas* canvas = surface->getCanvas();
   canvas->save();
-  if (dirtyBounds.has_value() && !needsFullRedraw_) {
+  if (effectiveDirty.has_value()) {
     RECT ignored{};
-    if (toRect(*dirtyBounds, &ignored, width_, height_)) {
+    if (toRect(*effectiveDirty, &ignored, width_, height_)) {
       canvas->clipRect(SkRect::MakeLTRB(static_cast<float>(ignored.left),
                                         static_cast<float>(ignored.top),
                                         static_cast<float>(ignored.right),
                                         static_cast<float>(ignored.bottom)));
     }
   }
-  if (transparent_) {
-    canvas->clear(SK_ColorTRANSPARENT);
-  } else {
-    canvas->clear(SK_ColorWHITE);
-  }
+  canvas->clear(static_cast<SkColor>(clearColorArgb_));
   canvas::render::SkiaRenderer renderer;
-  renderer.drawLayer(*canvas, document, layer, dirtyBounds);
+  renderer.drawLayer(*canvas, document, layer, effectiveDirty);
   canvas->restore();
   gpu_->context()->flushAndSubmit(GrSyncCpu::kNo);
-  needsFullRedraw_ = false;
-  return present(dirtyBounds);
+  bufferRendered_ = true;
+  return present(effectiveDirty);
 }
 
 HRESULT SkiaSwapChainLayer::present(const std::optional<core::Rect>& dirtyBounds) {
@@ -154,34 +168,95 @@ HRESULT SkiaSwapChainLayer::present(const std::optional<core::Rect>& dirtyBounds
   }
   if (SUCCEEDED(hr)) {
     ++frameId_;
+    if (bufferRendered_ && renderedBufferIndex_ < needsFullRedraw_.size()) {
+      needsFullRedraw_[renderedBufferIndex_] = false;
+      pendingDirty_[renderedBufferIndex_].reset();
+      for (UINT index = 0; index < needsFullRedraw_.size(); ++index) {
+        if (index == renderedBufferIndex_) continue;
+        if (renderedFullInvalidation_) {
+          needsFullRedraw_[index] = true;
+          pendingDirty_[index].reset();
+        } else if (renderedInvalidation_ && !needsFullRedraw_[index]) {
+          pendingDirty_[index] = pendingDirty_[index]
+                                     ? pendingDirty_[index]->united(
+                                           *renderedInvalidation_)
+                                     : renderedInvalidation_;
+        }
+      }
+      bufferRendered_ = false;
+    }
+    UINT lastPresentCount = 0;
+    if (SUCCEEDED(swapChain_->GetLastPresentCount(&lastPresentCount))) {
+      submittedFrames_.emplace_back(lastPresentCount, frameId_);
+      while (submittedFrames_.size() > 16) submittedFrames_.pop_front();
+    }
     LARGE_INTEGER frequency{};
     QueryPerformanceFrequency(&frequency);
     std::uint64_t micros = 0;
+    std::uint64_t callbackFrameId = 0;
     Microsoft::WRL::ComPtr<IDXGISwapChainMedia> media;
     DXGI_FRAME_STATISTICS_MEDIA stats{};
-    if (SUCCEEDED(swapChain_.As(&media)) &&
-        SUCCEEDED(media->GetFrameStatisticsMedia(&stats)) &&
-        stats.SyncQPCTime.QuadPart > 0) {
-      micros = qpcToMicros(stats.SyncQPCTime.QuadPart, frequency.QuadPart);
-    } else {
-      LARGE_INTEGER now{};
-      if (QueryPerformanceCounter(&now)) {
-        micros = qpcToMicros(now.QuadPart, frequency.QuadPart);
+    const HRESULT mediaResult = swapChain_.As(&media);
+    const HRESULT statsResult = SUCCEEDED(mediaResult)
+                                    ? media->GetFrameStatisticsMedia(&stats)
+                                    : mediaResult;
+    if (SUCCEEDED(statsResult) &&
+        stats.SyncQPCTime.QuadPart > 0 &&
+        stats.PresentCount > mediaPresentCount_) {
+      const auto match = std::find_if(
+          submittedFrames_.begin(), submittedFrames_.end(),
+          [&stats](const auto& submitted) {
+            return submitted.first == stats.PresentCount;
+          });
+      if (match != submittedFrames_.end()) {
+        mediaPresentCount_ = stats.PresentCount;
+        mediaFrameId_ = match->second;
+        callbackFrameId = mediaFrameId_;
+        micros = qpcTicksToMicros(
+            static_cast<std::uint64_t>(stats.SyncQPCTime.QuadPart),
+            static_cast<std::uint64_t>(frequency.QuadPart));
       }
     }
-    if (framePresentedHandler_) framePresentedHandler_(frameId_, micros);
+    // Unsupported/disjoint media statistics fall back to the local QPC for
+    // the frame just submitted. Stale media statistics do not emit a second
+    // callback for a frame already observed.
+    if (FAILED(statsResult)) {
+      callbackFrameId = frameId_;
+      LARGE_INTEGER now{};
+      if (QueryPerformanceCounter(&now)) {
+        micros = qpcTicksToMicros(
+            static_cast<std::uint64_t>(now.QuadPart),
+            static_cast<std::uint64_t>(frequency.QuadPart));
+      }
+    }
+    if (framePresentedHandler_ && callbackFrameId > lastCallbackFrameId_) {
+      lastCallbackFrameId_ = callbackFrameId;
+      framePresentedHandler_(callbackFrameId, micros);
+    }
+  } else if (bufferRendered_ &&
+             renderedBufferIndex_ < needsFullRedraw_.size()) {
+    needsFullRedraw_[renderedBufferIndex_] = true;
   }
   return hr;
 }
 
 HRESULT SkiaSwapChainLayer::resize(int width, int height) {
   if (!swapChain_ || width <= 0 || height <= 0) return E_INVALIDARG;
-  width_ = width;
-  height_ = height;
+  if (gpu_ == nullptr || gpu_->context() == nullptr) return E_UNEXPECTED;
+  gpu_->context()->flushAndSubmit(GrSyncCpu::kYes);
   const HRESULT hr = swapChain_->ResizeBuffers(2, static_cast<UINT>(width),
                                                static_cast<UINT>(height),
                                                DXGI_FORMAT_B8G8R8A8_UNORM, 0);
-  if (SUCCEEDED(hr)) needsFullRedraw_ = true;
+  if (SUCCEEDED(hr)) {
+    width_ = width;
+    height_ = height;
+    needsFullRedraw_.fill(true);
+    pendingDirty_.fill(std::nullopt);
+    bufferRendered_ = false;
+    mediaPresentCount_ = 0;
+    mediaFrameId_ = 0;
+    submittedFrames_.clear();
+  }
   return hr;
 }
 
@@ -192,7 +267,12 @@ void SkiaSwapChainLayer::cleanup() noexcept {
   swapChain_.Reset();
   gpu_ = nullptr;
   host_ = nullptr;
-  needsFullRedraw_ = true;
+  needsFullRedraw_.fill(true);
+  pendingDirty_.fill(std::nullopt);
+  renderedInvalidation_.reset();
+  renderedFullInvalidation_ = false;
+  bufferRendered_ = false;
+  submittedFrames_.clear();
 }
 
 }  // namespace canvas::windows

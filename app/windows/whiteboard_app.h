@@ -17,7 +17,7 @@ namespace canvas::windows {
 
 class WhiteboardApp {
  public:
-  int run(HINSTANCE instance, int commandShow);
+  int run(HINSTANCE instance, int commandShow, bool selfTestLayers = false);
 
   static LRESULT CALLBACK windowProc(HWND window, UINT message,
                                      WPARAM wParam, LPARAM lParam);
@@ -25,19 +25,29 @@ class WhiteboardApp {
  private:
   // Task 10 seam: samples stay native and are consumed by the future stroke
   // pipeline. No Electron IPC or rendering work belongs on this path.
-  void onPointerSample(const input::PointerSample& sample);
+  HRESULT onPointerSample(const input::PointerSample& sample);
+  HRESULT cancelActivePointer(std::uint64_t pointerId);
+  std::optional<document::NodeId> hitEmbedded(core::Vec2 point) const;
+  document::LayerClass activeDocumentLayer() const;
+  SkiaSwapChainLayer& activeSwapChainLayer();
+  bool populateSelfTestDocument();
 
   DCompHost composition_;
   SkiaD3D12Context gpu_;
   SkiaSwapChainLayer baseLayer_;
+  SkiaSwapChainLayer embeddedLayer_;
   SkiaSwapChainLayer annotationLayer_;
+  SkiaSwapChainLayer chromeLayer_;
   input::InputRouter inputRouter_;
   std::optional<stroke::StrokeBuilder> activeStroke_;
   std::optional<std::uint64_t> activePointerId_;
+  std::optional<input::PointerSample> lastPointerSample_;
+  input::RouteResult activeRoute_;
   document::StrokeNode activePreview_;
   document::NodeId activeStrokeId_;
   document::Document document_;
   std::uint64_t strokeSerial_ = 0;
+  HRESULT lastError_ = S_OK;
 };
 
 }  // namespace canvas::windows
