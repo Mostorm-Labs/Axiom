@@ -61,6 +61,10 @@ void SkiaRenderer::drawLayer(
         !std::holds_alternative<document::StrokeNode>(node.payload)) {
       continue;
     }
+    if (dirtyBounds && node.bounds.width > 0.0F && node.bounds.height > 0.0F &&
+        !node.bounds.intersects(*dirtyBounds)) {
+      continue;
+    }
 
     const auto& stroke = std::get<document::StrokeNode>(node.payload);
     const document::StrokeNode* drawable = &stroke;
@@ -86,12 +90,44 @@ void SkiaRenderer::drawLayer(
       continue;
     }
 
-    SkPath path;
-    path.moveTo(drawable->points.front().position.x,
-                drawable->points.front().position.y);
-    for (std::size_t index = 1; index < drawable->points.size(); ++index) {
-      path.lineTo(drawable->points[index].position.x,
-                  drawable->points[index].position.y);
+    const document::Node* parentNode =
+        node.parentId ? document.find(*node.parentId) : nullptr;
+    const auto parentBounds = parentNode ? parentNode->bounds : core::Rect{};
+    const auto lastPoint = drawable->points.back().position;
+    const auto firstPoint = drawable->points.front().position;
+    auto& cached = pathCache_[node.id];
+    const bool metadataValid = cached.source == &stroke &&
+        cached.width == drawable->width &&
+        cached.colorArgb == drawable->colorArgb &&
+        cached.coordinateSpace == drawable->coordinateSpace &&
+        cached.parentBounds == parentBounds && cached.firstPoint == firstPoint;
+    if (metadataValid && drawable->points.size() > cached.pointCount) {
+      for (std::size_t index = cached.pointCount;
+           index < drawable->points.size(); ++index) {
+        cached.path.lineTo(drawable->points[index].position.x,
+                           drawable->points[index].position.y);
+      }
+      cached.pointCount = drawable->points.size();
+      cached.source = &stroke;
+      cached.lastPoint = lastPoint;
+      ++incrementalAppendCount_;
+    } else if (!(metadataValid && cached.pointCount == drawable->points.size() &&
+                 cached.lastPoint == lastPoint)) {
+      cached.path.reset();
+      cached.path.moveTo(drawable->points.front().position.x,
+                         drawable->points.front().position.y);
+      for (std::size_t index = 1; index < drawable->points.size(); ++index) {
+        cached.path.lineTo(drawable->points[index].position.x,
+                           drawable->points[index].position.y);
+      }
+      cached.pointCount = drawable->points.size();
+      cached.firstPoint = firstPoint;
+      cached.lastPoint = lastPoint;
+      cached.width = drawable->width;
+      cached.colorArgb = drawable->colorArgb;
+      cached.coordinateSpace = drawable->coordinateSpace;
+      cached.parentBounds = parentBounds;
+      ++fullPathBuildCount_;
     }
 
     SkPaint paint;
@@ -101,7 +137,7 @@ void SkiaRenderer::drawLayer(
     paint.setStrokeJoin(SkPaint::kRound_Join);
     paint.setStrokeWidth(drawable->width);
     paint.setColor(static_cast<SkColor>(drawable->colorArgb));
-    canvas.drawPath(path, paint);
+    canvas.drawPath(cached.path, paint);
   }
 
   canvas.restore();

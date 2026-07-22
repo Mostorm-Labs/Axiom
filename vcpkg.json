@@ -8,7 +8,14 @@
     {
       "name": "skia",
       "default-features": false,
-      "features": ["direct3d", "png"]
+      "features": ["png"],
+      "platform": "!windows"
+    },
+    {
+      "name": "skia",
+      "default-features": false,
+      "features": ["direct3d", "png"],
+      "platform": "windows"
     }
   ]
 }

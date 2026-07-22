@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace canvas::windows {
 
@@ -26,6 +27,7 @@ class WhiteboardApp {
   // Task 10 seam: samples stay native and are consumed by the future stroke
   // pipeline. No Electron IPC or rendering work belongs on this path.
   HRESULT onPointerSample(const input::PointerSample& sample);
+  HRESULT onPointerSamples(std::vector<input::PointerSample> samples);
   HRESULT cancelActivePointer(std::uint64_t pointerId);
   std::optional<document::NodeId> hitEmbedded(core::Vec2 point) const;
   document::LayerClass activeDocumentLayer() const;
@@ -43,11 +45,14 @@ class WhiteboardApp {
   std::optional<std::uint64_t> activePointerId_;
   std::optional<input::PointerSample> lastPointerSample_;
   input::RouteResult activeRoute_;
-  document::StrokeNode activePreview_;
   document::NodeId activeStrokeId_;
   document::Document document_;
   std::uint64_t strokeSerial_ = 0;
   HRESULT lastError_ = S_OK;
+  bool batchingPointerSamples_ = false;
+  std::optional<core::Rect> batchedDirtyBounds_;
+  bool batchedFullRedraw_ = false;
+  document::LayerClass batchedLayer_ = document::LayerClass::Annotation;
 };
 
 }  // namespace canvas::windows

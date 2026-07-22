@@ -149,11 +149,21 @@ HRESULT SkiaSwapChainLayer::render(const document::Document& document,
     }
   }
   canvas->clear(static_cast<SkColor>(clearColorArgb_));
-  canvas::render::SkiaRenderer renderer;
-  renderer.drawLayer(*canvas, document, layer, effectiveDirty);
+  renderer_.drawLayer(*canvas, document, layer, effectiveDirty);
   canvas->restore();
   lastRenderWasFull_ = !effectiveDirty.has_value();
-  gpu_->context()->flushAndSubmit(GrSyncCpu::kNo);
+  GrFlushInfo flushInfo{};
+  gpu_->context()->flush(surface.get(),
+                         SkSurfaces::BackendSurfaceAccess::kPresent,
+                         flushInfo);
+  if (!gpu_->context()->submit(GrSyncCpu::kNo)) {
+    needsFullRedraw_.fill(true);
+    pendingDirty_.fill(std::nullopt);
+    renderedInvalidation_.reset();
+    renderedFullInvalidation_ = false;
+    bufferRendered_ = false;
+    return E_FAIL;
+  }
   bufferRendered_ = true;
   return present(effectiveDirty);
 }
@@ -239,7 +249,11 @@ HRESULT SkiaSwapChainLayer::present(const std::optional<core::Rect>& dirtyBounds
     }
   } else if (bufferRendered_ &&
              renderedBufferIndex_ < needsFullRedraw_.size()) {
-    needsFullRedraw_[renderedBufferIndex_] = true;
+    needsFullRedraw_.fill(true);
+    pendingDirty_.fill(std::nullopt);
+    renderedInvalidation_.reset();
+    renderedFullInvalidation_ = false;
+    bufferRendered_ = false;
   }
   return hr;
 }
@@ -267,6 +281,9 @@ HRESULT SkiaSwapChainLayer::resize(int width, int height) {
 }
 
 void SkiaSwapChainLayer::cleanup() noexcept {
+  if (gpu_ != nullptr && gpu_->context() != nullptr) {
+    gpu_->context()->flushAndSubmit(GrSyncCpu::kYes);
+  }
   if (host_ != nullptr) {
     (void)host_->setContent(slot_, nullptr);
   }

@@ -8,10 +8,12 @@
 #include <functional>
 #include <deque>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 #include "canvas/core/geometry.h"
 #include "canvas/document/document.h"
+#include "canvas/render/skia_renderer.h"
 #include "platform/windows/dcomp_host.h"
 #include "platform/windows/skia_d3d12_context.h"
 
@@ -19,6 +21,12 @@ namespace canvas::windows {
 
 class SkiaSwapChainLayer {
  public:
+  SkiaSwapChainLayer() = default;
+  SkiaSwapChainLayer(const SkiaSwapChainLayer&) = delete;
+  SkiaSwapChainLayer& operator=(const SkiaSwapChainLayer&) = delete;
+  SkiaSwapChainLayer(SkiaSwapChainLayer&&) = delete;
+  SkiaSwapChainLayer& operator=(SkiaSwapChainLayer&&) = delete;
+
   using FramePresentedHandler = std::function<void(std::uint64_t, std::uint64_t)>;
 
   ~SkiaSwapChainLayer();
@@ -55,6 +63,7 @@ class SkiaSwapChainLayer {
   }
   bool lastRenderWasFull() const noexcept { return lastRenderWasFull_; }
   bool lastPresentWasFull() const noexcept { return lastPresentWasFull_; }
+  void invalidateNode(std::string_view id) { renderer_.invalidateNode(id); }
   void setFramePresentedHandler(FramePresentedHandler handler) {
     framePresentedHandler_ = std::move(handler);
   }
@@ -88,6 +97,7 @@ class SkiaSwapChainLayer {
   std::deque<std::pair<std::uint64_t, std::uint64_t>> submittedFrames_;
   FramePresentedHandler framePresentedHandler_;
   Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain_;
+  render::SkiaRenderer renderer_;
 };
 
 }  // namespace canvas::windows

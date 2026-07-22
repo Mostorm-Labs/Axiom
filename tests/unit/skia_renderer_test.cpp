@@ -83,6 +83,45 @@ TEST(SkiaRendererTest, DirtyClipConfinesRasterOutput) {
   EXPECT_EQ((pixels[8 * 16 + 12] >> 24U) & 0xFFU, 0U);
 }
 
+TEST(SkiaRendererTest, AppendsActiveStrokePathWithoutFullRebuild) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.points = {{{2, 8}, 1.0F, 1}, {{8, 8}, 1.0F, 2}};
+  ASSERT_TRUE(doc.add({"active", document::LayerClass::Annotation,
+                       {0, 0, 16, 16}, {}, stroke}));
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 32, 32);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
+
+  auto* node = doc.find("active");
+  ASSERT_NE(node, nullptr);
+  std::get<document::StrokeNode>(node->payload)
+      .points.push_back({{16, 8}, 1.0F, 3});
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 32, 32);
+
+  EXPECT_EQ(renderer.fullPathBuildCount(), 1u);
+  EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+}
+
+TEST(SkiaRendererTest, DoesNotReuseSameNodeIdAcrossDocuments) {
+  auto makeDocument = [](float middleY) {
+    document::Document doc;
+    document::StrokeNode stroke;
+    stroke.points = {{{2, 2}, 1.0F, 1},
+                     {{8, middleY}, 1.0F, 2},
+                     {{16, 16}, 1.0F, 3}};
+    EXPECT_TRUE(doc.add({"shared-id", document::LayerClass::Base,
+                         {0, 0, 20, 20}, {}, stroke}));
+    return doc;
+  };
+  auto first = makeDocument(4.0F);
+  auto second = makeDocument(12.0F);
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(first, document::LayerClass::Base, 32, 32);
+  (void)renderer.renderRaster(second, document::LayerClass::Base, 32, 32);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 2u);
+}
+
 TEST(SkiaRendererTest, ResolvesParentNormalizedStrokeAfterParentMoveAndResize) {
   document::Document doc;
   document::Node parent{"embed", document::LayerClass::Embedded,

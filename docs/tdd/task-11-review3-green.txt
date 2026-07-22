@@ -9,3 +9,9 @@ asserts both values are true.
 
 `git diff --check` is run locally. No Windows test result is claimed from this
 macOS host; Windows CI remains authoritative.
+
+The Windows pointer adapter now consumes one oldest-first history batch,
+retaining the oldest DOWN and newest UP edges, updates the active preview node
+incrementally, and presents at most once per batch. SkiaRenderer retains paths
+by node id/point count/last point/parent bounds and skips known-outside dirty
+nodes, avoiding full path reconstruction on every sample.

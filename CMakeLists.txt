@@ -40,9 +40,9 @@ if(WIN32)
                                ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(canvas_windows_platform PUBLIC dcomp dxgi d3d12
                                                          user32 ole32
-                                                         PRIVATE spdlog::spdlog
-                                                                 unofficial::skia::skia
-                                                                 canvas::core)
+                                                         unofficial::skia::skia
+                                                         canvas::core
+                                                         PRIVATE spdlog::spdlog)
     canvas_enable_warnings(canvas_windows_platform)
 
     add_subdirectory(app/windows)

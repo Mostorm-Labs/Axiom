@@ -11,6 +11,12 @@ namespace canvas::windows {
 
 class SkiaD3D12Context {
  public:
+  SkiaD3D12Context() = default;
+  SkiaD3D12Context(const SkiaD3D12Context&) = delete;
+  SkiaD3D12Context& operator=(const SkiaD3D12Context&) = delete;
+  SkiaD3D12Context(SkiaD3D12Context&&) = delete;
+  SkiaD3D12Context& operator=(SkiaD3D12Context&&) = delete;
+
   HRESULT initialize(bool allowSoftwareFallback = false);
 
   IDXGIFactory4* factory() const noexcept { return factory_.Get(); }

@@ -164,9 +164,6 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
 
   if (message == WM_POINTERDOWN || message == WM_POINTERUPDATE ||
       message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
-    if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
-      ReleaseCapture();
-    }
     auto* app = reinterpret_cast<WhiteboardApp*>(GetWindowLongPtrW(
         window, GWLP_USERDATA));
     if (app == nullptr) {
@@ -180,6 +177,9 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
       if (FAILED(cancelResult)) {
         app->lastError_ = cancelResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
+      }
+      if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+        ReleaseCapture();
       }
       return DefWindowProcW(window, message, wParam, lParam);
     }
@@ -196,6 +196,9 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
         app->lastError_ = cancelResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
       }
+      if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+        ReleaseCapture();
+      }
       return DefWindowProcW(window, message, wParam, lParam);
     }
 
@@ -205,28 +208,34 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
         app->lastError_ = cancelResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
       }
+      if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+        ReleaseCapture();
+      }
       return 0;
     }
 
+    // Win32 history is oldest-first. Preserve the DOWN edge on the oldest
+    // record and the UP edge on the newest; all intervening records move.
     for (std::size_t index = 0; index < samples.size(); ++index) {
-      // Win32 returns history oldest-first after normalization. Only the
-      // newest record represents the DOWN/UP edge; preceding records are
-      // coalesced movement and must not begin/finish the stroke repeatedly.
-      if (index + 1 < samples.size() &&
-          (phase == input::PointerPhase::Down ||
-           phase == input::PointerPhase::Up)) {
+      if (phase == input::PointerPhase::Down && index != 0) {
+        samples[index].phase = input::PointerPhase::Move;
+      } else if (phase == input::PointerPhase::Up &&
+                 index + 1 < samples.size()) {
         samples[index].phase = input::PointerPhase::Move;
       }
-      const HRESULT sampleResult = app->onPointerSample(samples[index]);
-      if (FAILED(sampleResult)) {
-        app->lastError_ = sampleResult;
-        PostMessageW(window, WM_CLOSE, 0, 0);
-        return 0;
-      }
+    }
+    const HRESULT sampleResult = app->onPointerSamples(std::move(samples));
+    if (FAILED(sampleResult)) {
+      app->lastError_ = sampleResult;
+      PostMessageW(window, WM_CLOSE, 0, 0);
+      return 0;
     }
 
     if (message == WM_POINTERDOWN) {
       SetCapture(window);
+    } else if (message == WM_POINTERUP ||
+               message == WM_POINTERCAPTURECHANGED) {
+      ReleaseCapture();
     }
     return 0;
   }
@@ -268,12 +277,37 @@ HRESULT WhiteboardApp::cancelActivePointer(std::uint64_t pointerId) {
   return onPointerSample(cancel);
 }
 
+HRESULT WhiteboardApp::onPointerSamples(
+    std::vector<input::PointerSample> samples) {
+  batchingPointerSamples_ = true;
+  batchedDirtyBounds_.reset();
+  batchedFullRedraw_ = false;
+  if (activeStroke_) batchedLayer_ = activeDocumentLayer();
+  HRESULT result = S_OK;
+  for (const auto& sample : samples) {
+    result = onPointerSample(sample);
+    if (FAILED(result)) break;
+  }
+  batchingPointerSamples_ = false;
+  if (FAILED(result)) return result;
+  if (batchedFullRedraw_) {
+    return (batchedLayer_ == document::LayerClass::Base ? baseLayer_
+                                                          : annotationLayer_)
+        .render(document_, batchedLayer_);
+  }
+  if (!batchedDirtyBounds_) return result;
+  return (batchedLayer_ == document::LayerClass::Base ? baseLayer_
+                                                        : annotationLayer_)
+      .render(document_, batchedLayer_, batchedDirtyBounds_);
+}
+
 HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   if (sample.phase == input::PointerPhase::Down) {
     if (activeStroke_) return S_FALSE;
     const auto hit = hitEmbedded(sample.screenPosition);
     inputRouter_.setActiveEmbeddedNode(hit);
     activeRoute_ = inputRouter_.route(sample.kind, hit);
+    batchedLayer_ = activeDocumentLayer();
     if (activeRoute_.target != input::InputTarget::BaseCanvas &&
         activeRoute_.target != input::InputTarget::Annotation) {
       return S_FALSE;
@@ -282,15 +316,15 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
     activePointerId_ = sample.pointerId;
     lastPointerSample_ = sample;
     activeStroke_->begin(sample);
-    activePreview_ = {};
-    activePreview_.width = 4.0F;
-    activePreview_.points.push_back(document::StrokePoint{
+    document::StrokeNode preview;
+    preview.width = 4.0F;
+    preview.points.push_back(document::StrokePoint{
         sample.screenPosition, sample.pressure, sample.timestampMicros});
     activeStrokeId_ = "stroke-" + std::to_string(++strokeSerial_);
     document::Node previewNode;
     previewNode.id = activeStrokeId_;
     previewNode.layer = activeDocumentLayer();
-    previewNode.payload = activePreview_;
+    previewNode.payload = std::move(preview);
     if (!document_.add(std::move(previewNode))) return E_FAIL;
     return S_OK;
   }
@@ -299,28 +333,41 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   if (sample.phase == input::PointerPhase::Move) {
     const stroke::StrokeUpdate update = activeStroke_->append(sample);
     if (update.accepted) {
-      activePreview_.points.push_back(document::StrokePoint{
-          sample.screenPosition, sample.pressure, sample.timestampMicros});
+      if (auto* previewNode = document_.find(activeStrokeId_)) {
+        if (auto* preview =
+                std::get_if<document::StrokeNode>(&previewNode->payload)) {
+          preview->points.push_back(document::StrokePoint{
+              sample.screenPosition, sample.pressure, sample.timestampMicros});
+        }
+      }
     }
     if (update.dirtyBounds.width > 0.0F && update.dirtyBounds.height > 0.0F) {
-      if (auto* previewNode = document_.find(activeStrokeId_)) {
-        previewNode->payload = activePreview_;
+      if (batchingPointerSamples_) {
+        batchedDirtyBounds_ = batchedDirtyBounds_
+                                  ? batchedDirtyBounds_->united(update.dirtyBounds)
+                                  : std::optional<core::Rect>(update.dirtyBounds);
+      } else {
+        const HRESULT hr = activeSwapChainLayer().render(
+            document_, activeDocumentLayer(), update.dirtyBounds);
+        if (FAILED(hr)) return hr;
       }
-      const HRESULT hr = activeSwapChainLayer().render(
-          document_, activeDocumentLayer(), update.dirtyBounds);
-      if (FAILED(hr)) return hr;
     }
     return S_OK;
   }
   if (sample.phase == input::PointerPhase::Cancel) {
     const document::LayerClass layer = activeDocumentLayer();
     SkiaSwapChainLayer& swapChainLayer = activeSwapChainLayer();
+    swapChainLayer.invalidateNode(activeStrokeId_);
     document_.erase(activeStrokeId_);
     activeStroke_.reset();
     activePointerId_.reset();
-    activePreview_ = {};
     activeStrokeId_.clear();
     lastPointerSample_.reset();
+    if (batchingPointerSamples_) {
+      batchedLayer_ = layer;
+      batchedFullRedraw_ = true;
+      return S_OK;
+    }
     return swapChainLayer.render(document_, layer);
   }
   const stroke::StrokeUpdate finalUpdate = activeStroke_->append(sample);
@@ -351,9 +398,9 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   }
   const document::LayerClass layer = activeDocumentLayer();
   SkiaSwapChainLayer& swapChainLayer = activeSwapChainLayer();
+  swapChainLayer.invalidateNode(activeStrokeId_);
   activeStroke_.reset();
   activePointerId_.reset();
-  activePreview_ = {};
   activeStrokeId_.clear();
   lastPointerSample_.reset();
   std::optional<core::Rect> redraw;
@@ -363,6 +410,17 @@ HRESULT WhiteboardApp::onPointerSample(const input::PointerSample& sample) {
   }
   if (finalDirty.width > 0.0F && finalDirty.height > 0.0F) {
     redraw = redraw ? redraw->united(finalDirty) : finalDirty;
+  }
+  if (batchingPointerSamples_) {
+    batchedLayer_ = layer;
+    if (redraw) {
+      batchedDirtyBounds_ = batchedDirtyBounds_
+                                ? batchedDirtyBounds_->united(*redraw)
+                                : redraw;
+    } else {
+      batchedFullRedraw_ = true;
+    }
+    return completionResult;
   }
   const HRESULT renderResult = swapChainLayer.render(document_, layer, redraw);
   return FAILED(renderResult) ? renderResult : completionResult;
