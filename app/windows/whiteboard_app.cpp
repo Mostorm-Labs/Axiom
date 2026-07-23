@@ -1,6 +1,8 @@
 #include "whiteboard_app.h"
 
 #include "canvas/document/embedded_transform.h"
+#include "canvas/storage/document_codec.h"
+#include "platform/windows/document_store.h"
 #include "platform/windows/webview2_media_source.h"
 #include "platform/windows/win_pointer_adapter.h"
 
@@ -9,11 +11,14 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -79,6 +84,110 @@ bool isEmbeddedMouseButtonUp(UINT message) {
          message == WM_MBUTTONUP || message == WM_XBUTTONUP;
 }
 
+std::optional<std::wstring> utf8ToWide(std::string_view value) {
+  if (value.empty()) return std::wstring{};
+  if (value.size() >
+      static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    return std::nullopt;
+  }
+  const int sourceLength = static_cast<int>(value.size());
+  const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                         value.data(), sourceLength, nullptr,
+                                         0);
+  if (length <= 0) return std::nullopt;
+  std::wstring result(static_cast<std::size_t>(length), L'\0');
+  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
+                          sourceLength, result.data(), length) != length) {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<std::string> wideToUtf8(std::wstring_view value) {
+  if (value.empty()) return std::string{};
+  if (value.size() >
+      static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    return std::nullopt;
+  }
+  const int sourceLength = static_cast<int>(value.size());
+  const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+                                         value.data(), sourceLength, nullptr,
+                                         0, nullptr, nullptr);
+  if (length <= 0) return std::nullopt;
+  std::string result(static_cast<std::size_t>(length), '\0');
+  if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(),
+                          sourceLength, result.data(), length, nullptr,
+                          nullptr) != length) {
+    return std::nullopt;
+  }
+  return result;
+}
+
+std::optional<std::wstring> percentEncodeQueryComponent(
+    std::wstring_view value) {
+  const auto utf8 = wideToUtf8(value);
+  if (!utf8) return std::nullopt;
+  constexpr char kHex[] = "0123456789ABCDEF";
+  std::wstring result;
+  result.reserve(utf8->size() * 3U);
+  for (const unsigned char byte : *utf8) {
+    const bool unreserved =
+        (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') ||
+        (byte >= '0' && byte <= '9') || byte == '-' || byte == '.' ||
+        byte == '_' || byte == '~';
+    if (unreserved) {
+      result.push_back(static_cast<wchar_t>(byte));
+    } else {
+      result.push_back(L'%');
+      result.push_back(static_cast<wchar_t>(kHex[byte >> 4U]));
+      result.push_back(static_cast<wchar_t>(kHex[byte & 0x0FU]));
+    }
+  }
+  return result;
+}
+
+std::wstring jsonEscape(std::wstring_view value) {
+  std::wstring result;
+  result.reserve(value.size() + 8U);
+  constexpr wchar_t kHex[] = L"0123456789ABCDEF";
+  for (const wchar_t character : value) {
+    switch (character) {
+      case L'"':
+        result += L"\\\"";
+        break;
+      case L'\\':
+        result += L"\\\\";
+        break;
+      case L'\b':
+        result += L"\\b";
+        break;
+      case L'\f':
+        result += L"\\f";
+        break;
+      case L'\n':
+        result += L"\\n";
+        break;
+      case L'\r':
+        result += L"\\r";
+        break;
+      case L'\t':
+        result += L"\\t";
+        break;
+      default:
+        if (character < 0x20) {
+          const auto value16 = static_cast<unsigned int>(character);
+          result += L"\\u00";
+          result.push_back(kHex[(value16 >> 4U) & 0x0FU]);
+          result.push_back(kHex[value16 & 0x0FU]);
+        } else {
+          result.push_back(character);
+        }
+        break;
+    }
+  }
+  return result;
+}
+
 }  // namespace
 
 int WhiteboardApp::run(HINSTANCE instance, int commandShow,
@@ -86,6 +195,13 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   lastError_ = S_OK;
   if (instance == nullptr) {
     return hresultExitCode(E_INVALIDARG);
+  }
+  // Decode before creating any native surfaces. The codec returns a complete
+  // temporary Document, so a malformed file can never partially replace the
+  // in-memory document used by the renderer.
+  if (options.openPath) {
+    const HRESULT openResult = openDocument(*options.openPath);
+    if (FAILED(openResult)) return hresultExitCode(openResult);
   }
 
   WNDCLASSEXW windowClass{};
@@ -125,8 +241,16 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   }
   constexpr int kCanvasWidth = 1280;
   constexpr int kCanvasHeight = 720;
-  const bool diagnosticLayers =
-      options.selfTestLayers || options.selfTestEmbedded;
+  const bool openedDocumentHasEmbedded = std::any_of(
+      document_.nodes().begin(), document_.nodes().end(),
+      [](const document::Node& node) {
+        return node.layer == document::LayerClass::Embedded &&
+               std::holds_alternative<document::EmbeddedNode>(node.payload);
+      });
+  const bool diagnosticLayers = options.selfTestLayers ||
+                                options.selfTestEmbedded ||
+                                options.selfTestDocument ||
+                                openedDocumentHasEmbedded;
   inputRouter_.setFingerDrawEnabled(true);
   inputRouter_.setMode(diagnosticLayers ? input::InputMode::Interact
                                         : input::InputMode::Draw);
@@ -155,9 +279,12 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   }
   if (diagnosticLayers) {
     baseLayer_.setClearColorArgb(0xFF00AA00U);
-    const bool populated = options.selfTestEmbedded
-                               ? populateEmbeddedSelfTestDocument()
-                               : populateSelfTestDocument();
+    const bool populated = options.openPath
+                               ? true
+                               : (options.selfTestEmbedded ||
+                                          options.selfTestDocument
+                                      ? populateEmbeddedSelfTestDocument()
+                                      : populateSelfTestDocument());
     if (!populated) {
       DestroyWindow(window);
       UnregisterClassW(kWindowClassName, instance);
@@ -188,7 +315,7 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       return S_OK;
     };
 
-    if (options.selfTestEmbedded) {
+    if (options.selfTestEmbedded && !options.openPath) {
       WebView2Surface::Options contentOptions;
       contentOptions.canvasLocalFolder = L"web";
       layerResult = addWebView(
@@ -218,6 +345,83 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       if (SUCCEEDED(layerResult)) {
         layerResult = addWebView("web-1", std::move(contentOptions),
                                  L"https://example.com/");
+      }
+    } else if (options.openPath || options.selfTestDocument) {
+      // Recreate persisted embedded surfaces from their versioned node data.
+      // Only packaged canvas.local assets and HTTPS pages are accepted by the
+      // WebView2 navigation policy. A video path is approved through the same
+      // handle-based helper used by the standalone embedded diagnostic.
+      for (const auto& node : document_.nodes()) {
+        const auto* embedded =
+            std::get_if<document::EmbeddedNode>(&node.payload);
+        if (embedded == nullptr ||
+            node.layer != document::LayerClass::Embedded) {
+          continue;
+        }
+        const auto source = utf8ToWide(embedded->source);
+        const auto wideNodeId = utf8ToWide(node.id);
+        const auto encodedNodeId =
+            wideNodeId ? percentEncodeQueryComponent(*wideNodeId) :
+                         std::optional<std::wstring>{};
+        if (!source || !wideNodeId || !encodedNodeId || source->empty() ||
+            wideNodeId->empty() || wideNodeId->size() > 256U) {
+          layerResult = E_INVALIDARG;
+          break;
+        }
+        WebView2Surface::Options surfaceOptions;
+        std::wstring uri = *source;
+        std::optional<std::wstring> initialMessage;
+        const bool packagedSource =
+            _wcsnicmp(uri.c_str(), L"https://canvas.local/", 21) == 0;
+        if (packagedSource) surfaceOptions.canvasLocalFolder = L"web";
+
+        if (packagedSource &&
+            embedded->kind == document::EmbeddedKind::RichText) {
+          uri = L"https://canvas.local/richtext.html?nodeId=" +
+                *encodedNodeId;
+        } else if (packagedSource &&
+                   embedded->kind == document::EmbeddedKind::Video) {
+          uri = L"https://canvas.local/video.html?nodeId=" +
+                *encodedNodeId;
+        }
+
+        if (embedded->kind == document::EmbeddedKind::Video &&
+            options.videoPath) {
+          detail::LocalMediaSource mediaSource;
+          layerResult =
+              detail::approveLocalMediaFile(*options.videoPath, mediaSource);
+          if (FAILED(layerResult)) break;
+          surfaceOptions.canvasLocalFolder = L"web";
+          surfaceOptions.mediaCanvasLocalFolder = mediaSource.folder;
+          uri = L"https://canvas.local/video.html?nodeId=" +
+                *encodedNodeId;
+          initialMessage =
+              std::wstring(
+                  L"{\"protocolVersion\":1,\"type\":\"set-video-source\","
+                  L"\"nodeId\":\"") +
+              jsonEscape(*wideNodeId) + L"\",\"payload\":{\"source\":\"" +
+              jsonEscape(mediaSource.uri) + L"\"}}";
+        } else if (embedded->kind == document::EmbeddedKind::Video &&
+                   uri.rfind(L"https://", 0) != 0) {
+          detail::LocalMediaSource mediaSource;
+          layerResult = detail::approveLocalMediaFile(uri, mediaSource);
+          if (FAILED(layerResult)) break;
+          surfaceOptions.canvasLocalFolder = L"web";
+          surfaceOptions.mediaCanvasLocalFolder = mediaSource.folder;
+          uri = L"https://canvas.local/video.html?nodeId=" +
+                *encodedNodeId;
+          initialMessage =
+              std::wstring(
+                  L"{\"protocolVersion\":1,\"type\":\"set-video-source\","
+                  L"\"nodeId\":\"") +
+              jsonEscape(*wideNodeId) + L"\",\"payload\":{\"source\":\"" +
+              jsonEscape(mediaSource.uri) + L"\"}}";
+        }
+        if (SUCCEEDED(layerResult)) {
+          layerResult = addWebView(node.id, std::move(surfaceOptions), uri,
+                                   initialMessage);
+        }
+        if (FAILED(layerResult)) break;
       }
     } else {
       WebView2Surface::Options diagnosticOptions;
@@ -255,8 +459,25 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
     return hresultExitCode(renderResult);
   }
 
+  // Saving is an explicit command-line operation, intentionally performed
+  // outside all pointer callbacks. Copying first gives the store an immutable
+  // snapshot even if a future caller invokes save from another UI action.
+  if (options.savePath) {
+    const HRESULT saveResult = saveDocument(*options.savePath);
+    if (FAILED(saveResult)) {
+      DestroyWindow(window);
+      UnregisterClassW(kWindowClassName, instance);
+      return hresultExitCode(saveResult);
+    }
+  }
+
   ShowWindow(window, commandShow);
   UpdateWindow(window);
+  if (options.selfTestDocument) {
+    // The document round-trip diagnostic is intended for automation and must
+    // not leave a hidden message loop running after the requested save.
+    PostMessageW(window, WM_CLOSE, 0, 0);
+  }
 
   MSG message{};
   int messageResult = 0;
@@ -692,7 +913,8 @@ std::optional<document::NodeId> WhiteboardApp::hitEmbedded(
     core::Vec2 point) const {
   for (auto it = document_.nodes().rbegin(); it != document_.nodes().rend();
        ++it) {
-    if (std::holds_alternative<document::EmbeddedNode>(it->payload) &&
+    if (it->layer == document::LayerClass::Embedded &&
+        std::holds_alternative<document::EmbeddedNode>(it->payload) &&
         it->bounds.contains(point)) {
       return it->id;
     }
@@ -1005,16 +1227,31 @@ bool WhiteboardApp::populateEmbeddedSelfTestDocument() {
   }
 
   constexpr core::Rect kSurfaces[]{kRichTextBounds, kVideoBounds, kWebBounds};
+  constexpr const char* kSurfaceIds[]{"rich-text-1", "video-1", "web-1"};
   for (std::size_t index = 0; index < std::size(kSurfaces); ++index) {
     const core::Rect bounds = kSurfaces[index];
-    if (!addStroke("embedded-annotation-" + std::to_string(index),
-                   document::LayerClass::Annotation, 0xFFFF2020U,
-                   {{bounds.x - 4.0F, bounds.y - 4.0F},
-                    {bounds.x + bounds.width + 4.0F,
-                     bounds.y + bounds.height + 4.0F}},
-                   10.0F)) {
+    const core::Vec2 annotationStart{bounds.x + 20.0F, bounds.y + 20.0F};
+    const core::Vec2 annotationEnd{bounds.x + bounds.width - 20.0F,
+                                   bounds.y + bounds.height - 20.0F};
+    document::StrokeNode attachedStroke;
+    attachedStroke.colorArgb = 0xFFFF2020U;
+    attachedStroke.width = 10.0F;
+    attachedStroke.points = {{annotationStart, 1.0F, 0},
+                             {annotationEnd, 1.0F, 0}};
+    try {
+      attachedStroke =
+          document::attachStrokeToParent(std::move(attachedStroke), bounds);
+    } catch (const std::domain_error&) {
       return false;
     }
+    document::Node annotation;
+    annotation.id = "embedded-annotation-" + std::to_string(index);
+    annotation.layer = document::LayerClass::Annotation;
+    annotation.bounds =
+        core::Rect::fromPoints(annotationStart, annotationEnd).inflated(5.0F);
+    annotation.parentId = kSurfaceIds[index];
+    annotation.payload = std::move(attachedStroke);
+    if (!document_.add(std::move(annotation))) return false;
     constexpr float kHandleRadius = 10.0F;
     const core::Vec2 handle{bounds.x + bounds.width,
                             bounds.y + bounds.height};
@@ -1029,6 +1266,52 @@ bool WhiteboardApp::populateEmbeddedSelfTestDocument() {
     }
   }
   return true;
+}
+
+HRESULT WhiteboardApp::openDocument(const std::wstring& path) {
+  std::vector<std::uint8_t> bytes;
+  std::string storeError;
+  if (!DocumentStore::load(std::filesystem::path(path), bytes, storeError)) {
+    if (!storeError.empty()) {
+      OutputDebugStringA(("Canvas document load failed: " + storeError +
+                          "\n")
+                             .c_str());
+    }
+    return HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
+  }
+  std::string decodeError;
+  if (!storage::DocumentCodec::decodeInto(bytes, document_, decodeError)) {
+    if (!decodeError.empty()) {
+      OutputDebugStringA(("Canvas document decode failed: " + decodeError +
+                          "\n")
+                             .c_str());
+    }
+    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+  }
+  return S_OK;
+}
+
+HRESULT WhiteboardApp::saveDocument(const std::wstring& path) const {
+  // Copy before encoding so serialization never observes a document that is
+  // being changed by a pointer callback.
+  const document::Document snapshot = document_;
+  const std::vector<std::uint8_t> bytes =
+      storage::DocumentCodec::encode(snapshot);
+  if (bytes.empty()) {
+    OutputDebugStringA("Canvas document encode produced no bytes\n");
+    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+  }
+  std::string storeError;
+  if (!DocumentStore::saveAtomic(std::filesystem::path(path), bytes,
+                                 storeError)) {
+    if (!storeError.empty()) {
+      OutputDebugStringA(("Canvas document save failed: " + storeError +
+                          "\n")
+                             .c_str());
+    }
+    return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
+  }
+  return S_OK;
 }
 
 }  // namespace canvas::windows

@@ -21,6 +21,18 @@ target_link_libraries(canvas_document_test PRIVATE canvas::core GTest::gtest_mai
 canvas_enable_warnings(canvas_document_test)
 gtest_discover_tests(canvas_document_test)
 
+add_executable(canvas_document_codec_test unit/document_codec_test.cpp)
+target_link_libraries(canvas_document_codec_test PRIVATE canvas::core
+                      GTest::gtest_main)
+target_include_directories(canvas_document_codec_test PRIVATE
+                           ${CMAKE_SOURCE_DIR}/src)
+if(WIN32)
+    target_link_libraries(canvas_document_codec_test
+                          PRIVATE canvas::windows_platform)
+endif()
+canvas_enable_warnings(canvas_document_codec_test)
+gtest_discover_tests(canvas_document_codec_test)
+
 add_executable(canvas_stroke_builder_test unit/stroke_builder_test.cpp)
 target_link_libraries(canvas_stroke_builder_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_stroke_builder_test)

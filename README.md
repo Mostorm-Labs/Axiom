@@ -29,3 +29,16 @@ From PowerShell at the repository root:
 The diagnostic hosts Lexical rich text, HTML video, and an HTTPS page as three
 DirectComposition children below native annotation ink. Generated MP4
 fixtures are intentionally ignored and must not be committed.
+
+## Document persistence
+
+Canvas files use the versioned schema encoded as MessagePack. Saves write and
+flush `<path>.tmp` before an atomic Windows replacement; loads reject files
+larger than 512 MiB.
+
+```powershell
+./out/build/windows-x64/app/windows/Release/canvas_windows.exe `
+  --self-test-document --save "$env:TEMP/canvas-roundtrip.canvas"
+./out/build/windows-x64/app/windows/Release/canvas_windows.exe `
+  --open "$env:TEMP/canvas-roundtrip.canvas"
+```

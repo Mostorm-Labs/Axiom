@@ -7,6 +7,7 @@ endif()
 project(canvas VERSION 0.1.0 LANGUAGES CXX)
 
 find_package(unofficial-skia CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,11 +20,13 @@ include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
 add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp
+            src/storage/document_codec.cpp
             src/stroke/stroke_builder.cpp src/input/input_router.cpp
             src/render/skia_renderer.cpp src/embed/embedded_surface_manager.cpp)
 add_library(canvas::core ALIAS canvas_core)
 target_include_directories(canvas_core PUBLIC include)
-target_link_libraries(canvas_core PUBLIC unofficial::skia::skia)
+target_link_libraries(canvas_core PUBLIC unofficial::skia::skia
+                       PRIVATE nlohmann_json::nlohmann_json)
 canvas_enable_warnings(canvas_core)
 
 if(WIN32)
@@ -95,7 +98,8 @@ if(WIN32)
                 src/platform/windows/win_pointer_adapter.cpp
                 src/platform/windows/qpc_clock.cpp
                 src/platform/windows/skia_d3d12_context.cpp
-                src/platform/windows/skia_swap_chain_layer.cpp)
+                src/platform/windows/skia_swap_chain_layer.cpp
+                src/platform/windows/document_store.cpp)
     add_library(canvas::windows_platform ALIAS canvas_windows_platform)
     target_include_directories(canvas_windows_platform PUBLIC
                                ${PROJECT_SOURCE_DIR}/include

@@ -22,6 +22,12 @@ std::optional<canvas::windows::WhiteboardRunOptions> parseOptions() {
       options.selfTestLayers = true;
     } else if (argument == L"--self-test-embedded") {
       options.selfTestEmbedded = true;
+    } else if (argument == L"--self-test-document") {
+      options.selfTestDocument = true;
+    } else if (argument == L"--open" && index + 1 < argumentCount) {
+      options.openPath = arguments[++index];
+    } else if (argument == L"--save" && index + 1 < argumentCount) {
+      options.savePath = arguments[++index];
     } else if (argument == L"--video" && index + 1 < argumentCount) {
       options.videoPath = arguments[++index];
     } else {

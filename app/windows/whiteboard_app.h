@@ -22,6 +22,9 @@ namespace canvas::windows {
 struct WhiteboardRunOptions {
   bool selfTestLayers = false;
   bool selfTestEmbedded = false;
+  bool selfTestDocument = false;
+  std::optional<std::wstring> openPath;
+  std::optional<std::wstring> savePath;
   std::optional<std::wstring> videoPath;
 };
 
@@ -51,6 +54,8 @@ class WhiteboardApp {
   SkiaSwapChainLayer& activeSwapChainLayer();
   bool populateSelfTestDocument();
   bool populateEmbeddedSelfTestDocument();
+  HRESULT openDocument(const std::wstring& path);
+  HRESULT saveDocument(const std::wstring& path) const;
 
   struct HostedWebView {
     document::NodeId nodeId;

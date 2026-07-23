@@ -1,0 +1,31 @@
+Task 14 green phase (2026-07-23)
+
+Implemented the version 1 canonical JSON schema with MessagePack file
+encoding, strict finite/type/parent-graph validation, and complete raw JSON
+retention for unknown node types. Added the Win32 atomic DocumentStore, the
+512 MiB pre-allocation load limit, and explicit --open/--save/
+--self-test-document wiring. Opened embedded nodes recreate secured WebView2
+surfaces; packaged node IDs are percent-encoded in URLs and JSON-escaped in
+host messages. `decodeInto` is the tested replacement seam: corrupt data leaves
+the live sentinel document unchanged, while a valid full decode replaces it.
+The self-test board stores ParentNormalized annotation strokes attached to all
+three embedded nodes.
+
+Real checks on this macOS host:
+
+  g++ -std=c++17 -Wall -Wextra -Wpedantic ...
+      tests/unit/document_codec_test.cpp src/storage/document_codec.cpp
+      src/document/document.cpp gtest-all.cc gtest_main.cc
+  /tmp/canvas_document_codec_test
+
+Result: 7 DocumentCodec tests passed. A warning originated in the locally
+available legacy GoogleTest source; Canvas sources compiled without warnings.
+
+Also passed:
+
+  g++ -std=c++17 -Wall -Wextra -Wpedantic -I<json> -Iinclude
+      -c src/storage/document_codec.cpp
+  git diff --check
+
+Not run on macOS: Visual Studio/CMake Windows build, DocumentStore Win32 tests,
+WebView2 restore behavior, IME/touch/video checks, or i5-1235U latency tests.
