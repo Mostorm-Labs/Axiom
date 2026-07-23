@@ -38,6 +38,14 @@ Fourth RED boundary (message lifetime):
   preserved, preventing video time-update or remote-page spam from growing an
   unbounded process-lifetime vector.
 
+Fifth RED boundary (quality-review memory and lifecycle coverage):
+  The first revision bounded WebView messages only by count. New native tests
+  require rejection before copying a message above 1 Mi UTF-16 code units and
+  oldest-first eviction at a 4 Mi cumulative limit. Four new Node tests were
+  then run before their injectable lifecycle seams existed: rich-text bridge
+  initialization/update wiring and video bridge/media wiring failed with
+  missing-function errors. Production code was changed only after that RED.
+
 Environment boundary:
   npm installation and Vitest run are real results from the macOS authoring
   host. Visual Studio 2022, the Windows SDK, WebView2 Runtime, touch hardware,

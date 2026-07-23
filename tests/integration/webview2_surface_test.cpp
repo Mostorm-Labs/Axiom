@@ -1,4 +1,5 @@
 #include "platform/windows/dcomp_host.h"
+#include "platform/windows/webview2_message_log.h"
 #include "platform/windows/webview2_surface.h"
 
 #include "canvas/input/input_router.h"
@@ -137,6 +138,20 @@ TEST(WebView2Surface, ClassifiesNavigationWithoutHostPrefixSpoofing) {
   EXPECT_EQ(classify(L"javascript:alert(1)", false),
             NavigationClass::Denied);
   EXPECT_EQ(classify(L"about:blank", false), NavigationClass::Denied);
+}
+
+TEST(WebView2Surface, RejectsOversizedNativeMessagesBeforeRetainingThem) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface surface(host, nullptr);
+  const std::wstring oversizedMessage(
+      canvas::windows::detail::kWebView2MaxMessageCodeUnits + 1U, L'x');
+  const std::wstring oversizedNavigation(
+      canvas::windows::detail::kWebView2MaxNavigationCodeUnits + 1U, L'x');
+
+  EXPECT_EQ(surface.postMessage(oversizedMessage), E_INVALIDARG);
+  EXPECT_EQ(surface.navigate(oversizedNavigation), E_INVALIDARG);
+  EXPECT_TRUE(surface.capturedMessages().empty());
+  EXPECT_EQ(surface.close(), S_OK);
 }
 
 TEST(WebView2Surface, CloseRejectsTheWrongApartmentWithoutReleasingOwnership) {

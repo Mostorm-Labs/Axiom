@@ -24,6 +24,22 @@ export interface HostMessage {
   payload: JsonRecord;
 }
 
+export interface CanvasWebviewMessageEvent {
+  data: unknown;
+}
+
+export interface CanvasWebviewBridge {
+  postMessage(value: string): void;
+  addEventListener(
+    type: "message",
+    listener: (event: CanvasWebviewMessageEvent) => void
+  ): void;
+  removeEventListener?: (
+    type: "message",
+    listener: (event: CanvasWebviewMessageEvent) => void
+  ) => void;
+}
+
 const hostTypes = new Set<HostMessageType>([
   "set-content",
   "set-video-source",
@@ -143,12 +159,20 @@ export function encodeClientMessage(
 export function postToHost(
   nodeId: string,
   type: ClientMessageType,
-  payload: JsonRecord
+  payload: JsonRecord,
+  bridge: Pick<CanvasWebviewBridge, "postMessage"> | undefined =
+    getWebviewBridge()
 ): void {
+  const encoded = encodeClientMessage(nodeId, type, payload);
+  bridge?.postMessage(encoded);
+}
+
+export function getWebviewBridge(): CanvasWebviewBridge | undefined {
+  if (typeof window === "undefined") return undefined;
   const bridge = (window as Window & {
-    chrome?: { webview?: { postMessage(value: string): void } };
+    chrome?: { webview?: CanvasWebviewBridge };
   }).chrome?.webview;
-  bridge?.postMessage(encodeClientMessage(nodeId, type, payload));
+  return bridge;
 }
 
 export function nodeIdFromLocation(defaultNodeId: string): string {

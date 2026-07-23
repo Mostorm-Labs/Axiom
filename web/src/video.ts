@@ -1,10 +1,24 @@
 import {
+  type CanvasWebviewBridge,
+  type CanvasWebviewMessageEvent,
   decodeHostMessage,
+  getWebviewBridge,
   nodeIdFromLocation,
   postToHost,
   type HostMessage
 } from "./host-bridge";
 import { normalizeVideoSource } from "./video-source";
+
+export interface CanvasVideoElementLike {
+  currentTime: number;
+  duration: number;
+  error: { code: number } | null;
+  src: string;
+  addEventListener(type: string, listener: () => void): void;
+  load(): void;
+  play(): Promise<void>;
+  pause(): void;
+}
 
 function describeError(error: unknown): string {
   return error instanceof Error && error.message.length > 0
@@ -12,24 +26,34 @@ function describeError(error: unknown): string {
     : "Unknown media error";
 }
 
-function startVideoPlayer(player: HTMLVideoElement): void {
-  const nodeId = nodeIdFromLocation("video");
-  const reportError = (operation: string, error: unknown) => {
+function errorReporter(
+  nodeId: string,
+  bridge: Pick<CanvasWebviewBridge, "postMessage">
+): (operation: string, error: unknown) => void {
+  return (operation, error) => {
     postToHost(nodeId, "error", {
       operation,
       message: describeError(error)
-    });
+    }, bridge);
   };
+}
+
+export function installVideoEvents(
+  player: CanvasVideoElementLike,
+  nodeId: string,
+  bridge: Pick<CanvasWebviewBridge, "postMessage">
+): void {
+  const reportError = errorReporter(nodeId, bridge);
   const currentTime = () =>
     Number.isFinite(player.currentTime) && player.currentTime >= 0
       ? player.currentTime
       : 0;
 
   player.addEventListener("playing", () => {
-    postToHost(nodeId, "playing", { currentTime: currentTime() });
+    postToHost(nodeId, "playing", { currentTime: currentTime() }, bridge);
   });
   player.addEventListener("pause", () => {
-    postToHost(nodeId, "paused", { currentTime: currentTime() });
+    postToHost(nodeId, "paused", { currentTime: currentTime() }, bridge);
   });
   player.addEventListener("timeupdate", () => {
     postToHost(nodeId, "time-update", {
@@ -38,7 +62,7 @@ function startVideoPlayer(player: HTMLVideoElement): void {
         Number.isFinite(player.duration) && player.duration >= 0
           ? player.duration
           : null
-    });
+    }, bridge);
   });
   player.addEventListener("error", () => {
     const mediaError = player.error;
@@ -47,7 +71,14 @@ function startVideoPlayer(player: HTMLVideoElement): void {
       new Error(mediaError ? `MediaError ${mediaError.code}` : "Media failed")
     );
   });
+}
 
+export function installVideoHostBridge(
+  player: CanvasVideoElementLike,
+  nodeId: string,
+  bridge: CanvasWebviewBridge
+): () => void {
+  const reportError = errorReporter(nodeId, bridge);
   const handleMessage = async (message: HostMessage): Promise<void> => {
     if (message.nodeId !== nodeId) return;
     switch (message.type) {
@@ -72,17 +103,7 @@ function startVideoPlayer(player: HTMLVideoElement): void {
     }
   };
 
-  const webview = (window as Window & {
-    chrome?: {
-      webview?: {
-        addEventListener(
-          type: "message",
-          listener: (event: MessageEvent<unknown>) => void
-        ): void;
-      };
-    };
-  }).chrome?.webview;
-  webview?.addEventListener("message", (event) => {
+  const listener = (event: CanvasWebviewMessageEvent) => {
     let message: HostMessage;
     try {
       message = decodeHostMessage(event.data);
@@ -93,9 +114,22 @@ function startVideoPlayer(player: HTMLVideoElement): void {
     void handleMessage(message).catch((error: unknown) => {
       reportError(message.type, error);
     });
-  });
+  };
 
-  postToHost(nodeId, "ready", {});
+  bridge.addEventListener("message", listener);
+  postToHost(nodeId, "ready", {}, bridge);
+  return () => bridge.removeEventListener?.("message", listener);
+}
+
+export function startVideoPlayer(
+  player: HTMLVideoElement,
+  bridge: CanvasWebviewBridge | undefined = getWebviewBridge()
+): void {
+  const nodeId = nodeIdFromLocation("video");
+  if (!bridge) return;
+  const playerAdapter = player as unknown as CanvasVideoElementLike;
+  installVideoEvents(playerAdapter, nodeId, bridge);
+  installVideoHostBridge(playerAdapter, nodeId, bridge);
 }
 
 if (typeof document !== "undefined") {

@@ -20,12 +20,16 @@ Implemented after the recorded RED boundaries:
     capture and touch sessions pinned to their original node; keyboard/IME
     focus moves to the routed composition controller;
   - navigation-completion host-message queuing, CMake asset stamping/copying,
-    per-configuration runtime asset synchronization, bounded WebView message
-    retention, Windows CI web checks, and an idempotent test-video generator.
+    per-configuration runtime asset synchronization, WebView message bounds of
+    1 Mi UTF-16 code units per message and 4 Mi retained code units per queue,
+    Windows CI web checks, and an idempotent test-video generator;
+  - executable Node lifecycle tests with injected editor/WebView/media mocks
+    for ready/error, host set-content tagging and echo suppression, rejected
+    play promises, media errors, and playing/paused/time-update messages.
 
 Real checks completed on the macOS authoring host after npm ci:
   - npm ci: PASS (locked install, 0 vulnerabilities reported)
-  - npm test: PASS (3 files, 26 tests)
+  - npm test: PASS (3 files, 30 tests)
   - npm run build: PASS (Vite 8.1.5, both HTML entry points emitted)
   - npx tsc --noEmit: PASS
   - git diff --check: PASS at the recorded checkpoint

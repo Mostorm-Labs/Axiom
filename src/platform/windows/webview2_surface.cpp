@@ -20,7 +20,6 @@
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <new>
 #include <optional>
 #include <string>
 #include <utility>
@@ -59,7 +58,8 @@ std::optional<std::wstring> urlPart(const std::wstring& uri,
 WebView2Surface::NavigationClass classifyNavigationImpl(
     std::wstring_view candidate, bool allowTestDataUrls) {
   if (candidate.empty() ||
-      candidate.find(L'\0') != std::wstring_view::npos) {
+      candidate.find(L'\0') != std::wstring_view::npos ||
+      candidate.size() > detail::kWebView2MaxNavigationCodeUnits) {
     return WebView2Surface::NavigationClass::Denied;
   }
 
@@ -69,23 +69,28 @@ WebView2Surface::NavigationClass classifyNavigationImpl(
     return WebView2Surface::NavigationClass::TestData;
   }
 
-  const std::wstring uri(candidate);
-  const auto scheme = urlPart(uri, URL_PART_SCHEME);
-  const auto host = urlPart(uri, URL_PART_HOSTNAME);
-  if (!scheme || !host || host->empty() ||
-      !equalsIgnoreCase(*scheme, L"https") ||
-      UrlIsW(uri.c_str(), URLIS_URL) == FALSE) {
+  try {
+    const std::wstring uri(candidate);
+    const auto scheme = urlPart(uri, URL_PART_SCHEME);
+    const auto host = urlPart(uri, URL_PART_HOSTNAME);
+    if (!scheme || !host || host->empty() ||
+        !equalsIgnoreCase(*scheme, L"https") ||
+        UrlIsW(uri.c_str(), URLIS_URL) == FALSE) {
+      return WebView2Surface::NavigationClass::Denied;
+    }
+
+    // Remote HTTPS content is allowed. The two local virtual hosts are
+    // matched exactly by the same parsed hostname path (and never by string
+    // prefix).
+    const bool isLocalVirtualHost =
+        equalsIgnoreCase(*host, L"canvas.local") ||
+        equalsIgnoreCase(*host, L"media.canvas.local");
+    return isLocalVirtualHost
+               ? WebView2Surface::NavigationClass::LocalVirtualHost
+               : WebView2Surface::NavigationClass::Https;
+  } catch (...) {
     return WebView2Surface::NavigationClass::Denied;
   }
-
-  // Remote HTTPS content is allowed. The two local virtual hosts are matched
-  // exactly by the same parsed hostname path (and never by string prefix).
-  const bool isLocalVirtualHost =
-      equalsIgnoreCase(*host, L"canvas.local") ||
-      equalsIgnoreCase(*host, L"media.canvas.local");
-  return isLocalVirtualHost
-             ? WebView2Surface::NavigationClass::LocalVirtualHost
-             : WebView2Surface::NavigationClass::Https;
 }
 
 bool isAllowedNavigationForOptions(
@@ -97,14 +102,18 @@ bool isAllowedNavigationForOptions(
     return true;
   }
 
-  const auto host = urlPart(std::wstring(candidate), URL_PART_HOSTNAME);
-  if (!host) return false;
-  if (equalsIgnoreCase(*host, L"canvas.local")) {
-    return options.canvasLocalFolder && !options.canvasLocalFolder->empty();
-  }
-  if (equalsIgnoreCase(*host, L"media.canvas.local")) {
-    return options.mediaCanvasLocalFolder &&
-           !options.mediaCanvasLocalFolder->empty();
+  try {
+    const auto host = urlPart(std::wstring(candidate), URL_PART_HOSTNAME);
+    if (!host) return false;
+    if (equalsIgnoreCase(*host, L"canvas.local")) {
+      return options.canvasLocalFolder && !options.canvasLocalFolder->empty();
+    }
+    if (equalsIgnoreCase(*host, L"media.canvas.local")) {
+      return options.mediaCanvasLocalFolder &&
+             !options.mediaCanvasLocalFolder->empty();
+    }
+  } catch (...) {
+    return false;
   }
   return false;
 }
@@ -308,17 +317,30 @@ struct WebView2Surface::Impl final
   HRESULT navigate(std::wstring_view requestedUri) {
     const HRESULT threadResult = checkThread();
     if (FAILED(threadResult)) return threadResult;
+    if (requestedUri.size() > detail::kWebView2MaxNavigationCodeUnits) {
+      return E_INVALIDARG;
+    }
     if (!isAllowedNavigationForOptions(requestedUri, options)) {
       return E_ACCESSDENIED;
     }
     if (state == State::Closed) return RO_E_CLOSED;
     if (state == State::Failed) return lastResult;
 
-    pendingNavigation.assign(requestedUri);
+    try {
+      std::wstring requested(requestedUri);
+      pendingNavigation = std::move(requested);
+    } catch (...) {
+      return remember(E_OUTOFMEMORY);
+    }
     pendingHostMessages.clear();
     navigationComplete = false;
     if (!webView) return S_OK;
-    const HRESULT hr = webView->Navigate(pendingNavigation->c_str());
+    HRESULT hr = S_OK;
+    try {
+      hr = webView->Navigate(pendingNavigation->c_str());
+    } catch (...) {
+      return fail(E_OUTOFMEMORY);
+    }
     if (FAILED(hr)) return fail(hr);
     pendingNavigation.reset();
     return S_OK;
@@ -330,24 +352,26 @@ struct WebView2Surface::Impl final
     if (message.empty() || message.find(L'\0') != std::wstring_view::npos) {
       return E_INVALIDARG;
     }
+    if (message.size() > detail::kWebView2MaxMessageCodeUnits) {
+      return E_INVALIDARG;
+    }
     if (state == State::Closed) return RO_E_CLOSED;
     if (state == State::Failed) return lastResult;
     if (!webView || pendingNavigation || !navigationComplete) {
-      try {
-        constexpr std::size_t kPendingHostMessageLimit = 64U;
-        if (pendingHostMessages.size() >= kPendingHostMessageLimit) {
-          pendingHostMessages.erase(
-              pendingHostMessages.begin(),
-              pendingHostMessages.begin() +
-                  static_cast<std::ptrdiff_t>(kPendingHostMessageLimit / 2U));
-        }
-        pendingHostMessages.emplace_back(message);
-      } catch (const std::bad_alloc&) {
-        return E_OUTOFMEMORY;
+      const auto result = pendingHostMessages.tryPush(message);
+      if (result == detail::MessagePushResult::Oversized) {
+        return E_INVALIDARG;
       }
-      return S_OK;
+      return result == detail::MessagePushResult::AllocationFailure
+                 ? E_OUTOFMEMORY
+                 : S_OK;
     }
-    return remember(webView->PostWebMessageAsString(std::wstring(message).c_str()));
+    try {
+      std::wstring owned(message);
+      return remember(webView->PostWebMessageAsString(owned.c_str()));
+    } catch (...) {
+      return remember(E_OUTOFMEMORY);
+    }
   }
 
   HRESULT focus() {
@@ -657,7 +681,7 @@ struct WebView2Surface::Impl final
     if (succeeded == FALSE) return fail(E_FAIL);
 
     navigationComplete = true;
-    for (const auto& message : pendingHostMessages) {
+    for (const auto& message : pendingHostMessages.values()) {
       const HRESULT result = webView->PostWebMessageAsString(message.c_str());
       if (FAILED(result)) return fail(result);
     }
@@ -824,8 +848,15 @@ struct WebView2Surface::Impl final
   void captureMessage(const wchar_t* value) noexcept {
     if (value == nullptr) return;
     try {
-      capturedMessages.push(value);
-    } catch (const std::bad_alloc&) {
+      // Bound the scan as well as the retained copy. WebView2 owns the input
+      // allocation; an oversized inbound message is simply dropped.
+      constexpr std::size_t kMax =
+          detail::WebView2MessageLog::maxMessageCodeUnits();
+      std::size_t length = 0U;
+      while (length <= kMax && value[length] != L'\0') ++length;
+      if (length > kMax) return;
+      (void)capturedMessages.tryPush(std::wstring_view(value, length));
+    } catch (...) {
       // Diagnostics must never be able to terminate the WebView callback.
     }
   }
@@ -942,7 +973,7 @@ struct WebView2Surface::Impl final
   bool visible = true;
   bool interactive = false;
   std::optional<std::wstring> pendingNavigation;
-  std::vector<std::wstring> pendingHostMessages;
+  detail::WebView2PendingMessageQueue pendingHostMessages;
   detail::WebView2MessageLog capturedMessages;
   bool navigationComplete = false;
   UINT64 activeNavigationId = 0;
