@@ -1,0 +1,39 @@
+Task 13 authoring-host GREEN - rich text and HTML-video content
+Date: 2026-07-23
+
+Implemented after the recorded RED boundaries:
+  - a locked npm workspace with the exact planned Lexical, TypeScript, Vite,
+    Vitest, and Node type versions;
+  - strict protocol-v1 host decoding for exact message types and type-specific
+    payloads, plus structured-only client encoding;
+  - non-React Lexical rich-text/history behavior, structured editor state,
+    ready/content-changed messages, and a host-state update tag that prevents
+    state echo loops;
+  - an HTML video adapter with strict local/remote HTTPS policy, source,
+    play/pause/seek commands, structured lifecycle messages, and promise/media
+    error reporting;
+  - final-handle-path media approval, root rejection, supported video types,
+    UTF-8 filename encoding, and a media.canvas.local mapping of only the
+    resolved file parent;
+  - packaged canvas.local assets fixed to the executable-adjacent web folder;
+  - three node-bound composition WebViews in --self-test-embedded with mouse
+    capture and touch sessions pinned to their original node; keyboard/IME
+    focus moves to the routed composition controller;
+  - navigation-completion host-message queuing, CMake asset stamping/copying,
+    per-configuration runtime asset synchronization, bounded WebView message
+    retention, Windows CI web checks, and an idempotent test-video generator.
+
+Real checks completed on the macOS authoring host after npm ci:
+  - npm ci: PASS (locked install, 0 vulnerabilities reported)
+  - npm test: PASS (3 files, 26 tests)
+  - npm run build: PASS (Vite 8.1.5, both HTML entry points emitted)
+  - npx tsc --noEmit: PASS
+  - git diff --check: PASS at the recorded checkpoint
+
+Windows-only boundary:
+  This host has no Visual Studio 2022, Windows SDK, DirectComposition runtime,
+  WebView2 Runtime, Windows touch display, Media Foundation stack, or Chinese
+  IME test environment. Windows configure/build/CTest, actual WebView2 pages,
+  video decode/playback, IME entry, multi-surface input, fixed z-order, and
+  i5-1235U hardware behavior have NOT been run locally and are not claimed as
+  passing. Windows CI and the target touch display remain authoritative.

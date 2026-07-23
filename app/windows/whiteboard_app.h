@@ -19,9 +19,16 @@
 
 namespace canvas::windows {
 
+struct WhiteboardRunOptions {
+  bool selfTestLayers = false;
+  bool selfTestEmbedded = false;
+  std::optional<std::wstring> videoPath;
+};
+
 class WhiteboardApp {
  public:
-  int run(HINSTANCE instance, int commandShow, bool selfTestLayers = false);
+  int run(HINSTANCE instance, int commandShow,
+          const WhiteboardRunOptions& options = {});
 
   static LRESULT CALLBACK windowProc(HWND window, UINT message,
                                      WPARAM wParam, LPARAM lParam);
@@ -38,9 +45,17 @@ class WhiteboardApp {
                                  const input::PointerSample& sample);
   HRESULT cancelEmbeddedTouch(UINT32 pointerId);
   std::optional<document::NodeId> hitEmbedded(core::Vec2 point) const;
+  WebView2Surface* embeddedWebView(
+      const std::optional<document::NodeId>& nodeId) const;
   document::LayerClass activeDocumentLayer() const;
   SkiaSwapChainLayer& activeSwapChainLayer();
   bool populateSelfTestDocument();
+  bool populateEmbeddedSelfTestDocument();
+
+  struct HostedWebView {
+    document::NodeId nodeId;
+    std::unique_ptr<WebView2Surface> surface;
+  };
 
   DCompHost composition_;
   SkiaD3D12Context gpu_;
@@ -48,12 +63,14 @@ class WhiteboardApp {
   SkiaSwapChainLayer embeddedLayer_;
   SkiaSwapChainLayer annotationLayer_;
   SkiaSwapChainLayer chromeLayer_;
-  std::unique_ptr<WebView2Surface> embeddedWebView_;
+  std::vector<HostedWebView> embeddedWebViews_;
   input::InputRouter inputRouter_;
   std::optional<stroke::StrokeBuilder> activeStroke_;
   std::optional<std::uint64_t> activePointerId_;
   std::optional<UINT32> activeEmbeddedPointerId_;
+  std::optional<document::NodeId> activeEmbeddedTouchNodeId_;
   EmbeddedMouseSession embeddedMouseSession_;
+  std::optional<document::NodeId> embeddedMouseNodeId_;
   std::optional<input::PointerSample> lastPointerSample_;
   input::RouteResult activeRoute_;
   document::NodeId activeStrokeId_;

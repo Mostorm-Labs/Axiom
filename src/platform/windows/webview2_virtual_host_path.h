@@ -5,6 +5,7 @@
 #include <cwctype>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace canvas::windows::detail {
@@ -98,6 +99,31 @@ inline HRESULT directoryFromExecutablePath(std::wstring_view modulePath,
                          isPathSeparator(modulePath[2]);
   directory.assign(modulePath.substr(0, separator + (driveRoot ? 1U : 0U)));
   return isFullyQualifiedWindowsPath(directory) ? S_OK : E_UNEXPECTED;
+}
+
+inline HRESULT normalizePackagedCanvasFolder(
+    std::wstring_view requestedFolder, std::wstring_view executableDirectory,
+    std::wstring& normalized) {
+  std::wstring requested;
+  HRESULT result = normalizeVirtualHostFolder(
+      requestedFolder, executableDirectory, requested);
+  if (FAILED(result)) {
+    normalized.clear();
+    return result;
+  }
+  std::wstring packaged;
+  result = normalizeVirtualHostFolder(L"web", executableDirectory, packaged);
+  if (FAILED(result)) {
+    normalized.clear();
+    return result;
+  }
+  if (CompareStringOrdinal(requested.c_str(), -1, packaged.c_str(), -1,
+                           TRUE) != CSTR_EQUAL) {
+    normalized.clear();
+    return E_ACCESSDENIED;
+  }
+  normalized = std::move(packaged);
+  return S_OK;
 }
 
 inline HRESULT executableDirectory(std::wstring& directory) {

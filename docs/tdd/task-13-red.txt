@@ -1,0 +1,45 @@
+Task 13 RED - structured rich text and HTML-video content
+Date: 2026-07-23
+Baseline: 7e25a34
+
+Tests written before production modules:
+  web/src/host-bridge.test.ts
+  web/src/video-source.test.ts
+
+Command:
+  cd web
+  npm test
+
+Observed RED:
+  - host-bridge.test.ts could not import ./host-bridge
+  - video-source.test.ts could not import ./video-source
+  - Vitest exited 1 with two failed suites and zero executed tests
+
+This is the intended module-boundary RED: the locked workspace and strict
+protocol/source-policy expectations exist, while neither production module
+exists yet.
+
+Second RED boundary (native media mapping):
+  tests/unit/webview2_media_source_test.cpp was added before its production
+  header. It requires a pure derivation seam that maps only a video's parent,
+  percent-encodes one UTF-8 filename, rejects relative paths, and refuses a
+  drive or UNC share root. On Windows this target is intentionally a compile
+  RED until platform/windows/webview2_media_source.h is implemented.
+
+Third RED boundary (surface lifecycle):
+  EmbeddedSurfaceManagerTest.KeepsActiveRichTextLive was added while the
+  manager still retained only Video and active Web nodes. Against the baseline
+  implementation it expects one creation but receives zero; production is then
+  changed to treat active RichText with the same lifecycle as active Web.
+
+Fourth RED boundary (message lifetime):
+  webview2_message_log_test.cpp was added before its production seam. It
+  pushes 300 messages and requires bounded retention with the newest message
+  preserved, preventing video time-update or remote-page spam from growing an
+  unbounded process-lifetime vector.
+
+Environment boundary:
+  npm installation and Vitest run are real results from the macOS authoring
+  host. Visual Studio 2022, the Windows SDK, WebView2 Runtime, touch hardware,
+  Chinese IME, and Windows video playback are unavailable here; no Windows
+  build or runtime result is claimed.

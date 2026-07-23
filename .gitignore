@@ -5,6 +5,7 @@
 /vcpkg_installed/
 /web/node_modules/
 /web/dist/
+/tests/fixtures/*.mp4
 /tools/electron-host/node_modules/
 /tools/electron-host/dist/
 *.user

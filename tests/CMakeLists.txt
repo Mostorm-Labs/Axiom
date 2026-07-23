@@ -76,6 +76,24 @@ if(WIN32)
     canvas_enable_warnings(canvas_webview2_virtual_host_path_test)
     gtest_discover_tests(canvas_webview2_virtual_host_path_test)
 
+    add_executable(canvas_webview2_media_source_test
+                   unit/webview2_media_source_test.cpp)
+    target_include_directories(canvas_webview2_media_source_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_media_source_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_media_source_test)
+    gtest_discover_tests(canvas_webview2_media_source_test)
+
+    add_executable(canvas_webview2_message_log_test
+                   unit/webview2_message_log_test.cpp)
+    target_include_directories(canvas_webview2_message_log_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_message_log_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_message_log_test)
+    gtest_discover_tests(canvas_webview2_message_log_test)
+
     add_executable(canvas_win_pointer_adapter_test
                    unit/win_pointer_adapter_test.cpp)
     target_include_directories(canvas_win_pointer_adapter_test

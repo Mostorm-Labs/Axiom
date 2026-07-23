@@ -115,6 +115,23 @@ TEST(EmbeddedSurfaceManagerTest, KeepsActiveWebAndVisibleVideoLive) {
   EXPECT_FALSE(factory.states[1]->destroyed);
 }
 
+TEST(EmbeddedSurfaceManagerTest, KeepsActiveRichTextLive) {
+  Document document;
+  ASSERT_TRUE(document.add(embeddedNode(
+      "rich-text", EmbeddedKind::RichText, {0, 0, 300, 200})));
+  FakeSurfaceFactory factory;
+  EmbeddedSurfaceManager manager(factory);
+
+  manager.sync(document, {0, 0, 800, 600},
+               canvas::document::NodeId{"rich-text"});
+
+  ASSERT_EQ(factory.createCalls, 1);
+  ASSERT_EQ(manager.liveCount(), 1U);
+  ASSERT_EQ(factory.states.size(), 1U);
+  EXPECT_TRUE(factory.states.front()->interactive);
+  EXPECT_TRUE(factory.states.front()->visible);
+}
+
 TEST(EmbeddedSurfaceManagerTest, ReusesSurfaceAndUpdatesItsProperties) {
   Document document;
   ASSERT_TRUE(document.add(
@@ -198,7 +215,7 @@ TEST(EmbeddedSurfaceManagerTest, SkipsWrongLayerAndWrongPayload) {
   EXPECT_EQ(manager.liveCount(), 0U);
 }
 
-TEST(EmbeddedSurfaceManagerTest, ActiveRichTextIsNeverLive) {
+TEST(EmbeddedSurfaceManagerTest, ActiveRichTextIsLive) {
   Document document;
   ASSERT_TRUE(document.add(
       embeddedNode("rich", EmbeddedKind::RichText, {0, 0, 100, 100})));
@@ -208,8 +225,8 @@ TEST(EmbeddedSurfaceManagerTest, ActiveRichTextIsNeverLive) {
   manager.sync(document, {0, 0, 100, 100},
                canvas::document::NodeId{"rich"});
 
-  EXPECT_EQ(factory.createCalls, 0);
-  EXPECT_EQ(manager.liveCount(), 0U);
+  EXPECT_EQ(factory.createCalls, 1);
+  EXPECT_EQ(manager.liveCount(), 1U);
 }
 
 TEST(EmbeddedSurfaceManagerTest,

@@ -1,16 +1,20 @@
 #include "whiteboard_app.h"
 
 #include "canvas/document/embedded_transform.h"
+#include "platform/windows/webview2_media_source.h"
 #include "platform/windows/win_pointer_adapter.h"
 
 #include <windows.h>
 #include <windowsx.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <initializer_list>
+#include <iterator>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace canvas::windows {
@@ -78,7 +82,7 @@ bool isEmbeddedMouseButtonUp(UINT message) {
 }  // namespace
 
 int WhiteboardApp::run(HINSTANCE instance, int commandShow,
-                       bool selfTestLayers) {
+                       const WhiteboardRunOptions& options) {
   lastError_ = S_OK;
   if (instance == nullptr) {
     return hresultExitCode(E_INVALIDARG);
@@ -121,9 +125,11 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   }
   constexpr int kCanvasWidth = 1280;
   constexpr int kCanvasHeight = 720;
+  const bool diagnosticLayers =
+      options.selfTestLayers || options.selfTestEmbedded;
   inputRouter_.setFingerDrawEnabled(true);
-  inputRouter_.setMode(selfTestLayers ? input::InputMode::Interact
-                                     : input::InputMode::Draw);
+  inputRouter_.setMode(diagnosticLayers ? input::InputMode::Interact
+                                        : input::InputMode::Draw);
   HRESULT layerResult = baseLayer_.initialize(
       gpu_, composition_, VisualSlot::BaseCanvas, kCanvasWidth, kCanvasHeight,
       false);
@@ -132,12 +138,12 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
         gpu_, composition_, VisualSlot::Annotation, kCanvasWidth,
         kCanvasHeight, true);
   }
-  if (SUCCEEDED(layerResult) && selfTestLayers) {
+  if (SUCCEEDED(layerResult) && diagnosticLayers) {
     layerResult = embeddedLayer_.initialize(
         gpu_, composition_, VisualSlot::EmbeddedContent, kCanvasWidth,
         kCanvasHeight, true);
   }
-  if (SUCCEEDED(layerResult) && selfTestLayers) {
+  if (SUCCEEDED(layerResult) && diagnosticLayers) {
     layerResult = chromeLayer_.initialize(
         gpu_, composition_, VisualSlot::InteractionChrome, kCanvasWidth,
         kCanvasHeight, true);
@@ -147,29 +153,82 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
     UnregisterClassW(kWindowClassName, instance);
     return hresultExitCode(layerResult);
   }
-  if (selfTestLayers) {
+  if (diagnosticLayers) {
     baseLayer_.setClearColorArgb(0xFF00AA00U);
-    if (!populateSelfTestDocument()) {
+    const bool populated = options.selfTestEmbedded
+                               ? populateEmbeddedSelfTestDocument()
+                               : populateSelfTestDocument();
+    if (!populated) {
       DestroyWindow(window);
       UnregisterClassW(kWindowClassName, instance);
       return hresultExitCode(E_FAIL);
     }
-    WebView2Surface::Options diagnosticOptions;
-    diagnosticOptions.allowTestDataUrls = true;
-    embeddedWebView_ = std::make_unique<WebView2Surface>(
-        composition_, window, std::move(diagnosticOptions));
-    embeddedWebView_->setBounds(
-        core::Rect{440.0F, 240.0F, 400.0F, 240.0F});
-    embeddedWebView_->setInteractive(true);
-    embeddedWebView_->setVisible(true);
-    layerResult = embeddedWebView_->initialize();
-    if (SUCCEEDED(layerResult)) {
+
+    const auto addWebView =
+        [this, window](const document::NodeId& nodeId,
+                       WebView2Surface::Options surfaceOptions,
+                       std::wstring_view uri,
+                       const std::optional<std::wstring>& initialMessage =
+                           std::nullopt) -> HRESULT {
+      const document::Node* node = document_.find(nodeId);
+      if (node == nullptr) return E_INVALIDARG;
+      auto surface = std::make_unique<WebView2Surface>(
+          composition_, window, std::move(surfaceOptions));
+      surface->setBounds(node->bounds);
+      surface->setInteractive(false);
+      surface->setVisible(true);
+      HRESULT result = surface->initialize();
+      if (SUCCEEDED(result)) result = surface->navigate(uri);
+      if (SUCCEEDED(result) && initialMessage) {
+        result = surface->postMessage(*initialMessage);
+      }
+      if (FAILED(result)) return result;
+      embeddedWebViews_.push_back(
+          HostedWebView{nodeId, std::move(surface)});
+      return S_OK;
+    };
+
+    if (options.selfTestEmbedded) {
+      WebView2Surface::Options contentOptions;
+      contentOptions.canvasLocalFolder = L"web";
+      layerResult = addWebView(
+          "rich-text-1", contentOptions,
+          L"https://canvas.local/richtext.html?nodeId=rich-text-1");
+
+      detail::LocalMediaSource mediaSource;
+      if (SUCCEEDED(layerResult) && options.videoPath) {
+        layerResult =
+            detail::approveLocalMediaFile(*options.videoPath, mediaSource);
+      }
+      WebView2Surface::Options videoOptions = contentOptions;
+      std::optional<std::wstring> videoMessage;
+      if (SUCCEEDED(layerResult) && options.videoPath) {
+        videoOptions.mediaCanvasLocalFolder = mediaSource.folder;
+        videoMessage =
+            std::wstring(
+                L"{\"protocolVersion\":1,\"type\":\"set-video-source\","
+                L"\"nodeId\":\"video-1\",\"payload\":{\"source\":\"") +
+            mediaSource.uri + L"\"}}";
+      }
+      if (SUCCEEDED(layerResult)) {
+        layerResult = addWebView(
+            "video-1", std::move(videoOptions),
+            L"https://canvas.local/video.html?nodeId=video-1", videoMessage);
+      }
+      if (SUCCEEDED(layerResult)) {
+        layerResult = addWebView("web-1", std::move(contentOptions),
+                                 L"https://example.com/");
+      }
+    } else {
+      WebView2Surface::Options diagnosticOptions;
+      diagnosticOptions.allowTestDataUrls = true;
       constexpr auto kSelfTestPage =
           L"data:text/html,%3C!doctype%20html%3E%3Cmeta%20charset=utf-8%3E"
           L"%3Cstyle%3Ehtml,body%7Bmargin:0;width:100%25;height:100%25;"
           L"display:grid;place-items:center;background:%23ddd;font:24px%20"
           L"sans-serif%7D%3C/style%3EEmbedded%20WebView2";
-      layerResult = embeddedWebView_->navigate(kSelfTestPage);
+      layerResult = addWebView("self-test-embedded",
+                               std::move(diagnosticOptions), kSelfTestPage);
     }
     if (FAILED(layerResult)) {
       DestroyWindow(window);
@@ -179,7 +238,7 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   }
   HRESULT renderResult =
       baseLayer_.render(document_, document::LayerClass::Base);
-  if (SUCCEEDED(renderResult) && selfTestLayers) {
+  if (SUCCEEDED(renderResult) && diagnosticLayers) {
     renderResult = embeddedLayer_.render(
         document_, document::LayerClass::Embedded);
   }
@@ -187,7 +246,7 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
     renderResult = annotationLayer_.render(
         document_, document::LayerClass::Annotation);
   }
-  if (SUCCEEDED(renderResult) && selfTestLayers) {
+  if (SUCCEEDED(renderResult) && diagnosticLayers) {
     renderResult = chromeLayer_.render(document_, document::LayerClass::Chrome);
   }
   if (FAILED(renderResult)) {
@@ -225,7 +284,7 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
       (void)app->forwardMouseToEmbedded(window, WM_CANCELMODE, 0, 0);
-      app->embeddedWebView_.reset();
+      app->embeddedWebViews_.clear();
     }
     PostQuitMessage(0);
     return 0;
@@ -389,20 +448,24 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
     if (SUCCEEDED(firstResult) && FAILED(result)) firstResult = result;
   };
 
-  const auto applyCancellation =
-      [this, window, &mergeResult](const EmbeddedMouseDecision& decision) {
+  const auto applyCancellation = [this, window, &mergeResult](
+                                     const EmbeddedMouseDecision& decision) {
         if (!decision.handled()) return S_FALSE;
         HRESULT firstResult = S_OK;
-        if (embeddedWebView_) {
-          embeddedWebView_->setInteractive(true);
+        WebView2Surface* surface = embeddedWebView(embeddedMouseNodeId_);
+        if (surface != nullptr) {
+          surface->setInteractive(true);
           if (decision.cancelButtons != 0) {
-            mergeResult(firstResult, embeddedWebView_->cancelMouseButtons(
-                                         decision.cancelButtons));
+            mergeResult(firstResult,
+                        surface->cancelMouseButtons(decision.cancelButtons));
           } else if (decision.sendLeave) {
-            mergeResult(firstResult, embeddedWebView_->forwardMouseMessage(
-                                         WM_MOUSELEAVE, 0, 0));
+            mergeResult(firstResult,
+                        surface->forwardMouseMessage(WM_MOUSELEAVE, 0, 0));
           }
-          embeddedWebView_->setInteractive(false);
+          surface->setInteractive(embeddedMouseSession_.hovered() ||
+                                  embeddedMouseSession_.buttons() != 0);
+        } else {
+          mergeResult(firstResult, E_UNEXPECTED);
         }
         if (decision.releaseCapture && GetCapture() == window) {
           ReleaseCapture();
@@ -413,13 +476,22 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
   if (message == WM_CAPTURECHANGED) {
     // Capture already belongs elsewhere. Do not call ReleaseCapture; balance
     // each WebView button with LEAVE + a surface-local outside synthetic UP.
-    return applyCancellation(embeddedMouseSession_.captureLost());
+    const HRESULT result =
+        applyCancellation(embeddedMouseSession_.captureLost());
+    if (embeddedMouseSession_.buttons() == 0 &&
+        !embeddedMouseSession_.hovered()) {
+      embeddedMouseNodeId_.reset();
+    }
+    return result;
   }
   if (message == WM_CANCELMODE) {
-    return applyCancellation(embeddedMouseSession_.disable());
+    const HRESULT result = applyCancellation(embeddedMouseSession_.disable());
+    embeddedMouseNodeId_.reset();
+    return result;
   }
-  if (!embeddedWebView_) {
+  if (embeddedWebViews_.empty()) {
     (void)embeddedMouseSession_.disable();
+    embeddedMouseNodeId_.reset();
     return S_FALSE;
   }
 
@@ -432,17 +504,38 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
   const bool buttonDown = isEmbeddedMouseButtonDown(message);
   const bool buttonUp = isEmbeddedMouseButtonUp(message);
   const auto button = embeddedMouseButtonForMessage(message, wParam);
+
+  if (message == WM_MOUSELEAVE) {
+    const HRESULT result =
+        applyCancellation(embeddedMouseSession_.nativeLeave());
+    if (embeddedMouseSession_.buttons() == 0) embeddedMouseNodeId_.reset();
+    return result;
+  }
+
+  // One native mouse session belongs to one WebView. When an uncaptured hover
+  // crosses into another child, balance the previous surface before routing
+  // the same event to the new hit target.
+  if (embeddedMouseSession_.buttons() == 0 && embeddedMouseNodeId_ &&
+      hit != embeddedMouseNodeId_) {
+    const HRESULT leaveResult =
+        applyCancellation(embeddedMouseSession_.nativeLeave());
+    if (FAILED(leaveResult)) return leaveResult;
+    embeddedMouseNodeId_.reset();
+  }
   if (buttonDown && embeddedMouseSession_.buttons() == 0) {
     inputRouter_.setActiveEmbeddedNode(hit);
   }
   const auto route = inputRouter_.route(input::PointerKind::Mouse, hit);
   const bool routedToEmbedded =
-      route.target == input::InputTarget::EmbeddedSurface;
+      route.target == input::InputTarget::EmbeddedSurface &&
+      embeddedWebView(hit) != nullptr;
+  if (embeddedMouseSession_.buttons() == 0 && routedToEmbedded) {
+    embeddedMouseNodeId_ = hit;
+  }
+  WebView2Surface* surface = embeddedWebView(embeddedMouseNodeId_);
 
   EmbeddedMouseDecision decision;
-  if (message == WM_MOUSELEAVE) {
-    decision = embeddedMouseSession_.nativeLeave();
-  } else if (buttonDown && button) {
+  if (buttonDown && button) {
     decision = embeddedMouseSession_.buttonDown(*button, routedToEmbedded);
   } else if (buttonUp && button) {
     decision = embeddedMouseSession_.buttonUp(*button, routedToEmbedded);
@@ -452,8 +545,17 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
     decision = embeddedMouseSession_.move(routedToEmbedded);
   }
   if (!decision.handled()) {
-    embeddedWebView_->setInteractive(false);
+    if (surface != nullptr) surface->setInteractive(false);
+    if (embeddedMouseSession_.buttons() == 0 &&
+        !embeddedMouseSession_.hovered()) {
+      embeddedMouseNodeId_.reset();
+    }
     return S_FALSE;
+  }
+  if (surface == nullptr) {
+    (void)embeddedMouseSession_.disable();
+    embeddedMouseNodeId_.reset();
+    return E_UNEXPECTED;
   }
 
   HRESULT firstResult = S_OK;
@@ -478,16 +580,19 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
     }
   }
 
-  embeddedWebView_->setInteractive(true);
+  surface->setInteractive(true);
+  if (buttonDown && decision.forward) {
+    mergeResult(firstResult, recordForward(surface->focus()));
+  }
   if (decision.sendLeave) {
     mergeResult(firstResult, recordForward(
-                                 embeddedWebView_->forwardMouseMessage(
+                                 surface->forwardMouseMessage(
                                      WM_MOUSELEAVE, 0, 0)));
   }
-  if (decision.forward && message != WM_MOUSELEAVE) {
-    mergeResult(firstResult,
-                recordForward(embeddedWebView_->forwardMouseMessage(
-                    message, wParam, lParam)));
+  if (decision.forward) {
+    mergeResult(firstResult, recordForward(
+                                 surface->forwardMouseMessage(
+                                     message, wParam, lParam)));
   }
 
   if (decision.capture && SUCCEEDED(firstResult)) {
@@ -503,15 +608,19 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
     const HRESULT cleanupResult = applyCancellation(cleanup);
     mergeResult(firstResult, cleanupResult);
   } else {
-    embeddedWebView_->setInteractive(embeddedMouseSession_.hovered() ||
-                                     embeddedMouseSession_.buttons() != 0);
+    surface->setInteractive(embeddedMouseSession_.hovered() ||
+                            embeddedMouseSession_.buttons() != 0);
+    if (embeddedMouseSession_.buttons() == 0 &&
+        !embeddedMouseSession_.hovered()) {
+      embeddedMouseNodeId_.reset();
+    }
   }
   return firstResult;
 }
 
 HRESULT WhiteboardApp::forwardTouchToEmbedded(
     UINT message, UINT32 pointerId, const input::PointerSample& sample) {
-  if (!embeddedWebView_) return S_FALSE;
+  if (embeddedWebViews_.empty()) return S_FALSE;
   if (activeEmbeddedPointerId_ && *activeEmbeddedPointerId_ != pointerId) {
     return S_FALSE;
   }
@@ -521,25 +630,41 @@ HRESULT WhiteboardApp::forwardTouchToEmbedded(
     const auto hit = hitEmbedded(sample.screenPosition);
     inputRouter_.setActiveEmbeddedNode(hit);
     const auto route = inputRouter_.route(input::PointerKind::Touch, hit);
-    if (route.target != input::InputTarget::EmbeddedSurface) {
-      embeddedWebView_->setInteractive(false);
+    WebView2Surface* hitSurface = embeddedWebView(hit);
+    if (route.target != input::InputTarget::EmbeddedSurface ||
+        hitSurface == nullptr) {
+      if (hitSurface != nullptr) hitSurface->setInteractive(false);
       return S_FALSE;
     }
     activeEmbeddedPointerId_ = pointerId;
-    embeddedWebView_->setInteractive(true);
+    activeEmbeddedTouchNodeId_ = hit;
+    hitSurface->setInteractive(true);
+    const HRESULT focusResult = hitSurface->focus();
+    if (FAILED(focusResult)) {
+      activeEmbeddedPointerId_.reset();
+      activeEmbeddedTouchNodeId_.reset();
+      hitSurface->setInteractive(false);
+      return focusResult;
+    }
   }
 
-  const HRESULT result =
-      embeddedWebView_->forwardTouchMessage(message, pointerId);
+  WebView2Surface* surface = embeddedWebView(activeEmbeddedTouchNodeId_);
+  if (surface == nullptr) {
+    activeEmbeddedPointerId_.reset();
+    activeEmbeddedTouchNodeId_.reset();
+    return E_UNEXPECTED;
+  }
+  const HRESULT result = surface->forwardTouchMessage(message, pointerId);
   if (result != S_OK && message != WM_POINTERCAPTURECHANGED) {
     // Best effort: preserve the WebView pointer lifecycle before releasing
     // the native session. The cleanup below always runs even if this fails.
-    embeddedWebView_->forwardTouchMessage(WM_POINTERCAPTURECHANGED, pointerId);
+    surface->forwardTouchMessage(WM_POINTERCAPTURECHANGED, pointerId);
   }
   if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED ||
       result != S_OK) {
     activeEmbeddedPointerId_.reset();
-    embeddedWebView_->setInteractive(false);
+    activeEmbeddedTouchNodeId_.reset();
+    surface->setInteractive(false);
   }
   return result;
 }
@@ -551,13 +676,15 @@ HRESULT WhiteboardApp::cancelEmbeddedTouch(UINT32 pointerId) {
   }
 
   HRESULT result = S_OK;
-  if (embeddedWebView_) {
-    embeddedWebView_->setInteractive(true);
-    result = embeddedWebView_->forwardTouchMessage(
+  WebView2Surface* surface = embeddedWebView(activeEmbeddedTouchNodeId_);
+  if (surface != nullptr) {
+    surface->setInteractive(true);
+    result = surface->forwardTouchMessage(
         WM_POINTERCAPTURECHANGED, pointerId);
-    embeddedWebView_->setInteractive(false);
+    surface->setInteractive(false);
   }
   activeEmbeddedPointerId_.reset();
+  activeEmbeddedTouchNodeId_.reset();
   return result;
 }
 
@@ -571,6 +698,15 @@ std::optional<document::NodeId> WhiteboardApp::hitEmbedded(
     }
   }
   return std::nullopt;
+}
+
+WebView2Surface* WhiteboardApp::embeddedWebView(
+    const std::optional<document::NodeId>& nodeId) const {
+  if (!nodeId) return nullptr;
+  for (const auto& hosted : embeddedWebViews_) {
+    if (hosted.nodeId == *nodeId) return hosted.surface.get();
+  }
+  return nullptr;
 }
 
 document::LayerClass WhiteboardApp::activeDocumentLayer() const {
@@ -805,6 +941,89 @@ bool WhiteboardApp::populateSelfTestDocument() {
                    document::LayerClass::Chrome, 0xFF0066FFU,
                    {{p.x - 10, p.y}, {p.x + 10, p.y},
                     {p.x, p.y - 10}, {p.x, p.y + 10}},
+                   8.0F)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool WhiteboardApp::populateEmbeddedSelfTestDocument() {
+  const auto addEmbedded = [this](document::NodeId id,
+                                  document::EmbeddedKind kind,
+                                  core::Rect bounds, std::string source,
+                                  std::string title) {
+    document::Node node;
+    node.id = std::move(id);
+    node.layer = document::LayerClass::Embedded;
+    node.bounds = bounds;
+    node.payload = document::EmbeddedNode{
+        kind, std::move(source), std::move(title)};
+    return document_.add(std::move(node));
+  };
+  const auto addStroke =
+      [this](document::NodeId id, document::LayerClass layer,
+             std::uint32_t color,
+             std::initializer_list<core::Vec2> positions,
+             float width = 8.0F) {
+        if (positions.size() == 0) return false;
+        document::StrokeNode stroke;
+        stroke.colorArgb = color;
+        stroke.width = width;
+        auto position = positions.begin();
+        float minX = position->x;
+        float minY = position->y;
+        float maxX = position->x;
+        float maxY = position->y;
+        for (const auto point : positions) {
+          stroke.points.push_back(document::StrokePoint{point, 1.0F, 0});
+          minX = (std::min)(minX, point.x);
+          minY = (std::min)(minY, point.y);
+          maxX = (std::max)(maxX, point.x);
+          maxY = (std::max)(maxY, point.y);
+        }
+        document::Node node;
+        node.id = std::move(id);
+        node.layer = layer;
+        node.bounds = core::Rect{minX, minY, maxX - minX, maxY - minY}
+                          .inflated(width * 0.5F);
+        node.payload = std::move(stroke);
+        return document_.add(std::move(node));
+      };
+
+  constexpr core::Rect kRichTextBounds{40.0F, 100.0F, 360.0F, 240.0F};
+  constexpr core::Rect kVideoBounds{440.0F, 100.0F, 400.0F, 225.0F};
+  constexpr core::Rect kWebBounds{880.0F, 100.0F, 360.0F, 240.0F};
+  if (!addEmbedded("rich-text-1", document::EmbeddedKind::RichText,
+                   kRichTextBounds, "https://canvas.local/richtext.html",
+                   "Rich text") ||
+      !addEmbedded("video-1", document::EmbeddedKind::Video, kVideoBounds,
+                   "https://canvas.local/video.html", "HTML video") ||
+      !addEmbedded("web-1", document::EmbeddedKind::Web, kWebBounds,
+                   "https://example.com/", "HTTPS web page")) {
+    return false;
+  }
+
+  constexpr core::Rect kSurfaces[]{kRichTextBounds, kVideoBounds, kWebBounds};
+  for (std::size_t index = 0; index < std::size(kSurfaces); ++index) {
+    const core::Rect bounds = kSurfaces[index];
+    if (!addStroke("embedded-annotation-" + std::to_string(index),
+                   document::LayerClass::Annotation, 0xFFFF2020U,
+                   {{bounds.x - 4.0F, bounds.y - 4.0F},
+                    {bounds.x + bounds.width + 4.0F,
+                     bounds.y + bounds.height + 4.0F}},
+                   10.0F)) {
+      return false;
+    }
+    constexpr float kHandleRadius = 10.0F;
+    const core::Vec2 handle{bounds.x + bounds.width,
+                            bounds.y + bounds.height};
+    if (!addStroke("embedded-handle-" + std::to_string(index),
+                   document::LayerClass::Chrome, 0xFF0066FFU,
+                   {{handle.x - kHandleRadius, handle.y},
+                    {handle.x + kHandleRadius, handle.y},
+                    {handle.x, handle.y - kHandleRadius},
+                    {handle.x, handle.y + kHandleRadius}},
                    8.0F)) {
       return false;
     }

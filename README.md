@@ -4,8 +4,28 @@ Canvas is the Mostorm cross-platform collaborative whiteboard. The first milesto
 
 ## Windows build
 
-1. Install Visual Studio 2022 with Desktop development with C++.
+1. Install Visual Studio 2022 with Desktop development with C++, plus Node.js
+   22.12 or newer.
 2. Set `VCPKG_ROOT` to a vcpkg checkout.
-3. Run `cmake --preset windows-x64`.
-4. Run `cmake --build --preset windows-x64-release --parallel`.
-5. Run `ctest --preset windows-x64-release`.
+3. Run `./scripts/Restore-WebView2.ps1`.
+4. Run `cmake --preset windows-x64`.
+5. Run `cmake --build --preset windows-x64-release --parallel`.
+6. Run `ctest --preset windows-x64-release`.
+
+CMake restores the locked npm workspace, builds the rich-text/video assets,
+and copies them beside `canvas_windows.exe` under `web/`.
+
+## Embedded-content diagnostic
+
+From PowerShell at the repository root:
+
+```powershell
+./scripts/New-TestVideo.ps1
+./out/build/windows-x64/app/windows/Release/canvas_windows.exe `
+  --self-test-embedded `
+  --video "$PWD/tests/fixtures/test-pattern-1080p30.mp4"
+```
+
+The diagnostic hosts Lexical rich text, HTML video, and an HTTPS page as three
+DirectComposition children below native annotation ink. Generated MP4
+fixtures are intentionally ignored and must not be committed.

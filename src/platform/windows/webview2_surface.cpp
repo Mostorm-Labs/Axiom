@@ -2,6 +2,7 @@
 
 #include "platform/windows/dcomp_host.h"
 #include "platform/windows/webview2_close_seam.h"
+#include "platform/windows/webview2_message_log.h"
 #include "platform/windows/webview2_virtual_host_path.h"
 
 #include <WebView2.h>
@@ -13,11 +14,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <exception>
 #include <initializer_list>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <utility>
@@ -312,11 +315,49 @@ struct WebView2Surface::Impl final
     if (state == State::Failed) return lastResult;
 
     pendingNavigation.assign(requestedUri);
+    pendingHostMessages.clear();
+    navigationComplete = false;
     if (!webView) return S_OK;
     const HRESULT hr = webView->Navigate(pendingNavigation->c_str());
     if (FAILED(hr)) return fail(hr);
     pendingNavigation.reset();
     return S_OK;
+  }
+
+  HRESULT postMessage(std::wstring_view message) {
+    const HRESULT threadResult = checkThread();
+    if (FAILED(threadResult)) return threadResult;
+    if (message.empty() || message.find(L'\0') != std::wstring_view::npos) {
+      return E_INVALIDARG;
+    }
+    if (state == State::Closed) return RO_E_CLOSED;
+    if (state == State::Failed) return lastResult;
+    if (!webView || pendingNavigation || !navigationComplete) {
+      try {
+        constexpr std::size_t kPendingHostMessageLimit = 64U;
+        if (pendingHostMessages.size() >= kPendingHostMessageLimit) {
+          pendingHostMessages.erase(
+              pendingHostMessages.begin(),
+              pendingHostMessages.begin() +
+                  static_cast<std::ptrdiff_t>(kPendingHostMessageLimit / 2U));
+        }
+        pendingHostMessages.emplace_back(message);
+      } catch (const std::bad_alloc&) {
+        return E_OUTOFMEMORY;
+      }
+      return S_OK;
+    }
+    return remember(webView->PostWebMessageAsString(std::wstring(message).c_str()));
+  }
+
+  HRESULT focus() {
+    const HRESULT threadResult = checkThread();
+    if (FAILED(threadResult)) return threadResult;
+    if (!interactive || !visible) return S_FALSE;
+    if (state == State::Closed) return RO_E_CLOSED;
+    if (state != State::Ready || !controller) return E_PENDING;
+    return remember(
+        controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC));
   }
 
   HRESULT setBounds(core::Rect requestedBounds) {
@@ -599,6 +640,31 @@ struct WebView2Surface::Impl final
     return S_OK;
   }
 
+  HRESULT onNavigationCompleted(
+      ICoreWebView2NavigationCompletedEventArgs* args) {
+    if (FAILED(checkThread()) || state != State::Ready || args == nullptr) {
+      return S_FALSE;
+    }
+    UINT64 navigationId = 0;
+    HRESULT successResult = args->get_NavigationId(&navigationId);
+    if (FAILED(successResult)) return fail(successResult);
+    if (activeNavigationId == 0 || navigationId != activeNavigationId) {
+      return S_OK;
+    }
+    BOOL succeeded = FALSE;
+    successResult = args->get_IsSuccess(&succeeded);
+    if (FAILED(successResult)) return fail(successResult);
+    if (succeeded == FALSE) return fail(E_FAIL);
+
+    navigationComplete = true;
+    for (const auto& message : pendingHostMessages) {
+      const HRESULT result = webView->PostWebMessageAsString(message.c_str());
+      if (FAILED(result)) return fail(result);
+    }
+    pendingHostMessages.clear();
+    return S_OK;
+  }
+
   HRESULT configureSecurity() {
     ComPtr<ICoreWebView2Settings> settings;
     HRESULT hr = webView->get_Settings(settings.GetAddressOf());
@@ -626,11 +692,15 @@ struct WebView2Surface::Impl final
     const auto mapFolder = [this, &executableFolder](
                                LPCWSTR hostName,
                                const std::optional<std::wstring>& folder,
+                               bool packagedCanvasFolder,
                                bool& mapped) -> HRESULT {
       if (!folder) return S_OK;
       std::wstring normalizedFolder;
-      HRESULT result = detail::normalizeVirtualHostFolder(
-          *folder, executableFolder, normalizedFolder);
+      HRESULT result = packagedCanvasFolder
+                           ? detail::normalizePackagedCanvasFolder(
+                                 *folder, executableFolder, normalizedFolder)
+                           : detail::normalizeVirtualHostFolder(
+                                 *folder, executableFolder, normalizedFolder);
       if (FAILED(result)) return result;
 
       // Validation and WebView2 mapping intentionally consume the identical
@@ -650,11 +720,11 @@ struct WebView2Surface::Impl final
       return result;
     };
 
-    hr = mapFolder(L"canvas.local", options.canvasLocalFolder,
+    hr = mapFolder(L"canvas.local", options.canvasLocalFolder, true,
                    mappedCanvasLocal);
     if (FAILED(hr)) return hr;
     return mapFolder(L"media.canvas.local", options.mediaCanvasLocalFolder,
-                     mappedMediaCanvasLocal);
+                     false, mappedMediaCanvasLocal);
   }
 
   HRESULT registerEventHandlers() {
@@ -670,13 +740,32 @@ struct WebView2Surface::Impl final
               SUCCEEDED(uriResult) && rawUri != nullptr &&
               isAllowedNavigationForOptions(rawUri, self->options);
           CoTaskMemFree(rawUri);
-          return allowed ? S_OK : args->put_Cancel(TRUE);
+          if (!allowed) return args->put_Cancel(TRUE);
+          UINT64 navigationId = 0;
+          const HRESULT idResult = args->get_NavigationId(&navigationId);
+          if (FAILED(idResult)) return idResult;
+          self->activeNavigationId = navigationId;
+          self->navigationComplete = false;
+          return S_OK;
         });
     if (!navigation) return E_OUTOFMEMORY;
     HRESULT hr =
         webView->add_NavigationStarting(navigation.Get(), &navigationToken);
     if (FAILED(hr)) return hr;
     hasNavigationToken = true;
+
+    auto navigationCompleted =
+        Callback<ICoreWebView2NavigationCompletedEventHandler>(
+            [weak](ICoreWebView2*,
+                   ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+              const auto self = weak.lock();
+              return self ? self->onNavigationCompleted(args) : S_OK;
+            });
+    if (!navigationCompleted) return E_OUTOFMEMORY;
+    hr = webView->add_NavigationCompleted(navigationCompleted.Get(),
+                                           &navigationCompletedToken);
+    if (FAILED(hr)) return hr;
+    hasNavigationCompletedToken = true;
 
     auto newWindow = Callback<ICoreWebView2NewWindowRequestedEventHandler>(
         [weak](ICoreWebView2*,
@@ -708,7 +797,7 @@ struct WebView2Surface::Impl final
           LPWSTR value = nullptr;
           HRESULT messageResult = args->TryGetWebMessageAsString(&value);
           if (SUCCEEDED(messageResult) && value != nullptr) {
-            self->capturedMessages.emplace_back(value);
+            self->captureMessage(value);
             CoTaskMemFree(value);
             return S_OK;
           }
@@ -716,7 +805,7 @@ struct WebView2Surface::Impl final
           value = nullptr;
           messageResult = args->get_WebMessageAsJson(&value);
           if (SUCCEEDED(messageResult) && value != nullptr) {
-            self->capturedMessages.emplace_back(value);
+            self->captureMessage(value);
           }
           CoTaskMemFree(value);
           return S_OK;
@@ -730,6 +819,15 @@ struct WebView2Surface::Impl final
 
   HRESULT checkThread() const {
     return GetCurrentThreadId() == ownerThread ? S_OK : RPC_E_WRONG_THREAD;
+  }
+
+  void captureMessage(const wchar_t* value) noexcept {
+    if (value == nullptr) return;
+    try {
+      capturedMessages.push(value);
+    } catch (const std::bad_alloc&) {
+      // Diagnostics must never be able to terminate the WebView callback.
+    }
   }
 
   HRESULT remember(HRESULT result) {
@@ -748,6 +846,12 @@ struct WebView2Surface::Impl final
     const auto record = [&firstResult](HRESULT result) {
       if (SUCCEEDED(firstResult) && FAILED(result)) firstResult = result;
     };
+    if (hasNavigationCompletedToken) {
+      if (webView) {
+        record(webView->remove_NavigationCompleted(navigationCompletedToken));
+      }
+      hasNavigationCompletedToken = false;
+    }
     if (hasWebMessageToken) {
       if (webView) {
         record(webView->remove_WebMessageReceived(webMessageToken));
@@ -838,7 +942,10 @@ struct WebView2Surface::Impl final
   bool visible = true;
   bool interactive = false;
   std::optional<std::wstring> pendingNavigation;
-  std::vector<std::wstring> capturedMessages;
+  std::vector<std::wstring> pendingHostMessages;
+  detail::WebView2MessageLog capturedMessages;
+  bool navigationComplete = false;
+  UINT64 activeNavigationId = 0;
 
   ComPtr<IDCompositionVisual> rootVisual;
   ComPtr<IDCompositionVisual> compositionParent;
@@ -851,10 +958,12 @@ struct WebView2Surface::Impl final
   ComPtr<ICoreWebView2_3> webView3;
 
   EventRegistrationToken navigationToken{};
+  EventRegistrationToken navigationCompletedToken{};
   EventRegistrationToken newWindowToken{};
   EventRegistrationToken permissionToken{};
   EventRegistrationToken webMessageToken{};
   bool hasNavigationToken = false;
+  bool hasNavigationCompletedToken = false;
   bool hasNewWindowToken = false;
   bool hasPermissionToken = false;
   bool hasWebMessageToken = false;
@@ -884,6 +993,12 @@ HRESULT WebView2Surface::close() { return impl_->close(); }
 HRESULT WebView2Surface::navigate(std::wstring_view uri) {
   return impl_->navigate(uri);
 }
+
+HRESULT WebView2Surface::postMessage(std::wstring_view message) {
+  return impl_->postMessage(message);
+}
+
+HRESULT WebView2Surface::focus() { return impl_->focus(); }
 
 HRESULT WebView2Surface::forwardMouseMessage(UINT message, WPARAM wParam,
                                              LPARAM lParam) {
@@ -930,7 +1045,7 @@ bool WebView2Surface::interactive() const noexcept {
 const std::vector<std::wstring>& WebView2Surface::capturedMessages() const
     noexcept {
   impl_->requireOwnerThread();
-  return impl_->capturedMessages;
+  return impl_->capturedMessages.values();
 }
 
 WebView2Surface::NavigationClass WebView2Surface::classifyNavigation(

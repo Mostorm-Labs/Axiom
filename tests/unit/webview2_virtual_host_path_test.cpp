@@ -62,6 +62,20 @@ TEST(WebView2VirtualHostPath, AbsoluteFolderDoesNotUseExecutableDirectory) {
   EXPECT_EQ(normalized, L"D:\\CanvasData\\media");
 }
 
+TEST(WebView2VirtualHostPath, CanvasHostAcceptsOnlyPackagedWebDirectory) {
+  std::wstring normalized;
+  EXPECT_EQ(canvas::windows::detail::normalizePackagedCanvasFolder(
+                L"web", L"C:\\Program Files\\Mostorm\\Canvas", normalized),
+            S_OK);
+  EXPECT_EQ(normalized, L"C:\\Program Files\\Mostorm\\Canvas\\web");
+
+  EXPECT_EQ(canvas::windows::detail::normalizePackagedCanvasFolder(
+                L"D:\\arbitrary-assets",
+                L"C:\\Program Files\\Mostorm\\Canvas", normalized),
+            E_ACCESSDENIED);
+  EXPECT_TRUE(normalized.empty());
+}
+
 TEST(WebView2VirtualHostPath, RejectsAmbiguousDriveRelativePaths) {
   std::wstring normalized;
   EXPECT_EQ(canvas::windows::detail::normalizeVirtualHostFolder(

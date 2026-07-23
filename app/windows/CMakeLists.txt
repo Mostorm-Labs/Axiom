@@ -4,5 +4,5 @@ target_include_directories(canvas_windows PRIVATE
                            ${PROJECT_SOURCE_DIR}/src)
 target_link_libraries(canvas_windows PRIVATE canvas::core
                                             canvas::windows_platform
-                                            ole32 user32)
+                                            ole32 shell32 user32)
 canvas_enable_warnings(canvas_windows)

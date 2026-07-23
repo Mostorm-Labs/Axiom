@@ -58,6 +58,12 @@ class WebView2Surface final : public embed::EmbeddedSurface {
   // transitions the object to Closed.
   HRESULT close();
   HRESULT navigate(std::wstring_view uri);
+  // Queues a protocol JSON string until the current navigation completes, so
+  // page listeners cannot miss an initialization message.
+  HRESULT postMessage(std::wstring_view message);
+  // Gives the composition controller keyboard/IME focus after native routing
+  // selects this surface in Interact mode.
+  HRESULT focus();
 
   // These entry points are called only after InputRouter selected an embedded
   // surface. A disabled interaction gate returns S_FALSE without synthesizing

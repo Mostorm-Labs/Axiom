@@ -1,0 +1,63 @@
+:root {
+  color: #17191d;
+  background: transparent;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+}
+
+html,
+body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+.richtext-page {
+  padding: 12px;
+  background: #fffdf8;
+}
+
+.editor {
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  overflow: auto;
+  border: 1px solid #c9cdd5;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 20px;
+  line-height: 1.5;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.editor:focus {
+  border-color: #3478f6;
+  box-shadow: 0 0 0 2px rgb(52 120 246 / 20%);
+}
+
+.editor p {
+  margin: 0 0 0.6em;
+}
+
+.video-page {
+  display: grid;
+  place-items: center;
+  background: #0e1015;
+}
+
+#player {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
+}

@@ -21,8 +21,11 @@ void EmbeddedSurfaceManager::sync(
     }
 
     const bool isActive = activeNode && *activeNode == node.id;
+    const bool activeDocumentSurface =
+        embedded->kind == document::EmbeddedKind::Web ||
+        embedded->kind == document::EmbeddedKind::RichText;
     return embedded->kind == document::EmbeddedKind::Video ||
-           (embedded->kind == document::EmbeddedKind::Web && isActive);
+           (activeDocumentSurface && isActive);
   };
 
   std::unordered_set<document::NodeId> required;
