@@ -37,6 +37,44 @@ input::PointerPhase pointerPhaseForMessage(UINT message) {
   }
 }
 
+std::optional<EmbeddedMouseButton> embeddedMouseButtonForMessage(
+    UINT message, WPARAM wParam) {
+  switch (message) {
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_LBUTTONDBLCLK:
+      return EmbeddedMouseButton::Left;
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_RBUTTONDBLCLK:
+      return EmbeddedMouseButton::Right;
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONUP:
+    case WM_MBUTTONDBLCLK:
+      return EmbeddedMouseButton::Middle;
+    case WM_XBUTTONDOWN:
+    case WM_XBUTTONUP:
+    case WM_XBUTTONDBLCLK:
+      return GET_XBUTTON_WPARAM(wParam) == XBUTTON2
+                 ? EmbeddedMouseButton::X2
+                 : EmbeddedMouseButton::X1;
+    default:
+      return std::nullopt;
+  }
+}
+
+bool isEmbeddedMouseButtonDown(UINT message) {
+  return message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK ||
+         message == WM_RBUTTONDOWN || message == WM_RBUTTONDBLCLK ||
+         message == WM_MBUTTONDOWN || message == WM_MBUTTONDBLCLK ||
+         message == WM_XBUTTONDOWN || message == WM_XBUTTONDBLCLK;
+}
+
+bool isEmbeddedMouseButtonUp(UINT message) {
+  return message == WM_LBUTTONUP || message == WM_RBUTTONUP ||
+         message == WM_MBUTTONUP || message == WM_XBUTTONUP;
+}
+
 }  // namespace
 
 int WhiteboardApp::run(HINSTANCE instance, int commandShow,
@@ -185,7 +223,10 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
   if (message == WM_DESTROY) {
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
-    if (app != nullptr) app->embeddedWebView_.reset();
+    if (app != nullptr) {
+      (void)app->forwardMouseToEmbedded(window, WM_CANCELMODE, 0, 0);
+      app->embeddedWebView_.reset();
+    }
     PostQuitMessage(0);
     return 0;
   }
@@ -198,13 +239,19 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
       message == WM_MBUTTONDBLCLK || message == WM_XBUTTONDOWN ||
       message == WM_XBUTTONUP || message == WM_XBUTTONDBLCLK ||
       message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL ||
-      message == WM_CAPTURECHANGED) {
+      message == WM_CAPTURECHANGED || message == WM_CANCELMODE) {
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
       const HRESULT forwardResult =
           app->forwardMouseToEmbedded(window, message, wParam, lParam);
-      if (forwardResult == S_OK) return 0;
+      if (forwardResult == S_OK) {
+        if (message == WM_XBUTTONDOWN || message == WM_XBUTTONUP ||
+            message == WM_XBUTTONDBLCLK) {
+          return TRUE;
+        }
+        return 0;
+      }
       if (FAILED(forwardResult) && forwardResult != E_PENDING) {
         app->lastError_ = forwardResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
@@ -338,16 +385,42 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
 
 HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
                                                WPARAM wParam, LPARAM lParam) {
-  if (!embeddedWebView_) return S_FALSE;
+  const auto mergeResult = [](HRESULT& firstResult, HRESULT result) {
+    if (SUCCEEDED(firstResult) && FAILED(result)) firstResult = result;
+  };
+
+  const auto applyCancellation =
+      [this, window, &mergeResult](const EmbeddedMouseDecision& decision) {
+        if (!decision.handled()) return S_FALSE;
+        HRESULT firstResult = S_OK;
+        if (embeddedWebView_) {
+          embeddedWebView_->setInteractive(true);
+          if (decision.cancelButtons != 0) {
+            mergeResult(firstResult, embeddedWebView_->cancelMouseButtons(
+                                         decision.cancelButtons));
+          } else if (decision.sendLeave) {
+            mergeResult(firstResult, embeddedWebView_->forwardMouseMessage(
+                                         WM_MOUSELEAVE, 0, 0));
+          }
+          embeddedWebView_->setInteractive(false);
+        }
+        if (decision.releaseCapture && GetCapture() == window) {
+          ReleaseCapture();
+        }
+        return firstResult;
+      };
 
   if (message == WM_CAPTURECHANGED) {
-    if (!activeEmbeddedMouse_) return S_FALSE;
-    embeddedWebView_->setInteractive(true);
-    const HRESULT result =
-        embeddedWebView_->forwardMouseMessage(WM_MOUSELEAVE, 0, 0);
-    activeEmbeddedMouse_ = false;
-    embeddedWebView_->setInteractive(false);
-    return FAILED(result) ? result : S_OK;
+    // Capture already belongs elsewhere. Do not call ReleaseCapture; balance
+    // each WebView button with LEAVE + a surface-local outside synthetic UP.
+    return applyCancellation(embeddedMouseSession_.captureLost());
+  }
+  if (message == WM_CANCELMODE) {
+    return applyCancellation(embeddedMouseSession_.disable());
+  }
+  if (!embeddedWebView_) {
+    (void)embeddedMouseSession_.disable();
+    return S_FALSE;
   }
 
   POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
@@ -356,41 +429,84 @@ HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
   }
   const auto hit = hitEmbedded(
       core::Vec2{static_cast<float>(point.x), static_cast<float>(point.y)});
-  const bool buttonDown =
-      message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
-      message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN;
-  const bool buttonUp =
-      message == WM_LBUTTONUP || message == WM_RBUTTONUP ||
-      message == WM_MBUTTONUP || message == WM_XBUTTONUP;
-  if (buttonDown) {
+  const bool buttonDown = isEmbeddedMouseButtonDown(message);
+  const bool buttonUp = isEmbeddedMouseButtonUp(message);
+  const auto button = embeddedMouseButtonForMessage(message, wParam);
+  if (buttonDown && embeddedMouseSession_.buttons() == 0) {
     inputRouter_.setActiveEmbeddedNode(hit);
   }
   const auto route = inputRouter_.route(input::PointerKind::Mouse, hit);
   const bool routedToEmbedded =
       route.target == input::InputTarget::EmbeddedSurface;
-  const bool shouldForward = activeEmbeddedMouse_ || routedToEmbedded ||
-                             (message == WM_MOUSELEAVE &&
-                              embeddedWebView_->interactive());
-  embeddedWebView_->setInteractive(shouldForward);
-  if (!shouldForward) return S_FALSE;
 
-  const HRESULT result =
-      embeddedWebView_->forwardMouseMessage(message, wParam, lParam);
-  if (buttonDown && result == S_OK) {
-    activeEmbeddedMouse_ = true;
+  EmbeddedMouseDecision decision;
+  if (message == WM_MOUSELEAVE) {
+    decision = embeddedMouseSession_.nativeLeave();
+  } else if (buttonDown && button) {
+    decision = embeddedMouseSession_.buttonDown(*button, routedToEmbedded);
+  } else if (buttonUp && button) {
+    decision = embeddedMouseSession_.buttonUp(*button, routedToEmbedded);
+  } else {
+    // MOVE and wheel both establish/leave hover. While captured, an outside
+    // MOVE remains forwardable so WebView receives the drag position.
+    decision = embeddedMouseSession_.move(routedToEmbedded);
+  }
+  if (!decision.handled()) {
+    embeddedWebView_->setInteractive(false);
+    return S_FALSE;
+  }
+
+  HRESULT firstResult = S_OK;
+  const auto recordForward = [](HRESULT result) {
+    if (result == S_OK) return S_OK;
+    if (FAILED(result)) return result;
+    // S_FALSE means the surface gate declined the event; treating it as a
+    // successful DOWN would leave a host button bit with no WebView DOWN.
+    return E_UNEXPECTED;
+  };
+  if (decision.startTrackingLeave) {
+    TRACKMOUSEEVENT tracking{};
+    tracking.cbSize = sizeof(tracking);
+    tracking.dwFlags = TME_LEAVE;
+    tracking.hwndTrack = window;
+    SetLastError(ERROR_SUCCESS);
+    if (!TrackMouseEvent(&tracking)) {
+      const DWORD error = GetLastError();
+      mergeResult(firstResult,
+                  error == ERROR_SUCCESS ? E_FAIL
+                                         : HRESULT_FROM_WIN32(error));
+    }
+  }
+
+  embeddedWebView_->setInteractive(true);
+  if (decision.sendLeave) {
+    mergeResult(firstResult, recordForward(
+                                 embeddedWebView_->forwardMouseMessage(
+                                     WM_MOUSELEAVE, 0, 0)));
+  }
+  if (decision.forward && message != WM_MOUSELEAVE) {
+    mergeResult(firstResult,
+                recordForward(embeddedWebView_->forwardMouseMessage(
+                    message, wParam, lParam)));
+  }
+
+  if (decision.capture && SUCCEEDED(firstResult)) {
     SetCapture(window);
-  } else if (buttonDown) {
-    embeddedWebView_->setInteractive(false);
+    if (GetCapture() != window) mergeResult(firstResult, E_FAIL);
+  }
+  if (decision.releaseCapture && GetCapture() == window) {
+    ReleaseCapture();
   }
 
-  if (buttonUp || FAILED(result)) {
-    activeEmbeddedMouse_ = false;
-    if (GetCapture() == window) ReleaseCapture();
-    embeddedWebView_->setInteractive(buttonUp && routedToEmbedded);
-  } else if (message == WM_MOUSELEAVE && !activeEmbeddedMouse_) {
-    embeddedWebView_->setInteractive(false);
+  if (FAILED(firstResult)) {
+    const EmbeddedMouseDecision cleanup = embeddedMouseSession_.disable();
+    const HRESULT cleanupResult = applyCancellation(cleanup);
+    mergeResult(firstResult, cleanupResult);
+  } else {
+    embeddedWebView_->setInteractive(embeddedMouseSession_.hovered() ||
+                                     embeddedMouseSession_.buttons() != 0);
   }
-  return result;
+  return firstResult;
 }
 
 HRESULT WhiteboardApp::forwardTouchToEmbedded(

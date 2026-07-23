@@ -1,6 +1,11 @@
 find_package(GTest CONFIG REQUIRED)
 include(GoogleTest)
 
+add_test(NAME canvas_webview2_restore_script_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DRESTORE_SCRIPT=${CMAKE_SOURCE_DIR}/scripts/Restore-WebView2.ps1
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/restore_webview2_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)
@@ -44,6 +49,33 @@ canvas_enable_warnings(canvas_skia_renderer_test)
 gtest_discover_tests(canvas_skia_renderer_test)
 
 if(WIN32)
+    add_executable(canvas_embedded_mouse_session_test
+                   unit/embedded_mouse_session_test.cpp)
+    target_include_directories(canvas_embedded_mouse_session_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_embedded_mouse_session_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_embedded_mouse_session_test)
+    gtest_discover_tests(canvas_embedded_mouse_session_test)
+
+    add_executable(canvas_webview2_close_seam_test
+                   unit/webview2_close_seam_test.cpp)
+    target_include_directories(canvas_webview2_close_seam_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_close_seam_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_close_seam_test)
+    gtest_discover_tests(canvas_webview2_close_seam_test)
+
+    add_executable(canvas_webview2_virtual_host_path_test
+                   unit/webview2_virtual_host_path_test.cpp)
+    target_include_directories(canvas_webview2_virtual_host_path_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_virtual_host_path_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_virtual_host_path_test)
+    gtest_discover_tests(canvas_webview2_virtual_host_path_test)
+
     add_executable(canvas_win_pointer_adapter_test
                    unit/win_pointer_adapter_test.cpp)
     target_include_directories(canvas_win_pointer_adapter_test

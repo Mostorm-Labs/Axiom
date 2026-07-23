@@ -1,6 +1,7 @@
 #pragma once
 
 #include "canvas/embed/embedded_surface.h"
+#include "platform/windows/embedded_mouse_session.h"
 
 #include <windows.h>
 
@@ -20,8 +21,9 @@ class DCompHost;
 //
 // Thread contract: construct, mutate, inspect, and destroy on the creating STA.
 // HRESULT-returning calls report RPC_E_WRONG_THREAD. The void EmbeddedSurface
-// overrides, accessors, and destructor terminate on a contract violation so
-// apartment-bound COM interfaces are never silently released cross-thread.
+// overrides and accessors terminate on a contract violation. The destructor
+// terminates only on that wrong-thread violation; owner-STA cleanup errors are
+// returned by explicit close() and never leave local ownership behind.
 class WebView2Surface final : public embed::EmbeddedSurface {
  public:
   enum class State { Created, Initializing, Ready, Failed, Closed };
@@ -52,6 +54,8 @@ class WebView2Surface final : public embed::EmbeddedSurface {
 
   HRESULT initialize();
   // Must run on the creating STA. Wrong-thread close leaves ownership intact.
+  // Owner-thread cleanup is best effort, returns its first failure, and always
+  // transitions the object to Closed.
   HRESULT close();
   HRESULT navigate(std::wstring_view uri);
 
@@ -59,6 +63,9 @@ class WebView2Surface final : public embed::EmbeddedSurface {
   // surface. A disabled interaction gate returns S_FALSE without synthesizing
   // input into WebView2. Pen input deliberately has no forwarding API.
   HRESULT forwardMouseMessage(UINT message, WPARAM wParam, LPARAM lParam);
+  // Sends LEAVE followed by an outside UP for every active button. This is
+  // used only to balance WebView state after native capture is lost.
+  HRESULT cancelMouseButtons(EmbeddedMouseButtons buttons);
   HRESULT forwardTouchMessage(UINT message, UINT32 pointerId);
 
   void setBounds(core::Rect bounds) override;

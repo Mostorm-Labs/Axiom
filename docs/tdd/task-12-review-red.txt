@@ -1,0 +1,25 @@
+Task 12 quality-review RED evidence
+===================================
+
+The first implementation passed its static authoring checks but the quality
+review found five observable gaps:
+
+  - close discarded event-removal, controller Close, RemoveVisual, and DComp
+    Commit HRESULT values and the destructor terminated for every close error;
+  - one boolean represented all mouse buttons, so the first UP released native
+    capture even when another button remained pressed;
+  - capture loss did not balance each WebView button, and embedded hover had no
+    TrackMouseEvent/inside-to-outside state;
+  - relative virtual-host folders were interpreted by the process CWD;
+  - Restore-WebView2.ps1 considered the package complete when only WebView2.h
+    existed, even if WebView2LoaderStatic.lib was missing.
+
+Tests/seams added before their production integrations:
+
+  tests/unit/webview2_close_seam_test.cpp
+  tests/unit/embedded_mouse_session_test.cpp
+  tests/unit/webview2_virtual_host_path_test.cpp
+
+Against d406eb7 these tests had no corresponding seam headers or production
+integration and therefore represented the intended compile-time RED boundary.
+The Windows-only tests were not run on the macOS authoring host.

@@ -227,6 +227,21 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
             canvas::input::InputTarget::EmbeddedSurface);
   surface.setInteractive(
       interactRoute.target == canvas::input::InputTarget::EmbeddedSurface);
+  // Model native capture being stolen after WebView received DOWN. The
+  // cancellation path sends LEAVE and a surface-local outside UP, so it must
+  // balance DOM state without producing a click. A subsequent normal click
+  // proves the next session is not poisoned by the cancellation.
+  ASSERT_TRUE(SUCCEEDED(surface.forwardMouseMessage(
+      WM_LBUTTONDOWN, MK_LBUTTON, clickPoint)));
+  ASSERT_TRUE(SUCCEEDED(surface.cancelMouseButtons(
+      canvas::windows::embeddedMouseButtonMask(
+          canvas::windows::EmbeddedMouseButton::Left))));
+  EXPECT_FALSE(pumpUntil(
+      [&] { return hasMessage(surface, LR"({"type":"clicked"})"); },
+      std::chrono::milliseconds(100)));
+
+  ASSERT_TRUE(SUCCEEDED(
+      surface.forwardMouseMessage(WM_MOUSEMOVE, 0, clickPoint)));
   ASSERT_TRUE(SUCCEEDED(surface.forwardMouseMessage(
       WM_LBUTTONDOWN, MK_LBUTTON, clickPoint)));
   ASSERT_TRUE(
@@ -234,6 +249,7 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   EXPECT_TRUE(pumpUntil(
       [&] { return hasMessage(surface, LR"({"type":"clicked"})"); },
       std::chrono::seconds(2)));
+  EXPECT_EQ(surface.close(), S_OK);
   EXPECT_EQ(surface.close(), S_OK);
   EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Closed);
 }

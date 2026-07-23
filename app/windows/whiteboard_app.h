@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/windows/dcomp_host.h"
+#include "platform/windows/embedded_mouse_session.h"
 
 #include "canvas/input/pointer_sample.h"
 #include "canvas/document/document.h"
@@ -52,7 +53,7 @@ class WhiteboardApp {
   std::optional<stroke::StrokeBuilder> activeStroke_;
   std::optional<std::uint64_t> activePointerId_;
   std::optional<UINT32> activeEmbeddedPointerId_;
-  bool activeEmbeddedMouse_ = false;
+  EmbeddedMouseSession embeddedMouseSession_;
   std::optional<input::PointerSample> lastPointerSample_;
   input::RouteResult activeRoute_;
   document::NodeId activeStrokeId_;

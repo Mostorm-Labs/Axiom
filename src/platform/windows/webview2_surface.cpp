@@ -1,6 +1,8 @@
 #include "platform/windows/webview2_surface.h"
 
 #include "platform/windows/dcomp_host.h"
+#include "platform/windows/webview2_close_seam.h"
+#include "platform/windows/webview2_virtual_host_path.h"
 
 #include <WebView2.h>
 #include <shlwapi.h>
@@ -178,6 +180,36 @@ std::optional<COREWEBVIEW2_MOUSE_EVENT_KIND> mouseEventKind(UINT message) {
   }
 }
 
+COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS webViewVirtualKeys(
+    EmbeddedMouseButtons buttons) {
+  UINT32 keys = COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE;
+  const auto add = [&keys](COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS value) {
+    keys |= static_cast<UINT32>(value);
+  };
+  if (hasEmbeddedMouseButton(buttons, EmbeddedMouseButton::Left)) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_LEFT_BUTTON);
+  }
+  if (hasEmbeddedMouseButton(buttons, EmbeddedMouseButton::Right)) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_RIGHT_BUTTON);
+  }
+  if (hasEmbeddedMouseButton(buttons, EmbeddedMouseButton::Middle)) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_MIDDLE_BUTTON);
+  }
+  if (hasEmbeddedMouseButton(buttons, EmbeddedMouseButton::X1)) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_X_BUTTON1);
+  }
+  if (hasEmbeddedMouseButton(buttons, EmbeddedMouseButton::X2)) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_X_BUTTON2);
+  }
+  if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_SHIFT);
+  }
+  if ((GetKeyState(VK_CONTROL) & 0x8000) != 0) {
+    add(COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_CONTROL);
+  }
+  return static_cast<COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS>(keys);
+}
+
 std::optional<COREWEBVIEW2_POINTER_EVENT_KIND> pointerEventKind(UINT message) {
   switch (message) {
     case WM_POINTERDOWN:
@@ -212,7 +244,9 @@ POINT pixelToHimetric(POINT pixel, RECT deviceRect, RECT displayRect) {
 }  // namespace
 
 struct WebView2Surface::Impl final
-    : std::enable_shared_from_this<WebView2Surface::Impl> {
+    : std::enable_shared_from_this<WebView2Surface::Impl>,
+      detail::WebView2CloseOperations,
+      EmbeddedMouseCancellationSink {
   Impl(DCompHost& compositionHost, HWND window, Options surfaceOptions)
       : host(&compositionHost),
         hostWindow(window),
@@ -308,8 +342,16 @@ struct WebView2Surface::Impl final
   HRESULT close() {
     const HRESULT threadResult = checkThread();
     if (FAILED(threadResult)) return threadResult;
-    shutdownOnOwnerThread();
-    return S_OK;
+    if (state == State::Closed) return closeResult;
+
+    // Every operation is attempted even after a failure. Local ownership is
+    // then released unconditionally so an explicit close cannot leave a
+    // half-closed apartment-bound object behind.
+    closeResult = detail::runWebView2CloseOperations(*this);
+    releaseOwnership();
+    state = State::Closed;
+    if (FAILED(closeResult)) lastResult = closeResult;
+    return closeResult;
   }
 
   void setInteractive(bool requestedInteractive) {
@@ -353,6 +395,55 @@ struct WebView2Surface::Impl final
     point.y -= bounds.top;
     return compositionController->SendMouseInput(*kind, keys, mouseData,
                                                  point);
+  }
+
+  HRESULT cancelMouseButtons(EmbeddedMouseButtons buttons) {
+    const HRESULT threadResult = checkThread();
+    if (FAILED(threadResult)) return threadResult;
+    if (state == State::Closed) return RO_E_CLOSED;
+    if (state != State::Ready || !compositionController) return E_PENDING;
+    return runEmbeddedMouseCancellation(buttons, *this);
+  }
+
+  HRESULT sendLeave() noexcept override {
+    return compositionController
+               ? compositionController->SendMouseInput(
+                     COREWEBVIEW2_MOUSE_EVENT_KIND_LEAVE,
+                     COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE, 0, POINT{})
+               : E_PENDING;
+  }
+
+  HRESULT sendButtonUp(EmbeddedMouseButton button,
+                       EmbeddedMouseButtons remainingButtons)
+      noexcept override {
+    if (!compositionController) return E_PENDING;
+    COREWEBVIEW2_MOUSE_EVENT_KIND kind{};
+    UINT32 mouseData = 0;
+    switch (button) {
+      case EmbeddedMouseButton::Left:
+        kind = COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP;
+        break;
+      case EmbeddedMouseButton::Right:
+        kind = COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_UP;
+        break;
+      case EmbeddedMouseButton::Middle:
+        kind = COREWEBVIEW2_MOUSE_EVENT_KIND_MIDDLE_BUTTON_UP;
+        break;
+      case EmbeddedMouseButton::X1:
+        kind = COREWEBVIEW2_MOUSE_EVENT_KIND_X_BUTTON_UP;
+        mouseData = XBUTTON1;
+        break;
+      case EmbeddedMouseButton::X2:
+        kind = COREWEBVIEW2_MOUSE_EVENT_KIND_X_BUTTON_UP;
+        mouseData = XBUTTON2;
+        break;
+      default:
+        return E_INVALIDARG;
+    }
+    constexpr POINT kOutsideSurface{-1, -1};
+    return compositionController->SendMouseInput(
+        kind, webViewVirtualKeys(remainingButtons), mouseData,
+        kOutsideSurface);
   }
 
   HRESULT forwardTouchMessage(UINT message, UINT32 pointerId) {
@@ -528,25 +619,42 @@ struct WebView2Surface::Impl final
 
     HRESULT hr = webView.As(&webView3);
     if (FAILED(hr) || !webView3) return FAILED(hr) ? hr : E_NOINTERFACE;
-    const auto mapFolder = [this](LPCWSTR hostName,
-                                  const std::optional<std::wstring>& folder) {
+    std::wstring executableFolder;
+    hr = detail::executableDirectory(executableFolder);
+    if (FAILED(hr)) return hr;
+
+    const auto mapFolder = [this, &executableFolder](
+                               LPCWSTR hostName,
+                               const std::optional<std::wstring>& folder,
+                               bool& mapped) -> HRESULT {
       if (!folder) return S_OK;
-      if (folder->empty()) return E_INVALIDARG;
-      const DWORD attributes = GetFileAttributesW(folder->c_str());
+      std::wstring normalizedFolder;
+      HRESULT result = detail::normalizeVirtualHostFolder(
+          *folder, executableFolder, normalizedFolder);
+      if (FAILED(result)) return result;
+
+      // Validation and WebView2 mapping intentionally consume the identical
+      // normalized absolute string; process CWD never participates.
+      const DWORD attributes = GetFileAttributesW(normalizedFolder.c_str());
       if (attributes == INVALID_FILE_ATTRIBUTES) {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return detail::win32FailureOr(
+            HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND));
       }
       if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
         return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
       }
-      return webView3->SetVirtualHostNameToFolderMapping(
-          hostName, folder->c_str(),
+      result = webView3->SetVirtualHostNameToFolderMapping(
+          hostName, normalizedFolder.c_str(),
           COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
+      if (SUCCEEDED(result)) mapped = true;
+      return result;
     };
 
-    hr = mapFolder(L"canvas.local", options.canvasLocalFolder);
+    hr = mapFolder(L"canvas.local", options.canvasLocalFolder,
+                   mappedCanvasLocal);
     if (FAILED(hr)) return hr;
-    return mapFolder(L"media.canvas.local", options.mediaCanvasLocalFolder);
+    return mapFolder(L"media.canvas.local", options.mediaCanvasLocalFolder,
+                     mappedMediaCanvasLocal);
   }
 
   HRESULT registerEventHandlers() {
@@ -635,51 +743,79 @@ struct WebView2Surface::Impl final
     return lastResult;
   }
 
-  void unregisterEventHandlers() {
-    if (!webView) return;
+  HRESULT removeEventHandlers() noexcept override {
+    HRESULT firstResult = S_OK;
+    const auto record = [&firstResult](HRESULT result) {
+      if (SUCCEEDED(firstResult) && FAILED(result)) firstResult = result;
+    };
     if (hasWebMessageToken) {
-      webView->remove_WebMessageReceived(webMessageToken);
+      if (webView) {
+        record(webView->remove_WebMessageReceived(webMessageToken));
+      }
       hasWebMessageToken = false;
     }
     if (hasPermissionToken) {
-      webView->remove_PermissionRequested(permissionToken);
+      if (webView) {
+        record(webView->remove_PermissionRequested(permissionToken));
+      }
       hasPermissionToken = false;
     }
     if (hasNewWindowToken) {
-      webView->remove_NewWindowRequested(newWindowToken);
+      if (webView) {
+        record(webView->remove_NewWindowRequested(newWindowToken));
+      }
       hasNewWindowToken = false;
     }
     if (hasNavigationToken) {
-      webView->remove_NavigationStarting(navigationToken);
+      if (webView) {
+        record(webView->remove_NavigationStarting(navigationToken));
+      }
       hasNavigationToken = false;
     }
+    return firstResult;
   }
 
-  void shutdownOnOwnerThread() {
-    if (state == State::Closed) return;
-    requireOwnerThread();
-    unregisterEventHandlers();
-    if (webView3) {
-      if (options.canvasLocalFolder) {
-        webView3->ClearVirtualHostNameToFolderMapping(L"canvas.local");
-      }
-      if (options.mediaCanvasLocalFolder) {
-        webView3->ClearVirtualHostNameToFolderMapping(
-            L"media.canvas.local");
-      }
+  HRESULT clearVirtualHostMappings() noexcept override {
+    HRESULT firstResult = S_OK;
+    if (webView3 && mappedCanvasLocal) {
+      firstResult = webView3->ClearVirtualHostNameToFolderMapping(
+          L"canvas.local");
     }
-    if (compositionController) {
-      compositionController->put_RootVisualTarget(nullptr);
+    mappedCanvasLocal = false;
+    if (webView3 && mappedMediaCanvasLocal) {
+      const HRESULT result = webView3->ClearVirtualHostNameToFolderMapping(
+          L"media.canvas.local");
+      if (SUCCEEDED(firstResult) && FAILED(result)) firstResult = result;
     }
-    if (controller) {
-      controller->put_IsVisible(FALSE);
-      controller->Close();
-    }
-    if (compositionParent && rootVisual &&
-        SUCCEEDED(compositionParent->RemoveVisual(rootVisual.Get())) &&
-        compositionDevice) {
-      compositionDevice->Commit();
-    }
+    mappedMediaCanvasLocal = false;
+    return firstResult;
+  }
+
+  HRESULT detachRootVisualTarget() noexcept override {
+    return compositionController
+               ? compositionController->put_RootVisualTarget(nullptr)
+               : S_OK;
+  }
+
+  HRESULT hideController() noexcept override {
+    return controller ? controller->put_IsVisible(FALSE) : S_OK;
+  }
+
+  HRESULT closeController() noexcept override {
+    return controller ? controller->Close() : S_OK;
+  }
+
+  HRESULT removeChildVisual() noexcept override {
+    return compositionParent && rootVisual
+               ? compositionParent->RemoveVisual(rootVisual.Get())
+               : S_OK;
+  }
+
+  HRESULT commitComposition() noexcept override {
+    return compositionDevice ? compositionDevice->Commit() : S_OK;
+  }
+
+  void releaseOwnership() noexcept {
     webView.Reset();
     webView3.Reset();
     controller.Reset();
@@ -689,7 +825,6 @@ struct WebView2Surface::Impl final
     rootVisual.Reset();
     compositionParent.Reset();
     compositionDevice.Reset();
-    state = State::Closed;
   }
 
   DCompHost* host = nullptr;
@@ -697,6 +832,7 @@ struct WebView2Surface::Impl final
   DWORD ownerThread = 0;
   State state = State::Created;
   HRESULT lastResult = S_OK;
+  HRESULT closeResult = S_OK;
   Options options;
   RECT bounds{0, 0, 1, 1};
   bool visible = true;
@@ -722,6 +858,8 @@ struct WebView2Surface::Impl final
   bool hasNewWindowToken = false;
   bool hasPermissionToken = false;
   bool hasWebMessageToken = false;
+  bool mappedCanvasLocal = false;
+  bool mappedMediaCanvasLocal = false;
 };
 
 WebView2Surface::WebView2Surface(DCompHost& host, HWND hostWindow)
@@ -732,7 +870,11 @@ WebView2Surface::WebView2Surface(DCompHost& host, HWND hostWindow,
     : impl_(std::make_shared<Impl>(host, hostWindow, std::move(options))) {}
 
 WebView2Surface::~WebView2Surface() {
-  if (FAILED(impl_->close())) std::terminate();
+  // Cleanup failures cannot be reported from a destructor and all ownership
+  // has already been released. Only violating the creating-STA contract is
+  // fatal because releasing apartment-bound COM pointers there is unsafe.
+  if (FAILED(impl_->checkThread())) std::terminate();
+  (void)impl_->close();
 }
 
 HRESULT WebView2Surface::initialize() { return impl_->initialize(); }
@@ -746,6 +888,10 @@ HRESULT WebView2Surface::navigate(std::wstring_view uri) {
 HRESULT WebView2Surface::forwardMouseMessage(UINT message, WPARAM wParam,
                                              LPARAM lParam) {
   return impl_->forwardMouseMessage(message, wParam, lParam);
+}
+
+HRESULT WebView2Surface::cancelMouseButtons(EmbeddedMouseButtons buttons) {
+  return impl_->cancelMouseButtons(buttons);
 }
 
 HRESULT WebView2Surface::forwardTouchMessage(UINT message, UINT32 pointerId) {
