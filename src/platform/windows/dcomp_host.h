@@ -38,6 +38,7 @@ class DCompHost {
   Microsoft::WRL::ComPtr<IDCompositionTarget> target_;
   Microsoft::WRL::ComPtr<IDCompositionVisual> root_;
   std::array<Microsoft::WRL::ComPtr<IDCompositionVisual>, kLayerCount> layers_;
+  bool initialized_ = false;
 };
 
 }  // namespace canvas::windows

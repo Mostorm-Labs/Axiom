@@ -17,15 +17,15 @@ bool isValidSlot(VisualSlot slot) {
 }  // namespace
 
 HRESULT DCompHost::initialize(HWND window) {
-  if (window == nullptr || !IsWindow(window)) {
-    return E_INVALIDARG;
-  }
-
+  initialized_ = false;
   device_.Reset();
   target_.Reset();
   root_.Reset();
   for (auto& layer : layers_) {
     layer.Reset();
+  }
+  if (window == nullptr || !IsWindow(window)) {
+    return E_INVALIDARG;
   }
 
   HRESULT hr = DCompositionCreateDevice(
@@ -69,7 +69,9 @@ HRESULT DCompHost::initialize(HWND window) {
   if (FAILED(hr)) {
     return hr;
   }
-  return device_->Commit();
+  hr = device_->Commit();
+  if (SUCCEEDED(hr)) initialized_ = true;
+  return hr;
 }
 
 IDCompositionVisual* DCompHost::visual(VisualSlot slot) const {
@@ -83,6 +85,7 @@ HRESULT DCompHost::setContent(VisualSlot slot, IUnknown* content) {
   if (!isValidSlot(slot)) {
     return E_INVALIDARG;
   }
+  if (!initialized_) return E_UNEXPECTED;
   auto* layer = visual(slot);
   if (layer == nullptr) {
     return E_UNEXPECTED;
@@ -100,7 +103,7 @@ HRESULT DCompHost::createChildVisual(VisualSlot parent,
   if (!isValidSlot(parent)) {
     return E_INVALIDARG;
   }
-  if (!device_) {
+  if (!initialized_ || !device_) {
     return E_UNEXPECTED;
   }
 
@@ -132,7 +135,7 @@ HRESULT DCompHost::createChildVisual(VisualSlot parent,
 }
 
 HRESULT DCompHost::commit() {
-  return device_ ? device_->Commit() : E_UNEXPECTED;
+  return initialized_ && device_ ? device_->Commit() : E_UNEXPECTED;
 }
 
 }  // namespace canvas::windows

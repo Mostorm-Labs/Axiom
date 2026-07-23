@@ -1,0 +1,42 @@
+Task 12 static GREEN boundary - WebView2 composition surface
+Date: 2026-07-23
+
+Implemented after the recorded RED boundary:
+  - deterministic WebView2 1.0.4078.44 restore and imported static loader;
+  - child visuals owned below Annotation and InteractionChrome roots;
+  - weak-callback async environment/controller lifecycle with explicit STA
+    close contract and no cross-apartment COM release fallback;
+  - HTTPS policy, test-only data opt-in, exact virtual-host classification,
+    and optional canvas.local/media.canvas.local folder mappings;
+  - hardened settings, denied permissions/new windows, and captured messages;
+  - mouse/touch composition-controller forwarding gated by InputRouter while
+    pen input remains on the native annotation path;
+  - Windows integration coverage for policy, owner-thread close, DComp child
+    creation, ready messages, and Draw-versus-Interact synthetic clicks.
+
+Checks completed on the macOS authoring host:
+  - git diff --check: PASS
+  - Ruby parse of .github/workflows/windows-build.yml: PASS
+  - Node JSON parse of CMakePresets.json: PASS
+  - isolated CMake configure of cmake/WebView2.cmake against the restored
+    NuGet layout: PASS; imported location and include directory resolved
+  - public-header PImpl contract grep: PASS; no WebView2 SDK interfaces or
+    enums leak from webview2_surface.h
+
+The fixed 1.0.4078.44 WebView2.h was inspected for the exact
+ICoreWebView2Environment3, ICoreWebView2CompositionController,
+ICoreWebView2PointerInfo, and ICoreWebView2_3 signatures. The public adapter
+header is PImpl-only, so the loader include directory correctly remains a
+private platform-library usage requirement. The NuGet static loader does not
+require a WEBVIEW2_STATIC preprocessor definition.
+
+Environment limitation:
+  pwsh, Visual Studio 2022, Windows SDK runtime libraries, DirectComposition,
+  and the WebView2 runtime are unavailable on this host. The Windows configure,
+  build, integration test, and real touch-display validation have not been run
+  locally and are not claimed as passing. Windows CI is authoritative.
+
+An existing macOS native build/CTest tree was also attempted, but CMake could
+not reconfigure because `unofficial-skia` is not installed in the current
+environment; its stale test entries were therefore NOT RUN. This is recorded
+as an environment limitation, not a GREEN test result.

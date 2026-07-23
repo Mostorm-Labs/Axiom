@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <initializer_list>
 #include <iterator>
 #include <limits>
@@ -50,33 +51,57 @@ std::optional<std::wstring> urlPart(const std::wstring& uri,
 
 // UrlGetPart performs structural parsing, so exact hostname comparisons do
 // not accept values such as canvas.local.attacker.example or user-info spoofs.
-bool isAllowedNavigation(std::wstring_view candidate) {
+WebView2Surface::NavigationClass classifyNavigationImpl(
+    std::wstring_view candidate, bool allowTestDataUrls) {
   if (candidate.empty() ||
       candidate.find(L'\0') != std::wstring_view::npos) {
-    return false;
+    return WebView2Surface::NavigationClass::Denied;
   }
 
-  // Data navigation is retained solely for the deterministic integration
-  // page. Other data MIME types and active URL schemes remain blocked.
-  if (startsWithIgnoreCase(candidate, L"data:text/html,")) {
-    return true;
+  // Data navigation is retained solely behind the deterministic test option.
+  if (allowTestDataUrls &&
+      startsWithIgnoreCase(candidate, L"data:text/html,")) {
+    return WebView2Surface::NavigationClass::TestData;
   }
 
   const std::wstring uri(candidate);
   const auto scheme = urlPart(uri, URL_PART_SCHEME);
   const auto host = urlPart(uri, URL_PART_HOSTNAME);
   if (!scheme || !host || host->empty() ||
-      !equalsIgnoreCase(*scheme, L"https")) {
-    return false;
+      !equalsIgnoreCase(*scheme, L"https") ||
+      UrlIsW(uri.c_str(), URLIS_URL) == FALSE) {
+    return WebView2Surface::NavigationClass::Denied;
   }
 
   // Remote HTTPS content is allowed. The two local virtual hosts are matched
   // exactly by the same parsed hostname path (and never by string prefix).
-  const bool isLocalVirtualHost = equalsIgnoreCase(*host, L"canvas.local") ||
-                                  equalsIgnoreCase(*host,
-                                                   L"media.canvas.local");
-  (void)isLocalVirtualHost;
-  return true;
+  const bool isLocalVirtualHost =
+      equalsIgnoreCase(*host, L"canvas.local") ||
+      equalsIgnoreCase(*host, L"media.canvas.local");
+  return isLocalVirtualHost
+             ? WebView2Surface::NavigationClass::LocalVirtualHost
+             : WebView2Surface::NavigationClass::Https;
+}
+
+bool isAllowedNavigationForOptions(
+    std::wstring_view candidate, const WebView2Surface::Options& options) {
+  const auto classification =
+      classifyNavigationImpl(candidate, options.allowTestDataUrls);
+  if (classification == WebView2Surface::NavigationClass::Denied) return false;
+  if (classification != WebView2Surface::NavigationClass::LocalVirtualHost) {
+    return true;
+  }
+
+  const auto host = urlPart(std::wstring(candidate), URL_PART_HOSTNAME);
+  if (!host) return false;
+  if (equalsIgnoreCase(*host, L"canvas.local")) {
+    return options.canvasLocalFolder && !options.canvasLocalFolder->empty();
+  }
+  if (equalsIgnoreCase(*host, L"media.canvas.local")) {
+    return options.mediaCanvasLocalFolder &&
+           !options.mediaCanvasLocalFolder->empty();
+  }
+  return false;
 }
 
 HRESULT firstFailure(std::initializer_list<HRESULT> results) {
@@ -188,16 +213,21 @@ POINT pixelToHimetric(POINT pixel, RECT deviceRect, RECT displayRect) {
 
 struct WebView2Surface::Impl final
     : std::enable_shared_from_this<WebView2Surface::Impl> {
-  Impl(DCompHost& compositionHost, HWND window)
+  Impl(DCompHost& compositionHost, HWND window, Options surfaceOptions)
       : host(&compositionHost),
         hostWindow(window),
-        ownerThread(GetCurrentThreadId()) {}
+        ownerThread(GetCurrentThreadId()),
+        options(std::move(surfaceOptions)) {}
 
-  ~Impl() { shutdown(); }
+  ~Impl() {
+    // WebView2 controllers are apartment-bound. Cross-thread destruction is a
+    // contract violation, not a reason to silently release STA COM pointers.
+    if (state != State::Closed) std::terminate();
+  }
 
   HRESULT initialize() {
     const HRESULT threadResult = checkThread();
-    if (FAILED(threadResult)) return fail(threadResult);
+    if (FAILED(threadResult)) return threadResult;
     if (state != State::Created) return E_UNEXPECTED;
     if (host == nullptr || hostWindow == nullptr || !IsWindow(hostWindow)) {
       return fail(E_INVALIDARG);
@@ -241,8 +271,11 @@ struct WebView2Surface::Impl final
   HRESULT navigate(std::wstring_view requestedUri) {
     const HRESULT threadResult = checkThread();
     if (FAILED(threadResult)) return threadResult;
-    if (!isAllowedNavigation(requestedUri)) return E_ACCESSDENIED;
-    if (state == State::Failed || state == State::Closed) return lastResult;
+    if (!isAllowedNavigationForOptions(requestedUri, options)) {
+      return E_ACCESSDENIED;
+    }
+    if (state == State::Closed) return RO_E_CLOSED;
+    if (state == State::Failed) return lastResult;
 
     pendingNavigation.assign(requestedUri);
     if (!webView) return S_OK;
@@ -254,7 +287,7 @@ struct WebView2Surface::Impl final
 
   HRESULT setBounds(core::Rect requestedBounds) {
     const HRESULT threadResult = checkThread();
-    if (FAILED(threadResult)) return remember(threadResult);
+    if (FAILED(threadResult)) return threadResult;
     const auto rounded = outwardRoundedRect(requestedBounds);
     if (!rounded) return remember(E_INVALIDARG);
     bounds = *rounded;
@@ -266,20 +299,41 @@ struct WebView2Surface::Impl final
 
   HRESULT setVisible(bool requestedVisible) {
     const HRESULT threadResult = checkThread();
-    if (FAILED(threadResult)) return remember(threadResult);
+    if (FAILED(threadResult)) return threadResult;
     visible = requestedVisible;
     if (!controller) return S_OK;
     return remember(controller->put_IsVisible(visible ? TRUE : FALSE));
+  }
+
+  HRESULT close() {
+    const HRESULT threadResult = checkThread();
+    if (FAILED(threadResult)) return threadResult;
+    shutdownOnOwnerThread();
+    return S_OK;
+  }
+
+  void setInteractive(bool requestedInteractive) {
+    requireOwnerThread();
+    interactive = requestedInteractive;
+  }
+
+  void requireOwnerThread() const {
+    if (FAILED(checkThread())) std::terminate();
   }
 
   HRESULT forwardMouseMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     const HRESULT threadResult = checkThread();
     if (FAILED(threadResult)) return threadResult;
     if (!interactive || !visible) return S_FALSE;
+    if (state == State::Closed) return RO_E_CLOSED;
     if (state != State::Ready || !compositionController) return E_PENDING;
 
     const auto kind = mouseEventKind(message);
     if (!kind) return E_INVALIDARG;
+    if (message == WM_MOUSELEAVE) {
+      return compositionController->SendMouseInput(
+          *kind, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE, 0, POINT{});
+    }
     const auto keys = static_cast<COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS>(
         LOWORD(wParam));
     UINT32 mouseData = 0;
@@ -305,6 +359,7 @@ struct WebView2Surface::Impl final
     const HRESULT threadResult = checkThread();
     if (FAILED(threadResult)) return threadResult;
     if (!interactive || !visible) return S_FALSE;
+    if (state == State::Closed) return RO_E_CLOSED;
     if (state != State::Ready || !environment3 || !compositionController) {
       return E_PENDING;
     }
@@ -429,6 +484,8 @@ struct WebView2Surface::Impl final
     if (FAILED(hr) || !webView) return fail(FAILED(hr) ? hr : E_POINTER);
     hr = configureSecurity();
     if (FAILED(hr)) return fail(hr);
+    hr = configureVirtualHosts();
+    if (FAILED(hr)) return fail(hr);
     hr = registerEventHandlers();
     if (FAILED(hr)) return fail(hr);
     hr = controller->put_Bounds(bounds);
@@ -464,6 +521,34 @@ struct WebView2Surface::Impl final
     });
   }
 
+  HRESULT configureVirtualHosts() {
+    if (!options.canvasLocalFolder && !options.mediaCanvasLocalFolder) {
+      return S_OK;
+    }
+
+    HRESULT hr = webView.As(&webView3);
+    if (FAILED(hr) || !webView3) return FAILED(hr) ? hr : E_NOINTERFACE;
+    const auto mapFolder = [this](LPCWSTR hostName,
+                                  const std::optional<std::wstring>& folder) {
+      if (!folder) return S_OK;
+      if (folder->empty()) return E_INVALIDARG;
+      const DWORD attributes = GetFileAttributesW(folder->c_str());
+      if (attributes == INVALID_FILE_ATTRIBUTES) {
+        return HRESULT_FROM_WIN32(GetLastError());
+      }
+      if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+        return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+      }
+      return webView3->SetVirtualHostNameToFolderMapping(
+          hostName, folder->c_str(),
+          COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS);
+    };
+
+    hr = mapFolder(L"canvas.local", options.canvasLocalFolder);
+    if (FAILED(hr)) return hr;
+    return mapFolder(L"media.canvas.local", options.mediaCanvasLocalFolder);
+  }
+
   HRESULT registerEventHandlers() {
     const std::weak_ptr<Impl> weak = weak_from_this();
     auto navigation = Callback<ICoreWebView2NavigationStartingEventHandler>(
@@ -473,8 +558,9 @@ struct WebView2Surface::Impl final
           if (!self || args == nullptr) return S_OK;
           LPWSTR rawUri = nullptr;
           const HRESULT uriResult = args->get_Uri(&rawUri);
-          const bool allowed = SUCCEEDED(uriResult) && rawUri != nullptr &&
-                               isAllowedNavigation(rawUri);
+          const bool allowed =
+              SUCCEEDED(uriResult) && rawUri != nullptr &&
+              isAllowedNavigationForOptions(rawUri, self->options);
           CoTaskMemFree(rawUri);
           return allowed ? S_OK : args->put_Cancel(TRUE);
         });
@@ -569,24 +655,33 @@ struct WebView2Surface::Impl final
     }
   }
 
-  void shutdown() {
+  void shutdownOnOwnerThread() {
     if (state == State::Closed) return;
-    if (GetCurrentThreadId() == ownerThread) {
-      unregisterEventHandlers();
-      if (compositionController) {
-        compositionController->put_RootVisualTarget(nullptr);
+    requireOwnerThread();
+    unregisterEventHandlers();
+    if (webView3) {
+      if (options.canvasLocalFolder) {
+        webView3->ClearVirtualHostNameToFolderMapping(L"canvas.local");
       }
-      if (controller) {
-        controller->put_IsVisible(FALSE);
-        controller->Close();
-      }
-      if (compositionParent && rootVisual &&
-          SUCCEEDED(compositionParent->RemoveVisual(rootVisual.Get())) &&
-          compositionDevice) {
-        compositionDevice->Commit();
+      if (options.mediaCanvasLocalFolder) {
+        webView3->ClearVirtualHostNameToFolderMapping(
+            L"media.canvas.local");
       }
     }
+    if (compositionController) {
+      compositionController->put_RootVisualTarget(nullptr);
+    }
+    if (controller) {
+      controller->put_IsVisible(FALSE);
+      controller->Close();
+    }
+    if (compositionParent && rootVisual &&
+        SUCCEEDED(compositionParent->RemoveVisual(rootVisual.Get())) &&
+        compositionDevice) {
+      compositionDevice->Commit();
+    }
     webView.Reset();
+    webView3.Reset();
     controller.Reset();
     compositionController.Reset();
     environment3.Reset();
@@ -602,6 +697,7 @@ struct WebView2Surface::Impl final
   DWORD ownerThread = 0;
   State state = State::Created;
   HRESULT lastResult = S_OK;
+  Options options;
   RECT bounds{0, 0, 1, 1};
   bool visible = true;
   bool interactive = false;
@@ -616,6 +712,7 @@ struct WebView2Surface::Impl final
   ComPtr<ICoreWebView2Controller> controller;
   ComPtr<ICoreWebView2CompositionController> compositionController;
   ComPtr<ICoreWebView2> webView;
+  ComPtr<ICoreWebView2_3> webView3;
 
   EventRegistrationToken navigationToken{};
   EventRegistrationToken newWindowToken{};
@@ -628,11 +725,19 @@ struct WebView2Surface::Impl final
 };
 
 WebView2Surface::WebView2Surface(DCompHost& host, HWND hostWindow)
-    : impl_(std::make_shared<Impl>(host, hostWindow)) {}
+    : WebView2Surface(host, hostWindow, Options{}) {}
 
-WebView2Surface::~WebView2Surface() { impl_->shutdown(); }
+WebView2Surface::WebView2Surface(DCompHost& host, HWND hostWindow,
+                                 Options options)
+    : impl_(std::make_shared<Impl>(host, hostWindow, std::move(options))) {}
+
+WebView2Surface::~WebView2Surface() {
+  if (FAILED(impl_->close())) std::terminate();
+}
 
 HRESULT WebView2Surface::initialize() { return impl_->initialize(); }
+
+HRESULT WebView2Surface::close() { return impl_->close(); }
 
 HRESULT WebView2Surface::navigate(std::wstring_view uri) {
   return impl_->navigate(uri);
@@ -648,32 +753,43 @@ HRESULT WebView2Surface::forwardTouchMessage(UINT message, UINT32 pointerId) {
 }
 
 void WebView2Surface::setBounds(core::Rect bounds) {
+  impl_->requireOwnerThread();
   impl_->setBounds(bounds);
 }
 
 void WebView2Surface::setInteractive(bool interactive) {
-  impl_->interactive = interactive;
+  impl_->setInteractive(interactive);
 }
 
 void WebView2Surface::setVisible(bool visible) {
+  impl_->requireOwnerThread();
   impl_->setVisible(visible);
 }
 
 WebView2Surface::State WebView2Surface::state() const noexcept {
+  impl_->requireOwnerThread();
   return impl_->state;
 }
 
 HRESULT WebView2Surface::lastResult() const noexcept {
+  impl_->requireOwnerThread();
   return impl_->lastResult;
 }
 
 bool WebView2Surface::interactive() const noexcept {
+  impl_->requireOwnerThread();
   return impl_->interactive;
 }
 
 const std::vector<std::wstring>& WebView2Surface::capturedMessages() const
     noexcept {
+  impl_->requireOwnerThread();
   return impl_->capturedMessages;
+}
+
+WebView2Surface::NavigationClass WebView2Surface::classifyNavigation(
+    std::wstring_view uri, bool allowTestDataUrls) {
+  return classifyNavigationImpl(uri, allowTestDataUrls);
 }
 
 }  // namespace canvas::windows

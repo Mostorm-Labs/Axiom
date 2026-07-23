@@ -1,13 +1,17 @@
 #include "platform/windows/dcomp_host.h"
 #include "platform/windows/webview2_surface.h"
 
+#include "canvas/input/input_router.h"
+
 #include <gtest/gtest.h>
 #include <wrl/client.h>
 
 #include <chrono>
 #include <iomanip>
+#include <optional>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 namespace {
 
@@ -109,6 +113,53 @@ TEST(WebView2Surface, ChildVisualRequiresAnInitializedHostAndValidSlot) {
   EXPECT_NE(ownedChild.Get(), nullptr);
 }
 
+TEST(WebView2Surface, ClassifiesNavigationWithoutHostPrefixSpoofing) {
+  using NavigationClass = canvas::windows::WebView2Surface::NavigationClass;
+  const auto classify =
+      canvas::windows::WebView2Surface::classifyNavigation;
+
+  EXPECT_EQ(classify(L"data:text/html,ok", false), NavigationClass::Denied);
+  EXPECT_EQ(classify(L"data:text/html,ok", true), NavigationClass::TestData);
+  EXPECT_EQ(classify(L"https://canvas.local/page", false),
+            NavigationClass::LocalVirtualHost);
+  EXPECT_EQ(classify(L"https://media.canvas.local/page", false),
+            NavigationClass::LocalVirtualHost);
+  EXPECT_EQ(classify(L"https://canvas.local.attacker.example/page", false),
+            NavigationClass::Https);
+  EXPECT_EQ(classify(L"https://canvas.local@attacker.example/page", false),
+            NavigationClass::Https);
+  EXPECT_EQ(classify(L"https://example.com/page", false),
+            NavigationClass::Https);
+  EXPECT_EQ(classify(L"http://canvas.local/", false),
+            NavigationClass::Denied);
+  EXPECT_EQ(classify(L"file:///C:/Windows/win.ini", false),
+            NavigationClass::Denied);
+  EXPECT_EQ(classify(L"javascript:alert(1)", false),
+            NavigationClass::Denied);
+  EXPECT_EQ(classify(L"about:blank", false), NavigationClass::Denied);
+}
+
+TEST(WebView2Surface, CloseRejectsTheWrongApartmentWithoutReleasingOwnership) {
+  ScopedCom com;
+  ASSERT_TRUE(SUCCEEDED(com.result()));
+  ScopedTestWindow testWindow;
+  ASSERT_TRUE(testWindow.registered());
+  ASSERT_NE(testWindow.get(), nullptr);
+  canvas::windows::DCompHost host;
+  ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
+  canvas::windows::WebView2Surface surface(host, testWindow.get());
+
+  HRESULT wrongThreadResult = S_OK;
+  std::thread wrongThread(
+      [&] { wrongThreadResult = surface.close(); });
+  wrongThread.join();
+  EXPECT_EQ(wrongThreadResult, RPC_E_WRONG_THREAD);
+  EXPECT_EQ(surface.state(),
+            canvas::windows::WebView2Surface::State::Created);
+  EXPECT_EQ(surface.close(), S_OK);
+  EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Closed);
+}
+
 TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   ScopedCom com;
   ASSERT_TRUE(SUCCEEDED(com.result()));
@@ -119,13 +170,18 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   canvas::windows::DCompHost host;
   ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
 
-  canvas::windows::WebView2Surface surface(host, testWindow.get());
+  canvas::windows::WebView2Surface::Options testOptions;
+  testOptions.allowTestDataUrls = true;
+  canvas::windows::WebView2Surface surface(host, testWindow.get(),
+                                            std::move(testOptions));
   surface.setBounds(canvas::core::Rect{0.0F, 0.0F, 640.0F, 480.0F});
   ASSERT_TRUE(SUCCEEDED(surface.initialize()));
   EXPECT_EQ(surface.navigate(L"http://canvas.local/"), E_ACCESSDENIED);
   EXPECT_EQ(surface.navigate(L"file:///C:/Windows/win.ini"), E_ACCESSDENIED);
   EXPECT_EQ(surface.navigate(L"javascript:alert(1)"), E_ACCESSDENIED);
   EXPECT_EQ(surface.navigate(L"about:blank"), E_ACCESSDENIED);
+  EXPECT_EQ(surface.navigate(L"https://canvas.local/unmapped"),
+            E_ACCESSDENIED);
 
   constexpr auto kPage =
       L"data:text/html,%3C!doctype%20html%3E%3Cmeta%20charset=utf-8%3E"
@@ -147,7 +203,15 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
       << static_cast<unsigned long>(surface.lastResult());
 
   const LPARAM clickPoint = MAKELPARAM(32, 32);
-  surface.setInteractive(false);
+  const std::optional<canvas::document::NodeId> embeddedId{"web-1"};
+  canvas::input::InputRouter router;
+  router.setActiveEmbeddedNode(embeddedId);
+  router.setMode(canvas::input::InputMode::Draw);
+  const auto drawRoute =
+      router.route(canvas::input::PointerKind::Mouse, embeddedId);
+  ASSERT_NE(drawRoute.target, canvas::input::InputTarget::EmbeddedSurface);
+  surface.setInteractive(
+      drawRoute.target == canvas::input::InputTarget::EmbeddedSurface);
   EXPECT_EQ(surface.forwardMouseMessage(WM_LBUTTONDOWN, MK_LBUTTON,
                                         clickPoint),
             S_FALSE);
@@ -156,7 +220,13 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
       [&] { return hasMessage(surface, LR"({"type":"clicked"})"); },
       std::chrono::milliseconds(100)));
 
-  surface.setInteractive(true);
+  router.setMode(canvas::input::InputMode::Interact);
+  const auto interactRoute =
+      router.route(canvas::input::PointerKind::Mouse, embeddedId);
+  ASSERT_EQ(interactRoute.target,
+            canvas::input::InputTarget::EmbeddedSurface);
+  surface.setInteractive(
+      interactRoute.target == canvas::input::InputTarget::EmbeddedSurface);
   ASSERT_TRUE(SUCCEEDED(surface.forwardMouseMessage(
       WM_LBUTTONDOWN, MK_LBUTTON, clickPoint)));
   ASSERT_TRUE(
@@ -164,6 +234,8 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   EXPECT_TRUE(pumpUntil(
       [&] { return hasMessage(surface, LR"({"type":"clicked"})"); },
       std::chrono::seconds(2)));
+  EXPECT_EQ(surface.close(), S_OK);
+  EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Closed);
 }
 
 }  // namespace

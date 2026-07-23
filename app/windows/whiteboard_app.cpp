@@ -116,8 +116,10 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       UnregisterClassW(kWindowClassName, instance);
       return hresultExitCode(E_FAIL);
     }
-    embeddedWebView_ =
-        std::make_unique<WebView2Surface>(composition_, window);
+    WebView2Surface::Options diagnosticOptions;
+    diagnosticOptions.allowTestDataUrls = true;
+    embeddedWebView_ = std::make_unique<WebView2Surface>(
+        composition_, window, std::move(diagnosticOptions));
     embeddedWebView_->setBounds(
         core::Rect{440.0F, 240.0F, 400.0F, 240.0F});
     embeddedWebView_->setInteractive(true);
@@ -195,7 +197,8 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
       message == WM_MBUTTONDOWN || message == WM_MBUTTONUP ||
       message == WM_MBUTTONDBLCLK || message == WM_XBUTTONDOWN ||
       message == WM_XBUTTONUP || message == WM_XBUTTONDBLCLK ||
-      message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
+      message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL ||
+      message == WM_CAPTURECHANGED) {
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
@@ -219,14 +222,30 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     }
 
     const UINT32 pointerId = GET_POINTERID_WPARAM(wParam);
-    POINTER_INPUT_TYPE pointerType{};
-    if (!GetPointerType(pointerId, &pointerType)) {
-      const HRESULT cancelResult = app->cancelActivePointer(pointerId);
-      if (FAILED(cancelResult)) {
+    if (message == WM_POINTERCAPTURECHANGED) {
+      const HRESULT strokeCancel = app->cancelActivePointer(pointerId);
+      const HRESULT embeddedCancel = app->cancelEmbeddedTouch(pointerId);
+      const HRESULT cancelResult =
+          FAILED(strokeCancel) ? strokeCancel : embeddedCancel;
+      if (FAILED(cancelResult) && cancelResult != E_PENDING) {
         app->lastError_ = cancelResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
       }
-      if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+      ReleaseCapture();
+      return 0;
+    }
+
+    POINTER_INPUT_TYPE pointerType{};
+    if (!GetPointerType(pointerId, &pointerType)) {
+      const HRESULT strokeCancel = app->cancelActivePointer(pointerId);
+      const HRESULT embeddedCancel = app->cancelEmbeddedTouch(pointerId);
+      const HRESULT cancelResult =
+          FAILED(strokeCancel) ? strokeCancel : embeddedCancel;
+      if (FAILED(cancelResult) && cancelResult != E_PENDING) {
+        app->lastError_ = cancelResult;
+        PostMessageW(window, WM_CLOSE, 0, 0);
+      }
+      if (message == WM_POINTERUP) {
         ReleaseCapture();
       }
       return DefWindowProcW(window, message, wParam, lParam);
@@ -239,24 +258,30 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     } else if (pointerType == PT_TOUCH) {
       samples = WinPointerAdapter::readTouchHistory(window, pointerId, phase);
     } else {
-      const HRESULT cancelResult = app->cancelActivePointer(pointerId);
-      if (FAILED(cancelResult)) {
+      const HRESULT strokeCancel = app->cancelActivePointer(pointerId);
+      const HRESULT embeddedCancel = app->cancelEmbeddedTouch(pointerId);
+      const HRESULT cancelResult =
+          FAILED(strokeCancel) ? strokeCancel : embeddedCancel;
+      if (FAILED(cancelResult) && cancelResult != E_PENDING) {
         app->lastError_ = cancelResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
       }
-      if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+      if (message == WM_POINTERUP) {
         ReleaseCapture();
       }
       return DefWindowProcW(window, message, wParam, lParam);
     }
 
     if (samples.empty()) {
-      const HRESULT cancelResult = app->cancelActivePointer(pointerId);
-      if (FAILED(cancelResult)) {
+      const HRESULT strokeCancel = app->cancelActivePointer(pointerId);
+      const HRESULT embeddedCancel = app->cancelEmbeddedTouch(pointerId);
+      const HRESULT cancelResult =
+          FAILED(strokeCancel) ? strokeCancel : embeddedCancel;
+      if (FAILED(cancelResult) && cancelResult != E_PENDING) {
         app->lastError_ = cancelResult;
         PostMessageW(window, WM_CLOSE, 0, 0);
       }
-      if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
+      if (message == WM_POINTERUP) {
         ReleaseCapture();
       }
       return 0;
@@ -280,10 +305,9 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
           app->lastError_ = forwardResult;
           PostMessageW(window, WM_CLOSE, 0, 0);
         }
-        if (message == WM_POINTERDOWN) {
+        if (message == WM_POINTERDOWN && forwardResult == S_OK) {
           SetCapture(window);
-        } else if (message == WM_POINTERUP ||
-                   message == WM_POINTERCAPTURECHANGED) {
+        } else if (message == WM_POINTERUP || FAILED(forwardResult)) {
           ReleaseCapture();
         }
         return 0;
@@ -315,23 +339,58 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
 HRESULT WhiteboardApp::forwardMouseToEmbedded(HWND window, UINT message,
                                                WPARAM wParam, LPARAM lParam) {
   if (!embeddedWebView_) return S_FALSE;
+
+  if (message == WM_CAPTURECHANGED) {
+    if (!activeEmbeddedMouse_) return S_FALSE;
+    embeddedWebView_->setInteractive(true);
+    const HRESULT result =
+        embeddedWebView_->forwardMouseMessage(WM_MOUSELEAVE, 0, 0);
+    activeEmbeddedMouse_ = false;
+    embeddedWebView_->setInteractive(false);
+    return FAILED(result) ? result : S_OK;
+  }
+
   POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
   if (message == WM_MOUSEWHEEL || message == WM_MOUSEHWHEEL) {
     if (!ScreenToClient(window, &point)) return S_FALSE;
   }
   const auto hit = hitEmbedded(
       core::Vec2{static_cast<float>(point.x), static_cast<float>(point.y)});
-  if (message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
-      message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN) {
+  const bool buttonDown =
+      message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
+      message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN;
+  const bool buttonUp =
+      message == WM_LBUTTONUP || message == WM_RBUTTONUP ||
+      message == WM_MBUTTONUP || message == WM_XBUTTONUP;
+  if (buttonDown) {
     inputRouter_.setActiveEmbeddedNode(hit);
   }
   const auto route = inputRouter_.route(input::PointerKind::Mouse, hit);
-  const bool shouldForward =
+  const bool routedToEmbedded =
       route.target == input::InputTarget::EmbeddedSurface;
+  const bool shouldForward = activeEmbeddedMouse_ || routedToEmbedded ||
+                             (message == WM_MOUSELEAVE &&
+                              embeddedWebView_->interactive());
   embeddedWebView_->setInteractive(shouldForward);
-  return shouldForward
-             ? embeddedWebView_->forwardMouseMessage(message, wParam, lParam)
-             : S_FALSE;
+  if (!shouldForward) return S_FALSE;
+
+  const HRESULT result =
+      embeddedWebView_->forwardMouseMessage(message, wParam, lParam);
+  if (buttonDown && result == S_OK) {
+    activeEmbeddedMouse_ = true;
+    SetCapture(window);
+  } else if (buttonDown) {
+    embeddedWebView_->setInteractive(false);
+  }
+
+  if (buttonUp || FAILED(result)) {
+    activeEmbeddedMouse_ = false;
+    if (GetCapture() == window) ReleaseCapture();
+    embeddedWebView_->setInteractive(buttonUp && routedToEmbedded);
+  } else if (message == WM_MOUSELEAVE && !activeEmbeddedMouse_) {
+    embeddedWebView_->setInteractive(false);
+  }
+  return result;
 }
 
 HRESULT WhiteboardApp::forwardTouchToEmbedded(
@@ -356,9 +415,33 @@ HRESULT WhiteboardApp::forwardTouchToEmbedded(
 
   const HRESULT result =
       embeddedWebView_->forwardTouchMessage(message, pointerId);
-  if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED) {
-    activeEmbeddedPointerId_.reset();
+  if (result != S_OK && message != WM_POINTERCAPTURECHANGED) {
+    // Best effort: preserve the WebView pointer lifecycle before releasing
+    // the native session. The cleanup below always runs even if this fails.
+    embeddedWebView_->forwardTouchMessage(WM_POINTERCAPTURECHANGED, pointerId);
   }
+  if (message == WM_POINTERUP || message == WM_POINTERCAPTURECHANGED ||
+      result != S_OK) {
+    activeEmbeddedPointerId_.reset();
+    embeddedWebView_->setInteractive(false);
+  }
+  return result;
+}
+
+HRESULT WhiteboardApp::cancelEmbeddedTouch(UINT32 pointerId) {
+  if (!activeEmbeddedPointerId_ ||
+      *activeEmbeddedPointerId_ != pointerId) {
+    return S_FALSE;
+  }
+
+  HRESULT result = S_OK;
+  if (embeddedWebView_) {
+    embeddedWebView_->setInteractive(true);
+    result = embeddedWebView_->forwardTouchMessage(
+        WM_POINTERCAPTURECHANGED, pointerId);
+    embeddedWebView_->setInteractive(false);
+  }
+  activeEmbeddedPointerId_.reset();
   return result;
 }
 

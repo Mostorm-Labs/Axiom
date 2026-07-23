@@ -35,6 +35,7 @@ class WhiteboardApp {
                                  LPARAM lParam);
   HRESULT forwardTouchToEmbedded(UINT message, UINT32 pointerId,
                                  const input::PointerSample& sample);
+  HRESULT cancelEmbeddedTouch(UINT32 pointerId);
   std::optional<document::NodeId> hitEmbedded(core::Vec2 point) const;
   document::LayerClass activeDocumentLayer() const;
   SkiaSwapChainLayer& activeSwapChainLayer();
@@ -51,6 +52,7 @@ class WhiteboardApp {
   std::optional<stroke::StrokeBuilder> activeStroke_;
   std::optional<std::uint64_t> activePointerId_;
   std::optional<UINT32> activeEmbeddedPointerId_;
+  bool activeEmbeddedMouse_ = false;
   std::optional<input::PointerSample> lastPointerSample_;
   input::RouteResult activeRoute_;
   document::NodeId activeStrokeId_;
