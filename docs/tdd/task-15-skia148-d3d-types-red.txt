@@ -1,0 +1,40 @@
+Skia 148 D3D resource type red phase (2026-07-25)
+
+GitHub Actions Windows run 30120816614 compiled the Win32 header-hygiene
+probe and every source preceding skia_swap_chain_layer.cpp, then failed at the
+MSVC Build step:
+
+  https://github.com/Mostorm-Labs/canvas/actions/runs/30120816614
+
+  skia_swap_chain_layer.cpp(126,28): error C2079:
+      'info' uses undefined struct 'GrD3DTextureResourceInfo'
+  skia_swap_chain_layer.cpp(133,31): error C2664:
+      cannot convert argument 3 to 'const GrD3DTextureResourceInfo &'
+
+The locked Skia 148 source is commit:
+
+  git -C /tmp/canvas-skia148 rev-parse HEAD
+  e7c90ecca9444fe09598f1630ab7cee2c0ee027a
+
+At that version GrD3DBackendSurface.h includes
+GrD3DTypesMinimal.h, which forward-declares GrD3DTextureResourceInfo. Its full
+definition is in the separate public header GrD3DTypes.h. A minimal exact-
+header syntax probe reproduced the incomplete-type boundary before changing
+production code:
+
+  clang++ -std=c++17 -fsyntax-only \
+      -Iout/probes/skia148-d3d-sdk -I/tmp/canvas-skia148 -x c++ -
+
+Probe body:
+
+  #include "include/gpu/ganesh/d3d/GrD3DBackendSurface.h"
+  static_assert(sizeof(GrD3DTextureResourceInfo) > 0);
+
+Result:
+
+  error: invalid application of 'sizeof' to an incomplete type
+         'GrD3DTextureResourceInfo'
+  note: forward declaration is in GrD3DTypesMinimal.h:24
+
+The probe uses minimal local declarations for otherwise unavailable Windows
+SDK types. It does not replace the pending MSVC production build evidence.

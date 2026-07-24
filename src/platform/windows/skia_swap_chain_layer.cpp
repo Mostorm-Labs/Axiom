@@ -8,6 +8,7 @@
 #include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/d3d/GrD3DBackendSurface.h"
+#include "include/gpu/ganesh/d3d/GrD3DTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 
 #include <algorithm>
