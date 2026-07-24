@@ -264,6 +264,11 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   ASSERT_TRUE(
       SUCCEEDED(surface.postMessage(LR"({"type":"queued-b"})")));
 
+  constexpr std::wstring_view kQueuedBHostMessage =
+      LR"json({"type":"host-message","value":"{\"type\":\"queued-b\"}"})json";
+  constexpr std::wstring_view kQueuedAHostMessage =
+      LR"json({"type":"host-message","value":"{\"type\":\"queued-a\"}"})json";
+
   ASSERT_TRUE(pumpUntil(
       [&] {
         return surface.state() ==
@@ -275,12 +280,8 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
       << static_cast<unsigned long>(surface.lastResult());
   EXPECT_TRUE(pumpUntil(
       [&] {
-        return hasMessage(
-                   surface,
-                   LR"({"type":"host-message","value":"{\"type\":\"queued-b\"}"})") &&
-               !hasMessage(
-                   surface,
-                   LR"({"type":"host-message","value":"{\"type\":\"queued-a\"}"})");
+        return hasMessage(surface, kQueuedBHostMessage) &&
+               !hasMessage(surface, kQueuedAHostMessage);
       },
       std::chrono::seconds(2)));
 
