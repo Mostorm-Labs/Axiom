@@ -1,0 +1,44 @@
+Skia 148 color-space completeness red phase (2026-07-25)
+
+GitHub Actions Windows run 30121280886 reached
+skia_swap_chain_layer.cpp after compiling the prior Skia 148 compatibility
+fixes, then failed at the MSVC Build step:
+
+  https://github.com/Mostorm-Labs/canvas/actions/runs/30121280886
+
+  SkRefCnt.h(151,9): error C2027: use of undefined type 'SkColorSpace'
+  SkImageInfo.h(25,7): see declaration of 'SkColorSpace'
+  skia_swap_chain_layer.cpp(136,16): first reference to
+      'sk_sp<SkColorSpace>::~sk_sp' in SkiaSwapChainLayer::render
+
+The call to SkSurfaces::WrapBackendRenderTarget passes nullptr to its by-value
+sk_sp<SkColorSpace> parameter. Destroying that temporary instantiates
+SkSafeUnref<SkColorSpace>, which requires the complete class. In locked Skia
+148, SkSurfaceGanesh.h only forward-declares SkColorSpace.
+
+The exact Skia source used for the local probe is commit:
+
+  git -C /tmp/canvas-skia148 rev-parse HEAD
+  e7c90ecca9444fe09598f1630ab7cee2c0ee027a
+
+Before changing production code:
+
+  clang++ -std=c++17 -Wall -Wextra -Wpedantic -fsyntax-only \
+      -isystem /tmp/canvas-skia148 -x c++ -
+
+Probe body:
+
+  #include "include/gpu/ganesh/SkSurfaceGanesh.h"
+  void probe(const GrBackendRenderTarget& target) {
+    auto surface = SkSurfaces::WrapBackendRenderTarget(
+        nullptr, target, kTopLeft_GrSurfaceOrigin,
+        kBGRA_8888_SkColorType, nullptr, nullptr);
+  }
+
+Result:
+
+  SkRefCnt.h:151:12: error: member access into incomplete type 'SkColorSpace'
+  note: instantiation of sk_sp<SkColorSpace>::~sk_sp requested here
+
+This reproduces the same template-instantiation boundary without requiring a
+Windows SDK or linking Skia.

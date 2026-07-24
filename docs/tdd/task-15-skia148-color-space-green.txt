@@ -1,0 +1,33 @@
+Skia 148 color-space completeness green phase (2026-07-25)
+
+Added the public include/core/SkColorSpace.h header directly to
+skia_swap_chain_layer.cpp before the SkSurfaceGanesh API is used. This makes
+the by-value sk_sp<SkColorSpace> temporary's pointee complete without changing
+the WrapBackendRenderTarget call or rendering behavior.
+
+Exact-header syntax check against locked Skia commit
+e7c90ecca9444fe09598f1630ab7cee2c0ee027a:
+
+  clang++ -std=c++17 -Wall -Wextra -Wpedantic -Werror -fsyntax-only \
+      -Iout/probes/skia148-color-space \
+      -isystem /tmp/canvas-skia148 -x c++ -
+
+Probe body:
+
+  #include "include/core/SkColorSpace.h"
+  #include "include/gpu/ganesh/SkSurfaceGanesh.h"
+  void probe(const GrBackendRenderTarget& target) {
+    auto surface = SkSurfaces::WrapBackendRenderTarget(
+        nullptr, target, kTopLeft_GrSurfaceOrigin,
+        kBGRA_8888_SkColorType, nullptr, nullptr);
+  }
+
+Result: passed with no diagnostics. The temporary probe include directory
+only supplies declarations from the skcms dependency omitted by the sparse
+Skia checkout; SkColorSpace.h, SkSurfaceGanesh.h, SkRefCnt.h, and their other
+Skia headers are the exact locked revision.
+
+  git diff --check
+
+Result: passed. Full MSVC compilation, linkage, and the Windows test suite
+remain pending the next Windows CI run.
