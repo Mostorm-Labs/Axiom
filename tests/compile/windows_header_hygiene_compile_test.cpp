@@ -25,3 +25,7 @@ static_assert(std::numeric_limits<DWORD>::max() > 0,
 SkRect canvasWindowsHeaderHygieneCompileProbe() {
   return SkRect::MakeLTRB(0.0F, 0.0F, 1.0F, 1.0F);
 }
+
+HCURSOR canvasWindowsWideCursorResourceCompileProbe() {
+  return LoadCursorW(nullptr, MAKEINTRESOURCEW(OCR_NORMAL));
+}

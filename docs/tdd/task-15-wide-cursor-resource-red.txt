@@ -1,0 +1,21 @@
+Explicit wide cursor resource red phase (2026-07-25)
+
+GitHub Actions Windows run 30121762393 compiled canvas_windows_platform in
+full, then failed while compiling the Windows application target:
+
+  https://github.com/Mostorm-Labs/canvas/actions/runs/30121762393
+
+  whiteboard_app.cpp(217,25): error C2664:
+      'HCURSOR LoadCursorW(HINSTANCE,LPCWSTR)': cannot convert argument 2
+      from 'LPSTR' to 'LPCWSTR'
+  while trying to match the argument list '(nullptr, LPSTR)'
+
+The application explicitly uses the wide Win32 APIs and W structures, but
+passed the encoding-neutral IDC_ARROW macro to LoadCursorW. Because this
+project does not globally define UNICODE, IDC_ARROW expands through the ANSI
+MAKEINTRESOURCE alias and has type LPSTR.
+
+Enabling UNICODE globally would change every encoding-neutral Win32 alias and
+is broader than this cursor resource mismatch. A cast would hide the type
+error without making the resource encoding explicit. The narrow failure is
+therefore corrected at this call site.

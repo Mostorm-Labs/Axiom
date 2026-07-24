@@ -1,0 +1,29 @@
+Explicit wide cursor resource green phase (2026-07-25)
+
+Replaced IDC_ARROW at the LoadCursorW call with the explicit wide integer
+resource MAKEINTRESOURCEW(OCR_NORMAL). OCR_NORMAL and IDC_ARROW identify the
+same standard arrow cursor value (32512), while MAKEINTRESOURCEW produces the
+LPCWSTR-compatible resource pointer required by LoadCursorW. No global
+UNICODE or _UNICODE definition was added.
+
+Added the exact expression to the existing Windows-only OBJECT compile target:
+
+  HCURSOR canvasWindowsWideCursorResourceCompileProbe() {
+    return LoadCursorW(nullptr, MAKEINTRESOURCEW(OCR_NORMAL));
+  }
+
+The `canvas_windows_header_hygiene_compile_test` target is built by the normal
+all-target Windows build and does not link an executable, so this contract
+checks the real Windows SDK declaration and macro types without runtime or
+user32 linkage requirements.
+
+Local static checks:
+
+  rg -n 'LoadCursorW.*IDC_ARROW|(^|[^W])MAKEINTRESOURCE\(' app src tests
+  rg -n '(^|[^A-Z_])(UNICODE|_UNICODE)([^A-Z_]|$)' CMakeLists.txt app src tests
+  git diff --check
+
+Result: passed. Both production and compile-contract sites use the explicit
+wide resource; no generic MAKEINTRESOURCE use or global UNICODE compile
+definition was found; and the diff has no whitespace errors. Compilation
+against the real Windows SDK remains pending the next Windows CI run.

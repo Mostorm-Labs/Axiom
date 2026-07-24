@@ -214,7 +214,7 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   windowClass.hInstance = instance;
   windowClass.lpfnWndProc = &WhiteboardApp::windowProc;
   windowClass.lpszClassName = kWindowClassName;
-  windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+  windowClass.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(OCR_NORMAL));
   windowClass.style = CS_HREDRAW | CS_VREDRAW;
 
   if (RegisterClassExW(&windowClass) == 0) {
