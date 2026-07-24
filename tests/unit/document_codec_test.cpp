@@ -2,8 +2,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -62,9 +64,9 @@ TEST(DocumentCodecTest, RoundTripsEmbeddedAndAttachedStrokeNodes) {
             document::StrokeCoordinateSpace::ParentNormalized);
 }
 
-TEST(DocumentCodecTest, PreservesAnUnknownNodeVerbatim) {
+TEST(DocumentCodecTest, PreservesRepresentableUnknownNodeFields) {
   const std::string raw =
-      R"({"schemaVersion":1,"nodes":[{"id":"future-1","type":"future-widget","layer":"base","bounds":[0,0,10,10],"parentId":null,"payload":{"answer":42,"nested":{"keep":true}}}]})";
+      R"({"schemaVersion":1,"nodes":[{"id":"future-1","type":"future-widget","layer":"base","bounds":[0,0,10,10],"parentId":null,"payload":{"answer":42,"maximum":18446744073709551615,"nested":{"keep":true}}}]})";
   const std::vector<std::uint8_t> bytes(raw.begin(), raw.end());
   const auto decoded = storage::DocumentCodec::decodeJson(bytes);
   ASSERT_TRUE(decoded.document.has_value()) << decoded.error;
@@ -76,7 +78,86 @@ TEST(DocumentCodecTest, PreservesAnUnknownNodeVerbatim) {
   const auto encoded = storage::DocumentCodec::encodeJson(*decoded.document);
   const std::string output(encoded.begin(), encoded.end());
   EXPECT_NE(output.find("\"answer\":42"), std::string::npos);
+  EXPECT_NE(output.find("\"maximum\":18446744073709551615"),
+            std::string::npos);
   EXPECT_NE(output.find("\"nested\":{"), std::string::npos);
+
+  const auto msgpack = storage::DocumentCodec::encode(*decoded.document);
+  ASSERT_FALSE(msgpack.empty());
+  const auto reopened = storage::DocumentCodec::decode(msgpack);
+  ASSERT_TRUE(reopened.document.has_value()) << reopened.error;
+  const auto reopenedJson =
+      storage::DocumentCodec::encodeJson(*reopened.document);
+  const std::string reopenedText(reopenedJson.begin(), reopenedJson.end());
+  EXPECT_NE(reopenedText.find("\"maximum\":18446744073709551615"),
+            std::string::npos);
+}
+
+TEST(DocumentCodecTest, RejectsUnknownIntegerThatCannotRoundTripLosslessly) {
+  const std::string raw =
+      R"({"schemaVersion":1,"nodes":[{"id":"future-1","type":"future-widget","layer":"base","bounds":[0,0,10,10],"parentId":null,"payload":{"tooLarge":18446744073709551617}}]})";
+  const std::vector<std::uint8_t> bytes(raw.begin(), raw.end());
+  const auto decoded = storage::DocumentCodec::decodeJson(bytes);
+  EXPECT_FALSE(decoded.document.has_value());
+  EXPECT_NE(decoded.error.find("losslessly"), std::string::npos);
+}
+
+TEST(DocumentCodecTest, RejectsExcessiveJsonNestingBeforeDomParsing) {
+  std::string raw =
+      R"({"schemaVersion":1,"nodes":[{"id":"future-1","type":"future-widget","layer":"base","bounds":[0,0,10,10],"parentId":null,"payload":)";
+  raw.append(300U, '[');
+  raw += '0';
+  raw.append(300U, ']');
+  raw += "}]}";
+  const std::vector<std::uint8_t> bytes(raw.begin(), raw.end());
+  const auto decoded = storage::DocumentCodec::decodeJson(bytes);
+  EXPECT_FALSE(decoded.document.has_value());
+  EXPECT_NE(decoded.error.find("nesting"), std::string::npos);
+}
+
+TEST(DocumentCodecTest, EnforcesExactMessagePackNestingBoundary) {
+  const auto nestedArrays = [](std::size_t depth) {
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(depth * 3U + 1U);
+    for (std::size_t index = 0; index < depth; ++index) {
+      bytes.push_back(0xDCU);  // array 16
+      bytes.push_back(0x00U);
+      bytes.push_back(0x01U);
+    }
+    bytes.push_back(0xC0U);  // nil
+    return bytes;
+  };
+
+  const auto maximum = storage::DocumentCodec::decode(nestedArrays(256U));
+  EXPECT_FALSE(maximum.document.has_value());
+  EXPECT_EQ(maximum.error.find("nesting"), std::string::npos);
+
+  const auto excessive = storage::DocumentCodec::decode(nestedArrays(257U));
+  EXPECT_FALSE(excessive.document.has_value());
+  EXPECT_NE(excessive.error.find("nesting"), std::string::npos);
+}
+
+TEST(DocumentCodecTest, RejectsInvalidUtf8FromMessagePackAndLiveModels) {
+  document::Document input;
+  ASSERT_TRUE(input.add(makeEmbedded("web", document::EmbeddedKind::Web)));
+  auto bytes = storage::DocumentCodec::encode(input);
+  ASSERT_FALSE(bytes.empty());
+  const std::string source = "https://example.com";
+  const auto sourceStart =
+      std::search(bytes.begin(), bytes.end(), source.begin(), source.end());
+  ASSERT_NE(sourceStart, bytes.end());
+  *sourceStart = 0xFFU;
+  const auto decoded = storage::DocumentCodec::decode(bytes);
+  EXPECT_FALSE(decoded.document.has_value());
+  EXPECT_NE(decoded.error.find("UTF-8"), std::string::npos);
+
+  document::Document invalid;
+  auto invalidNode = makeEmbedded("invalid", document::EmbeddedKind::Web);
+  auto& embedded = std::get<document::EmbeddedNode>(invalidNode.payload);
+  embedded.source.assign(1U, static_cast<char>(0xFFU));
+  ASSERT_TRUE(invalid.add(std::move(invalidNode)));
+  EXPECT_TRUE(storage::DocumentCodec::encode(invalid).empty());
+  EXPECT_TRUE(storage::DocumentCodec::encodeJson(invalid).empty());
 }
 
 TEST(DocumentCodecTest, RejectsCorruptInputWithoutChangingDocument) {
@@ -144,6 +225,102 @@ TEST(DocumentCodecTest, RejectsNonFiniteAndMalformedPayload) {
   EXPECT_FALSE(storage::DocumentCodec::decodeJson(malformedBytes).document);
 }
 
+TEST(DocumentCodecTest, RefusesToEncodeInvalidLiveModels) {
+  document::Document invalidBounds;
+  auto zeroWidth = makeEmbedded("zero-width", document::EmbeddedKind::Web);
+  zeroWidth.bounds.width = 0.0F;
+  ASSERT_TRUE(invalidBounds.add(std::move(zeroWidth)));
+  EXPECT_TRUE(storage::DocumentCodec::encode(invalidBounds).empty());
+
+  document::Document invalidStroke;
+  document::StrokeNode stroke;
+  stroke.width = std::numeric_limits<float>::quiet_NaN();
+  stroke.points = {{{1.0F, 2.0F}, 0.5F, 1U}};
+  ASSERT_TRUE(invalidStroke.add({"bad-stroke",
+                                 document::LayerClass::Annotation,
+                                 {0.0F, 0.0F, 10.0F, 10.0F},
+                                 std::nullopt,
+                                 stroke}));
+  EXPECT_TRUE(storage::DocumentCodec::encode(invalidStroke).empty());
+
+  document::Document orphan;
+  ASSERT_TRUE(orphan.add(makeEmbedded("node", document::EmbeddedKind::Web)));
+  ASSERT_TRUE(orphan.mutate("node", [](document::Node& node) {
+    node.parentId = "missing";
+  }));
+  EXPECT_TRUE(storage::DocumentCodec::encode(orphan).empty());
+
+  document::Document cycle;
+  ASSERT_TRUE(cycle.add(makeEmbedded("a", document::EmbeddedKind::Web)));
+  ASSERT_TRUE(cycle.add(makeEmbedded("b", document::EmbeddedKind::Web)));
+  ASSERT_TRUE(cycle.mutate("a", [](document::Node& node) {
+    node.parentId = "b";
+  }));
+  ASSERT_TRUE(cycle.mutate("b", [](document::Node& node) {
+    node.parentId = "a";
+  }));
+  EXPECT_TRUE(storage::DocumentCodec::encode(cycle).empty());
+
+  document::Document detachedNormalized;
+  document::StrokeNode normalized;
+  normalized.coordinateSpace =
+      document::StrokeCoordinateSpace::ParentNormalized;
+  normalized.points = {{{0.1F, 0.2F}, 0.5F, 1U}};
+  ASSERT_TRUE(detachedNormalized.add({"detached",
+                                      document::LayerClass::Annotation,
+                                      {0.0F, 0.0F, 1.0F, 1.0F},
+                                      std::nullopt,
+                                      normalized}));
+  EXPECT_TRUE(storage::DocumentCodec::encode(detachedNormalized).empty());
+}
+
+TEST(DocumentCodecTest, RejectsExcessiveParentDepthIteratively) {
+  const auto parentChain = [](std::size_t nodeCount) {
+    std::string raw = R"({"schemaVersion":1,"nodes":[)";
+    raw.reserve(nodeCount * 180U);
+    for (std::size_t index = 0; index < nodeCount; ++index) {
+      if (index != 0U) raw.push_back(',');
+      raw += R"({"id":"n)" + std::to_string(index) +
+             R"(","type":"web","layer":"embedded","bounds":[0,0,10,10],"parentId":)";
+      if (index + 1U < nodeCount) {
+        raw += R"("n)" + std::to_string(index + 1U) + '"';
+      } else {
+        raw += "null";
+      }
+      raw +=
+          R"(,"payload":{"kind":"web","source":"https://example.com/","title":""}})";
+    }
+    raw += "]}";
+    return std::vector<std::uint8_t>(raw.begin(), raw.end());
+  };
+
+  const auto maximum = storage::DocumentCodec::decodeJson(parentChain(4096U));
+  ASSERT_TRUE(maximum.document.has_value()) << maximum.error;
+  EXPECT_EQ(maximum.document->nodes().size(), 4096U);
+
+  const auto excessive =
+      storage::DocumentCodec::decodeJson(parentChain(4097U));
+  EXPECT_FALSE(excessive.document.has_value());
+  EXPECT_NE(excessive.error.find("depth"), std::string::npos);
+}
+
+TEST(DocumentCodecTest, LoadsAFlatDocumentInBulk) {
+  constexpr std::size_t kNodeCount = 5000U;
+  std::string raw = R"({"schemaVersion":1,"nodes":[)";
+  raw.reserve(kNodeCount * 170U);
+  for (std::size_t index = 0; index < kNodeCount; ++index) {
+    if (index != 0U) raw.push_back(',');
+    raw += R"({"id":"flat-)" + std::to_string(index) +
+           R"(","type":"web","layer":"embedded","bounds":[0,0,10,10],"parentId":null,"payload":{"kind":"web","source":"https://example.com/","title":""}})";
+  }
+  raw += "]}";
+  const std::vector<std::uint8_t> bytes(raw.begin(), raw.end());
+  const auto decoded = storage::DocumentCodec::decodeJson(bytes);
+  ASSERT_TRUE(decoded.document.has_value()) << decoded.error;
+  EXPECT_EQ(decoded.document->nodes().size(), kNodeCount);
+  EXPECT_NE(decoded.document->find("flat-4999"), nullptr);
+}
+
 TEST(DocumentCodecTest, JsonEncodingIsCanonicalAndMessagePackDiffers) {
   document::Document input;
   ASSERT_TRUE(input.add(makeEmbedded("web", document::EmbeddedKind::Web)));
@@ -165,6 +342,11 @@ TEST(DocumentCodecTest, JsonEncodingIsCanonicalAndMessagePackDiffers) {
 
 #if defined(_WIN32)
 TEST(DocumentStoreTest, AtomicRoundTripAndOversizeLoadLimit) {
+  EXPECT_TRUE(windows::DocumentStore::supportsDocumentSize(
+      windows::DocumentStore::maximumDocumentBytes));
+  EXPECT_FALSE(windows::DocumentStore::supportsDocumentSize(
+      windows::DocumentStore::maximumDocumentBytes + 1U));
+
   const auto path = std::filesystem::temp_directory_path() /
                     "canvas-document-store-test.canvas";
   auto tempPath = path;

@@ -31,7 +31,8 @@ if(WIN32)
                           PRIVATE canvas::windows_platform)
 endif()
 canvas_enable_warnings(canvas_document_codec_test)
-gtest_discover_tests(canvas_document_codec_test)
+gtest_discover_tests(canvas_document_codec_test
+                     TEST_PREFIX "canvas_document_codec_test.")
 
 add_executable(canvas_stroke_builder_test unit/stroke_builder_test.cpp)
 target_link_libraries(canvas_stroke_builder_test PRIVATE canvas::core GTest::gtest_main)
@@ -96,6 +97,16 @@ if(WIN32)
                           PRIVATE GTest::gtest_main)
     canvas_enable_warnings(canvas_webview2_media_source_test)
     gtest_discover_tests(canvas_webview2_media_source_test)
+
+    add_executable(canvas_webview2_video_restore_test
+                   unit/webview2_video_restore_test.cpp)
+    target_include_directories(canvas_webview2_video_restore_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_video_restore_test
+                          PRIVATE canvas::windows_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_video_restore_test)
+    gtest_discover_tests(canvas_webview2_video_restore_test
+                         TEST_PREFIX "canvas_webview2_video_restore_test.")
 
     add_executable(canvas_webview2_message_log_test
                    unit/webview2_message_log_test.cpp)

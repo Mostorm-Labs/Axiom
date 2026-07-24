@@ -14,8 +14,6 @@ namespace canvas::windows {
 
 namespace {
 
-constexpr std::uint64_t kMaximumDocumentBytes = 512ULL * 1024ULL * 1024ULL;
-
 std::string win32Error(DWORD code) {
   wchar_t* message = nullptr;
   const DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -91,6 +89,10 @@ bool DocumentStore::saveAtomic(const std::filesystem::path& path,
     error = "saveAtomic: path is empty";
     return false;
   }
+  if (!supportsDocumentSize(bytes.size())) {
+    error = "document exceeds the 512 MiB save limit";
+    return false;
+  }
   const std::filesystem::path temp = temporaryPath(path);
   HANDLE handle = CreateFileW(
       temp.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
@@ -159,7 +161,7 @@ bool DocumentStore::load(const std::filesystem::path& path,
     return false;
   }
   if (fileSize.QuadPart < 0 ||
-      static_cast<std::uint64_t>(fileSize.QuadPart) > kMaximumDocumentBytes) {
+      !supportsDocumentSize(static_cast<std::uint64_t>(fileSize.QuadPart))) {
     error = "document exceeds the 512 MiB load limit";
     CloseHandle(handle);
     return false;

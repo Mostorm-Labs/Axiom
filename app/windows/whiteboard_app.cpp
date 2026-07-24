@@ -4,6 +4,7 @@
 #include "canvas/storage/document_codec.h"
 #include "platform/windows/document_store.h"
 #include "platform/windows/webview2_media_source.h"
+#include "platform/windows/webview2_video_restore.h"
 #include "platform/windows/win_pointer_adapter.h"
 
 #include <windows.h>
@@ -141,48 +142,6 @@ std::optional<std::wstring> percentEncodeQueryComponent(
       result.push_back(L'%');
       result.push_back(static_cast<wchar_t>(kHex[byte >> 4U]));
       result.push_back(static_cast<wchar_t>(kHex[byte & 0x0FU]));
-    }
-  }
-  return result;
-}
-
-std::wstring jsonEscape(std::wstring_view value) {
-  std::wstring result;
-  result.reserve(value.size() + 8U);
-  constexpr wchar_t kHex[] = L"0123456789ABCDEF";
-  for (const wchar_t character : value) {
-    switch (character) {
-      case L'"':
-        result += L"\\\"";
-        break;
-      case L'\\':
-        result += L"\\\\";
-        break;
-      case L'\b':
-        result += L"\\b";
-        break;
-      case L'\f':
-        result += L"\\f";
-        break;
-      case L'\n':
-        result += L"\\n";
-        break;
-      case L'\r':
-        result += L"\\r";
-        break;
-      case L'\t':
-        result += L"\\t";
-        break;
-      default:
-        if (character < 0x20) {
-          const auto value16 = static_cast<unsigned int>(character);
-          result += L"\\u00";
-          result.push_back(kHex[(value16 >> 4U) & 0x0FU]);
-          result.push_back(kHex[value16 & 0x0FU]);
-        } else {
-          result.push_back(character);
-        }
-        break;
     }
   }
   return result;
@@ -332,10 +291,8 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       if (SUCCEEDED(layerResult) && options.videoPath) {
         videoOptions.mediaCanvasLocalFolder = mediaSource.folder;
         videoMessage =
-            std::wstring(
-                L"{\"protocolVersion\":1,\"type\":\"set-video-source\","
-                L"\"nodeId\":\"video-1\",\"payload\":{\"source\":\"") +
-            mediaSource.uri + L"\"}}";
+            detail::buildSetVideoSourceMessage(L"video-1", mediaSource.uri);
+        if (!videoMessage) layerResult = E_INVALIDARG;
       }
       if (SUCCEEDED(layerResult)) {
         layerResult = addWebView(
@@ -358,64 +315,94 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
             node.layer != document::LayerClass::Embedded) {
           continue;
         }
+        if (node.id.empty() || node.id.size() > 1024U ||
+            embedded->source.empty() ||
+            embedded->source.size() > 1024U * 1024U) {
+          layerResult = E_INVALIDARG;
+          break;
+        }
         const auto source = utf8ToWide(embedded->source);
         const auto wideNodeId = utf8ToWide(node.id);
-        const auto encodedNodeId =
-            wideNodeId ? percentEncodeQueryComponent(*wideNodeId) :
-                         std::optional<std::wstring>{};
-        if (!source || !wideNodeId || !encodedNodeId || source->empty() ||
-            wideNodeId->empty() || wideNodeId->size() > 256U) {
+        if (!source || !wideNodeId || source->empty() || wideNodeId->empty() ||
+            wideNodeId->size() > 256U) {
           layerResult = E_INVALIDARG;
           break;
         }
         WebView2Surface::Options surfaceOptions;
         std::wstring uri = *source;
         std::optional<std::wstring> initialMessage;
-        const bool packagedSource =
-            _wcsnicmp(uri.c_str(), L"https://canvas.local/", 21) == 0;
-        if (packagedSource) surfaceOptions.canvasLocalFolder = L"web";
-
-        if (packagedSource &&
-            embedded->kind == document::EmbeddedKind::RichText) {
-          uri = L"https://canvas.local/richtext.html?nodeId=" +
-                *encodedNodeId;
-        } else if (packagedSource &&
-                   embedded->kind == document::EmbeddedKind::Video) {
-          uri = L"https://canvas.local/video.html?nodeId=" +
-                *encodedNodeId;
-        }
-
-        if (embedded->kind == document::EmbeddedKind::Video &&
-            options.videoPath) {
-          detail::LocalMediaSource mediaSource;
-          layerResult =
-              detail::approveLocalMediaFile(*options.videoPath, mediaSource);
-          if (FAILED(layerResult)) break;
+        if (embedded->kind == document::EmbeddedKind::Video) {
+          // A persisted video node always restores the packaged adapter. Its
+          // media URL is delivered through the versioned host bridge so
+          // play/pause/seek and telemetry keep working after reopening.
+          const auto plan =
+              detail::buildVideoRestorePlan(*wideNodeId, *source);
+          if (!plan) {
+            layerResult = E_INVALIDARG;
+            break;
+          }
           surfaceOptions.canvasLocalFolder = L"web";
-          surfaceOptions.mediaCanvasLocalFolder = mediaSource.folder;
-          uri = L"https://canvas.local/video.html?nodeId=" +
-                *encodedNodeId;
-          initialMessage =
-              std::wstring(
-                  L"{\"protocolVersion\":1,\"type\":\"set-video-source\","
-                  L"\"nodeId\":\"") +
-              jsonEscape(*wideNodeId) + L"\",\"payload\":{\"source\":\"" +
-              jsonEscape(mediaSource.uri) + L"\"}}";
-        } else if (embedded->kind == document::EmbeddedKind::Video &&
-                   uri.rfind(L"https://", 0) != 0) {
-          detail::LocalMediaSource mediaSource;
-          layerResult = detail::approveLocalMediaFile(uri, mediaSource);
-          if (FAILED(layerResult)) break;
-          surfaceOptions.canvasLocalFolder = L"web";
-          surfaceOptions.mediaCanvasLocalFolder = mediaSource.folder;
-          uri = L"https://canvas.local/video.html?nodeId=" +
-                *encodedNodeId;
-          initialMessage =
-              std::wstring(
-                  L"{\"protocolVersion\":1,\"type\":\"set-video-source\","
-                  L"\"nodeId\":\"") +
-              jsonEscape(*wideNodeId) + L"\",\"payload\":{\"source\":\"" +
-              jsonEscape(mediaSource.uri) + L"\"}}";
+          uri = plan->navigationUri;
+          if (options.videoPath) {
+            detail::LocalMediaSource mediaSource;
+            layerResult =
+                detail::approveLocalMediaFile(*options.videoPath, mediaSource);
+            if (FAILED(layerResult)) break;
+            surfaceOptions.mediaCanvasLocalFolder = mediaSource.folder;
+            initialMessage = detail::buildSetVideoSourceMessage(
+                *wideNodeId, mediaSource.uri);
+            if (!initialMessage) {
+              layerResult = E_INVALIDARG;
+              break;
+            }
+          } else {
+            switch (plan->mediaAction) {
+              case detail::VideoRestoreMediaAction::None:
+                break;
+              case detail::VideoRestoreMediaAction::UsePersistedRemote:
+                if (!plan->initialMessage) {
+                  layerResult = E_INVALIDARG;
+                  break;
+                }
+                initialMessage = plan->initialMessage;
+                break;
+              case detail::VideoRestoreMediaAction::ApprovePersistedLocalFile: {
+                detail::LocalMediaSource mediaSource;
+                layerResult =
+                    detail::approveLocalMediaFile(*source, mediaSource);
+                if (FAILED(layerResult)) break;
+                surfaceOptions.mediaCanvasLocalFolder = mediaSource.folder;
+                initialMessage = detail::buildSetVideoSourceMessage(
+                    *wideNodeId, mediaSource.uri);
+                if (!initialMessage) layerResult = E_INVALIDARG;
+                break;
+              }
+              case detail::VideoRestoreMediaAction::Reject:
+                // A media.canvas.local URL alone is not durable: its approved
+                // folder mapping is process-local. Persist the original local
+                // path instead, or provide --video when reopening. Invalid
+                // remote sources are rejected before a page message is sent.
+                layerResult = E_ACCESSDENIED;
+                break;
+            }
+            if (FAILED(layerResult)) break;
+          }
+        } else {
+          const auto encodedNodeId = percentEncodeQueryComponent(*wideNodeId);
+          if (!encodedNodeId) {
+            layerResult = E_INVALIDARG;
+            break;
+          }
+          const bool packagedSource =
+              _wcsnicmp(uri.c_str(), L"https://canvas.local/", 21) == 0;
+          if (packagedSource &&
+              embedded->kind == document::EmbeddedKind::RichText) {
+            surfaceOptions.canvasLocalFolder = L"web";
+            uri = L"https://canvas.local/richtext.html?nodeId=" +
+                  *encodedNodeId;
+          } else if (packagedSource) {
+            surfaceOptions.canvasLocalFolder = L"web";
+          }
         }
         if (SUCCEEDED(layerResult)) {
           layerResult = addWebView(node.id, std::move(surfaceOptions), uri,

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <unordered_map>
 #include <utility>
 
 namespace canvas::document {
@@ -85,6 +86,50 @@ bool Document::add(Node node) {
   }
   node.cacheIdentity = nextNodeIdentity();
   nodes_.push_back(std::move(node));
+  return true;
+}
+
+bool Document::replaceValidatedNodes(std::vector<Node> nodes) {
+  std::unordered_map<NodeId, std::size_t> indexes;
+  indexes.reserve(nodes.size());
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    if (nodes[index].id.empty() ||
+        !indexes.emplace(nodes[index].id, index).second) {
+      return false;
+    }
+  }
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    if (!nodes[index].parentId) continue;
+    const auto parent = indexes.find(*nodes[index].parentId);
+    if (parent == indexes.end() || parent->second == index) return false;
+  }
+
+  // Parent links are a forest. Detect cycles iteratively so loading a deep
+  // but bounded document never consumes the native call stack.
+  std::vector<unsigned char> marks(nodes.size(), 0);
+  std::vector<std::size_t> path;
+  path.reserve(64);
+  for (std::size_t start = 0; start < nodes.size(); ++start) {
+    if (marks[start] == 2) continue;
+    path.clear();
+    std::size_t current = start;
+    while (marks[current] == 0) {
+      marks[current] = 1;
+      path.push_back(current);
+      if (!nodes[current].parentId) break;
+      current = indexes.at(*nodes[current].parentId);
+    }
+    const bool terminalInPath =
+        marks[current] == 1 && !nodes[current].parentId;
+    if (marks[current] == 1 && !terminalInPath) {
+      return false;
+    }
+    for (const auto index : path) marks[index] = 2;
+  }
+
+  for (auto& node : nodes) node.cacheIdentity = nextNodeIdentity();
+  nodes_ = std::move(nodes);
+  instanceId_ = nextDocumentId();
   return true;
 }
 

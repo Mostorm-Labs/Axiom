@@ -162,3 +162,30 @@ TEST(DocumentTest, RejectsNaNBoundsAndPreservesPreviousBounds) {
     ASSERT_NE(doc.find("node"), nullptr);
     EXPECT_EQ(doc.find("node")->bounds, (core::Rect{1, 2, 3, 4}));
 }
+
+TEST(DocumentTest, BulkReplacementSupportsChildFirstAndIsAtomicOnFailure) {
+    document::Document doc;
+    document::Node sentinel;
+    sentinel.id = "sentinel";
+    sentinel.bounds = {0, 0, 1, 1};
+    ASSERT_TRUE(doc.add(std::move(sentinel)));
+
+    document::Node child{"child", document::LayerClass::Annotation,
+                         {0, 0, 1, 1}, "parent", document::StrokeNode{}};
+    document::Node parent{"parent", document::LayerClass::Embedded,
+                          {0, 0, 10, 10}, {}, document::EmbeddedNode{}};
+    ASSERT_TRUE(doc.replaceValidatedNodes({child, parent}));
+    EXPECT_EQ(doc.find("sentinel"), nullptr);
+    ASSERT_NE(doc.find("child"), nullptr);
+    EXPECT_EQ(doc.find("child")->parentId, "parent");
+
+    const auto instanceBeforeFailure = doc.instanceId();
+    document::Node first{"a", document::LayerClass::Base,
+                         {0, 0, 1, 1}, "b", document::StrokeNode{}};
+    document::Node second{"b", document::LayerClass::Base,
+                          {0, 0, 1, 1}, "a", document::StrokeNode{}};
+    EXPECT_FALSE(doc.replaceValidatedNodes({first, second}));
+    EXPECT_EQ(doc.instanceId(), instanceBeforeFailure);
+    EXPECT_NE(doc.find("parent"), nullptr);
+    EXPECT_NE(doc.find("child"), nullptr);
+}
