@@ -1,0 +1,52 @@
+Skia 148 compatibility green phase (2026-07-25)
+
+Replaced the removed mutable SkPath calls with SkPathBuilder while keeping
+SkPath as the render cache. A changed tail chunk is restored into one builder
+once, all points for that chunk are appended, and one path is detached after
+the batch. New chunks likewise use one builder for at most 64 segments.
+Unchanged frames continue to draw the cached SkPath directly.
+
+This preserves the existing chunk and counter semantics. A full rebuild is
+O(total points). Amortized incremental work is O(appended points + one replay
+of the existing tail chunk), with that replay bounded to 64 segments; it does
+not replay a growing path or create a path for every appended point. An
+occasional chunk-vector growth may move the existing lightweight SkPath cache
+entries before capacity is reused.
+
+Three pixel-level regressions cover the changed behavior: preserving the old
+path while appending a new tail, extending a cached one-point path into its
+first segment without a full rebuild, and appending the 65th segment after an
+exactly full 64-segment chunk. The boundary case also requires a second chunk
+and verifies a pixel on the newly created vertical tail.
+
+Checked the exact public headers used by vcpkg Skia 148 directly from upstream:
+
+  git -C /tmp/canvas-skia148 rev-parse HEAD
+  e7c90ecca9444fe09598f1630ab7cee2c0ee027a
+
+Strict production syntax check:
+
+  clang++ -std=c++17 -fno-rtti -Wall -Wextra -Wpedantic -Werror \
+      -fsyntax-only -Iinclude -isystem /tmp/canvas-skia148 \
+      src/render/skia_renderer.cpp
+
+Result: passed with no diagnostics.
+
+Strict regression-test syntax check, using GoogleTest headers from a clean
+upstream checkout:
+
+  clang++ -std=c++17 -fno-rtti -Wall -Wextra -Wpedantic -Werror \
+      -fsyntax-only -Iinclude \
+      -I/tmp/canvas-googletest/googletest/include \
+      -isystem /tmp/canvas-skia148 tests/unit/skia_renderer_test.cpp
+
+Result: passed with no diagnostics.
+
+  git diff --check
+
+Result: passed.
+
+Not run or inferred on this macOS host: linking against the vcpkg Skia 148
+package; execution of canvas_skia_renderer_test; the MSVC Windows build and
+CTest suite; D3D12/DirectComposition rendering; or target-device latency.
+Those remain pending Windows CI and i5-1235U hardware evidence.

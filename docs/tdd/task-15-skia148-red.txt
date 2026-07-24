@@ -1,0 +1,33 @@
+Skia 148 compatibility red phase (2026-07-25)
+
+Added the SkiaRenderer regression test
+IncrementalAppendPreservesOldPathAndRendersNewTail. It primes the cached
+stroke path, appends one point through Document::appendStrokePoint, then
+requires both the old segment and the new tail to produce pixels while the
+full-build counter remains unchanged.
+
+Reproduced the production compile failure locally before changing renderer
+code. The public Skia headers were checked out directly from upstream at the
+exact vcpkg Skia 148 source commit:
+
+  git -C /tmp/canvas-skia148 rev-parse HEAD
+  e7c90ecca9444fe09598f1630ab7cee2c0ee027a
+
+  clang++ -std=c++17 -fsyntax-only -Iinclude \
+      -I/tmp/canvas-skia148 src/render/skia_renderer.cpp
+
+Observed failure:
+
+  src/render/skia_renderer.cpp:114:18: error: no member named 'moveTo' in 'SkPath'
+  src/render/skia_renderer.cpp:123:18: error: no member named 'lineTo' in 'SkPath'
+  2 errors generated.
+
+The same API failure occurred in GitHub Actions Windows run 30114145548 at
+the Build step after vcpkg installation and CMake configuration succeeded:
+
+  D:\a\canvas\canvas\src\render\skia_renderer.cpp(114,18):
+      error C2039: 'moveTo': is not a member of 'SkPath'
+  D:\a\canvas\canvas\src\render\skia_renderer.cpp(123,18):
+      error C2039: 'lineTo': is not a member of 'SkPath'
+
+No production source had been changed when these RED results were captured.

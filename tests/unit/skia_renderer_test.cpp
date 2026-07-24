@@ -101,6 +101,86 @@ TEST(SkiaRendererTest, AppendsActiveStrokePathWithoutFullRebuild) {
   EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
 }
 
+TEST(SkiaRendererTest, IncrementalAppendPreservesOldPathAndRendersNewTail) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.points = {{{4, 12}, 1.0F, 1}, {{12, 12}, 1.0F, 2}};
+  stroke.width = 4.0F;
+  stroke.colorArgb = 0xFF00FF00;
+  ASSERT_TRUE(doc.add({"active", document::LayerClass::Annotation,
+                       {2, 10, 12, 4}, {}, stroke}));
+
+  render::SkiaRenderer renderer;
+  const auto before =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 32, 24);
+  ASSERT_NE((before.pixel(8, 12) >> 24U) & 0xFFU, 0U);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
+
+  ASSERT_TRUE(doc.appendStrokePoint("active", {{24, 12}, 1.0F, 3},
+                                    {10, 10, 16, 4}));
+  const auto after =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 32, 24);
+
+  EXPECT_NE((after.pixel(8, 12) >> 24U) & 0xFFU, 0U);
+  EXPECT_NE((after.pixel(20, 12) >> 24U) & 0xFFU, 0U);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 1u);
+  EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+}
+
+TEST(SkiaRendererTest, IncrementalAppendFromSinglePointDrawsFirstSegment) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.points = {{{20, 4}, 1.0F, 1}};
+  stroke.width = 4.0F;
+  stroke.colorArgb = 0xFF00FF00;
+  ASSERT_TRUE(doc.add({"active", document::LayerClass::Annotation,
+                       {18, 2, 4, 4}, {}, stroke}));
+
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 40, 28);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
+  ASSERT_EQ(renderer.cachedChunkCount("active"), 1u);
+
+  ASSERT_TRUE(doc.appendStrokePoint("active", {{20, 20}, 1.0F, 2},
+                                    {18, 2, 4, 20}));
+  const auto after =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 40, 28);
+
+  EXPECT_NE((after.pixel(20, 12) >> 24U) & 0xFFU, 0U);
+  EXPECT_EQ(renderer.cachedChunkCount("active"), 1u);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 1u);
+  EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+}
+
+TEST(SkiaRendererTest, IncrementalAppendStartsNewChunkAfterExactly64Segments) {
+  document::Document doc;
+  document::StrokeNode stroke;
+  stroke.width = 4.0F;
+  stroke.colorArgb = 0xFF00FF00;
+  for (int index = 0; index <= 64; ++index) {
+    stroke.points.push_back(
+        {{static_cast<float>(index + 2), 12.0F}, 1.0F,
+         static_cast<std::uint64_t>(index + 1)});
+  }
+  ASSERT_TRUE(doc.add({"boundary", document::LayerClass::Annotation,
+                       {0, 10, 70, 4}, {}, stroke}));
+
+  render::SkiaRenderer renderer;
+  (void)renderer.renderRaster(doc, document::LayerClass::Annotation, 96, 32);
+  ASSERT_EQ(renderer.fullPathBuildCount(), 1u);
+  ASSERT_EQ(renderer.cachedChunkCount("boundary"), 1u);
+
+  ASSERT_TRUE(doc.appendStrokePoint("boundary", {{66, 20}, 1.0F, 66},
+                                    {64, 10, 4, 12}));
+  const auto after =
+      renderer.renderRaster(doc, document::LayerClass::Annotation, 96, 32);
+
+  EXPECT_NE((after.pixel(66, 16) >> 24U) & 0xFFU, 0U);
+  EXPECT_EQ(renderer.cachedChunkCount("boundary"), 2u);
+  EXPECT_EQ(renderer.fullPathBuildCount(), 1u);
+  EXPECT_EQ(renderer.incrementalAppendCount(), 1u);
+}
+
 TEST(SkiaRendererTest, RebuildsWhenMiddlePointChangesAtSameCount) {
   document::Document doc;
   document::StrokeNode stroke;

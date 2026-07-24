@@ -7,6 +7,7 @@
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkPathBuilder.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkSurface.h"
 
@@ -108,22 +109,37 @@ void SkiaRenderer::drawLayer(
       return core::Rect{point.x, point.y, 0, 0}.inflated(
           drawWidth * 0.5F + kAntialiasMargin);
     };
-    const auto startChunk = [&](core::Vec2 point) {
-      cached.chunks.emplace_back();
-      auto& chunk = cached.chunks.back();
-      chunk.path.moveTo(point.x, point.y);
-      chunk.bounds = pointBounds(point);
-    };
-    const auto appendPoint = [&](core::Vec2 previous, core::Vec2 point) {
-      if (cached.chunks.empty() ||
-          cached.chunks.back().segmentCount >= kMaximumSegmentsPerChunk) {
-        startChunk(previous);
+    const auto appendPoints = [&](std::size_t index) {
+      while (index < stroke.points.size()) {
+        const bool extendsTail =
+            !cached.chunks.empty() &&
+            cached.chunks.back().segmentCount < kMaximumSegmentsPerChunk;
+        core::Vec2 previous{};
+        if (!extendsTail) {
+          previous = mapPoint(stroke.points[index - 1].position);
+          cached.chunks.emplace_back();
+          cached.chunks.back().bounds = pointBounds(previous);
+        }
+
+        auto& chunk = cached.chunks.back();
+        SkPathBuilder builder;
+        if (extendsTail) {
+          builder = chunk.path;
+        } else {
+          builder.moveTo(previous.x, previous.y);
+        }
+        while (index < stroke.points.size() &&
+               chunk.segmentCount < kMaximumSegmentsPerChunk) {
+          const auto point = mapPoint(stroke.points[index].position);
+          builder.lineTo(point.x, point.y);
+          const auto bounds = pointBounds(point);
+          chunk.bounds = chunk.bounds.united(bounds);
+          cached.geometryBounds = cached.geometryBounds.united(bounds);
+          ++chunk.segmentCount;
+          ++index;
+        }
+        chunk.path = builder.detach();
       }
-      auto& chunk = cached.chunks.back();
-      chunk.path.lineTo(point.x, point.y);
-      chunk.bounds = chunk.bounds.united(pointBounds(point));
-      ++chunk.segmentCount;
-      cached.geometryBounds = cached.geometryBounds.united(pointBounds(point));
     };
     const bool identityValid = cached.documentId == document.instanceId() &&
         cached.nodeIdentity == node.cacheIdentity;
@@ -135,12 +151,7 @@ void SkiaRenderer::drawLayer(
         cached.parentBounds == parentBounds && cached.firstPoint == firstPoint;
     try {
       if (metadataValid && stroke.points.size() > cached.pointCount) {
-        for (std::size_t index = cached.pointCount;
-             index < stroke.points.size(); ++index) {
-          const auto previous = mapPoint(stroke.points[index - 1].position);
-          const auto point = mapPoint(stroke.points[index].position);
-          appendPoint(previous, point);
-        }
+        appendPoints(cached.pointCount);
         cached.pointCount = stroke.points.size();
         cached.nodeRevision = node.revision;
         cached.lastPoint = lastPoint;
@@ -150,12 +161,16 @@ void SkiaRenderer::drawLayer(
                    cached.lastPoint == lastPoint)) {
         cached.chunks.clear();
         const auto first = mapPoint(stroke.points.front().position);
-        startChunk(first);
         cached.geometryBounds = pointBounds(first);
-        for (std::size_t index = 1; index < stroke.points.size(); ++index) {
-          const auto previous = mapPoint(stroke.points[index - 1].position);
-          const auto point = mapPoint(stroke.points[index].position);
-          appendPoint(previous, point);
+        if (stroke.points.size() == 1) {
+          cached.chunks.emplace_back();
+          auto& chunk = cached.chunks.back();
+          chunk.bounds = cached.geometryBounds;
+          SkPathBuilder builder;
+          builder.moveTo(first.x, first.y);
+          chunk.path = builder.detach();
+        } else {
+          appendPoints(1);
         }
         cached.documentId = document.instanceId();
         cached.nodeIdentity = node.cacheIdentity;
