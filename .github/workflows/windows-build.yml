@@ -10,6 +10,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-2022
+    env:
+      VCPKG_ROOT: C:/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
     defaults:
       run:
         shell: pwsh
@@ -20,12 +23,21 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - uses: actions/cache@v4
+      - name: Resolve runner image version
+        id: runner-image
+        run: |
+          $imageVersion = if ([string]::IsNullOrWhiteSpace($env:ImageVersion)) {
+            "windows-2022"
+          } else {
+            $env:ImageVersion
+          }
+          "version=$imageVersion" >> $env:GITHUB_OUTPUT
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
-          path: |
-            ${{ github.workspace }}/vcpkg_installed
-            ${{ github.workspace }}/.vcpkg-binary-cache
-          key: canvas-vcpkg-${{ hashFiles('vcpkg.json') }}
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: canvas-vcpkg-${{ runner.os }}-${{ runner.arch }}-x64-windows-static-${{ steps.runner-image.outputs.version }}-${{ hashFiles('vcpkg.json', 'CMakePresets.json') }}
       - name: Prepare vcpkg binary cache
         run: New-Item -ItemType Directory -Force "${{ github.workspace }}/.vcpkg-binary-cache" | Out-Null
       - name: Restore WebView2 SDK
@@ -36,10 +48,22 @@ jobs:
           npm ci
           npm test
           npm run build
+      - name: Install vcpkg dependencies
+        id: vcpkg-install
+        run: |
+          $manifestRoot = "${{ github.workspace }}"
+          $installRoot = "${{ github.workspace }}/out/build/windows-x64/vcpkg_installed"
+          & "$env:VCPKG_ROOT/vcpkg.exe" install `
+            --triplet x64-windows-static `
+            "--x-manifest-root=$manifestRoot" `
+            "--x-install-root=$installRoot"
+      - name: Save vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-install.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
       - name: Configure
-        env:
-          VCPKG_ROOT: C:/vcpkg
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
         run: cmake --preset windows-x64
       - name: Build
         run: cmake --build --preset windows-x64-release --parallel
