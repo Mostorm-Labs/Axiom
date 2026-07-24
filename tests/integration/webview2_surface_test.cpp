@@ -246,10 +246,17 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   constexpr std::wstring_view kPage =
       L"data:text/html,%3C!doctype%20html%3E%3Cmeta%20charset=utf-8%3E"
       L"%3Cstyle%3Ehtml,body%7Bwidth:100%25;height:100%25;margin:0%7D%3C/style%3E"
+      L"%3Cbutton%20id=click-target%20style='position:absolute;left:16px;"
+      L"top:16px;width:64px;height:64px'%3E"
+      L"target%3C/button%3E"
       L"%3Cscript%3E"
       L"chrome.webview.addEventListener('message',e=>"
       L"chrome.webview.postMessage(%7Btype:'host-message',value:e.data%7D));"
-      L"addEventListener('click',()=>chrome.webview.postMessage(%7Btype:'clicked'%7D));"
+      L"const%20clickTarget=document.getElementById('click-target');"
+      L"clickTarget.addEventListener('mousedown',()=>"
+      L"chrome.webview.postMessage(%7Btype:'pressed'%7D));"
+      L"clickTarget.addEventListener('click',()=>"
+      L"chrome.webview.postMessage(%7Btype:'clicked'%7D));"
       L"chrome.webview.postMessage(%7Btype:'ready'%7D);"
       L"%3C/script%3E";
   ASSERT_TRUE(SUCCEEDED(surface.navigate(kPage)));
@@ -313,11 +320,15 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   surface.setInteractive(
       interactRoute.target == canvas::input::InputTarget::EmbeddedSurface);
   // Model native capture being stolen after WebView received DOWN. The
-  // cancellation path sends LEAVE and a surface-local outside UP, so it must
-  // balance DOM state without producing a click. A subsequent normal click
-  // proves the next session is not poisoned by the cancellation.
+  // cancellation path sends LEAVE and a surface-local outside UP. Chromium
+  // may still route a compatibility click to a common document ancestor, but
+  // it must not activate the control that received DOWN. A subsequent normal
+  // click proves the next session is not poisoned by the cancellation.
   ASSERT_TRUE(SUCCEEDED(surface.forwardMouseMessage(
       WM_LBUTTONDOWN, MK_LBUTTON, clickPoint)));
+  ASSERT_TRUE(pumpUntil(
+      [&] { return hasMessage(surface, LR"({"type":"pressed"})"); },
+      std::chrono::seconds(2)));
   ASSERT_TRUE(SUCCEEDED(surface.cancelMouseButtons(
       canvas::windows::embeddedMouseButtonMask(
           canvas::windows::EmbeddedMouseButton::Left))));

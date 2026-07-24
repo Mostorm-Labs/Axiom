@@ -121,7 +121,8 @@ class EmbeddedMouseSession {
     decision.cancelButtons = buttons_;
     // A leave is also required when capture was lost after a native leave:
     // cancellation sends it immediately before the synthetic outside UPs so
-    // WebView cannot turn those UPs into clicks.
+    // they cannot activate the control that originally received DOWN. The DOM
+    // may still route a compatibility click to a common document ancestor.
     decision.sendLeave = hovered_ || buttons_ != 0;
     decision.releaseCapture = releaseNativeCapture && buttons_ != 0;
     buttons_ = 0;
@@ -144,7 +145,8 @@ class EmbeddedMouseCancellationSink {
 
 // Cancellation never short-circuits. LEAVE is deliberately first and every
 // active button receives an UP at a surface-local outside point supplied by
-// the sink. This clears WebView/DOM pressed state without producing a click.
+// the sink. This clears WebView/DOM pressed state without activating the
+// control that received DOWN; a compatibility click may target an ancestor.
 inline HRESULT runEmbeddedMouseCancellation(
     EmbeddedMouseButtons buttons,
     EmbeddedMouseCancellationSink& sink) noexcept {

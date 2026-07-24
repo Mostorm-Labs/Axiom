@@ -18,7 +18,7 @@ class RecordingCancellationSink final
     : public EmbeddedMouseCancellationSink {
  public:
   HRESULT sendLeave() noexcept override {
-    hovered = false;
+    downTargetCanActivate = false;
     calls.emplace_back("leave");
     return leaveResult;
   }
@@ -28,15 +28,16 @@ class RecordingCancellationSink final
     calls.emplace_back("up:" + std::to_string(
                                   embeddedMouseButtonMask(button)));
     // The production sink uses a surface-local outside point. This fake models
-    // the DOM click precondition and proves the cancellation order defeats it.
-    if (hovered) ++clicks;
+    // whether the UP can activate the control that originally received DOWN;
+    // a compatibility click on a common ancestor is outside this contract.
+    if (downTargetCanActivate) ++downTargetActivations;
     if (button == failingButton) return E_ABORT;
     return S_OK;
   }
 
   std::vector<std::string> calls;
-  bool hovered = true;
-  int clicks = 0;
+  bool downTargetCanActivate = true;
+  int downTargetActivations = 0;
   HRESULT leaveResult = S_OK;
   EmbeddedMouseButton failingButton =
       static_cast<EmbeddedMouseButton>(0);
@@ -89,7 +90,8 @@ TEST(EmbeddedMouseSession, DuplicateDownAndStrayUpDoNotCorruptMask) {
   EXPECT_TRUE(session.buttonUp(EmbeddedMouseButton::Left, true).releaseCapture);
 }
 
-TEST(EmbeddedMouseSession, CaptureLossCancelsEveryButtonWithoutClick) {
+TEST(EmbeddedMouseSession,
+     CaptureLossCancelsEveryButtonWithoutActivatingDownTarget) {
   EmbeddedMouseSession session;
   session.buttonDown(EmbeddedMouseButton::Left, true);
   session.buttonDown(EmbeddedMouseButton::X1, true);
@@ -111,7 +113,7 @@ TEST(EmbeddedMouseSession, CaptureLossCancelsEveryButtonWithoutClick) {
   EXPECT_EQ(runEmbeddedMouseCancellation(cancel.cancelButtons, sink), S_OK);
   EXPECT_EQ(sink.calls,
             (std::vector<std::string>{"leave", "up:1", "up:8", "up:16"}));
-  EXPECT_EQ(sink.clicks, 0);
+  EXPECT_EQ(sink.downTargetActivations, 0);
 
   const auto nextDown = session.buttonDown(EmbeddedMouseButton::Left, true);
   const auto nextUp = session.buttonUp(EmbeddedMouseButton::Left, true);
@@ -172,7 +174,7 @@ TEST(EmbeddedMouseSession, CancellationRunsAllUpsAndReturnsFirstFailure) {
   EXPECT_EQ(runEmbeddedMouseCancellation(buttons, sink), E_ABORT);
   EXPECT_EQ(sink.calls,
             (std::vector<std::string>{"leave", "up:1", "up:4", "up:16"}));
-  EXPECT_EQ(sink.clicks, 0);
+  EXPECT_EQ(sink.downTargetActivations, 0);
 }
 
 }  // namespace
