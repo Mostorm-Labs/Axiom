@@ -336,7 +336,9 @@ TEST(SkiaRendererTest, ResolvesParentNormalizedStrokeAfterParentMoveAndResize) {
   document::StrokeNode attached;
   attached.points = {{{0.25F, 0.5F}, 1.0F, 1},
                      {{0.75F, 0.5F}, 1.0F, 2}};
-  attached.width = 0.02F;
+  // Use multi-pixel resolved widths so integer alpha bounds can observe the
+  // resize consistently across Skia raster backends (2 px before, 4 px after).
+  attached.width = 0.1F;
   attached.coordinateSpace = document::StrokeCoordinateSpace::ParentNormalized;
   attached.colorArgb = 0xFFFF0000;
   ASSERT_TRUE(doc.add({"annotation", document::LayerClass::Annotation,
