@@ -10,6 +10,7 @@
 #include <chrono>
 #include <iomanip>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -223,6 +224,8 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   ScopedTestWindow testWindow;
   ASSERT_TRUE(testWindow.registered());
   ASSERT_NE(testWindow.get(), nullptr);
+  ShowWindow(testWindow.get(), SW_SHOW);
+  ASSERT_TRUE(IsWindowVisible(testWindow.get()));
 
   canvas::windows::DCompHost host;
   ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
@@ -240,27 +243,26 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   EXPECT_EQ(surface.navigate(L"https://canvas.local/unmapped"),
             E_ACCESSDENIED);
 
-  constexpr auto kPage =
+  constexpr std::wstring_view kPage =
       L"data:text/html,%3C!doctype%20html%3E%3Cmeta%20charset=utf-8%3E"
       L"%3Cstyle%3Ehtml,body%7Bwidth:100%25;height:100%25;margin:0%7D%3C/style%3E"
-      L"%3Cscript%3EaddEventListener('DOMContentLoaded',()=>%7B"
-      L"chrome.webview.postMessage(%7Btype:'ready'%7D);"
+      L"%3Cscript%3E"
       L"chrome.webview.addEventListener('message',e=>"
       L"chrome.webview.postMessage(%7Btype:'host-message',value:e.data%7D));"
       L"addEventListener('click',()=>chrome.webview.postMessage(%7Btype:'clicked'%7D));"
-      L"%7D)%3C/script%3E";
+      L"chrome.webview.postMessage(%7Btype:'ready'%7D);"
+      L"%3C/script%3E";
   ASSERT_TRUE(SUCCEEDED(surface.navigate(kPage)));
   EXPECT_EQ(surface.postMessage(L""), E_INVALIDARG);
   ASSERT_TRUE(
       SUCCEEDED(surface.postMessage(LR"({"type":"queued-a"})")));
   // A second navigation starts a new host-message generation. The queued A
-  // message must not leak into page B.
-  ASSERT_TRUE(SUCCEEDED(surface.navigate(L"data:text/html,%3C!doctype%20html%3E"
-                                         L"%3Cscript%3EaddEventListener('DOMContentLoaded',()=>%7B"
-                                         L"chrome.webview.postMessage(%7Btype:'ready'%7D);"
-                                         L"chrome.webview.addEventListener('message',e=>"
-                                         L"chrome.webview.postMessage(%7Btype:'host-message',value:e.data%7D));"
-                                         L"%7D)%3C/script%3E#page-b")));
+  // message must not leak into page B. Reuse the complete page contract so
+  // page B retains the click handler exercised below; the encoded marker
+  // makes this a document navigation rather than a fragment navigation.
+  std::wstring pageB(kPage);
+  pageB += L"%3C!--page-b--%3E";
+  ASSERT_TRUE(SUCCEEDED(surface.navigate(pageB)));
   ASSERT_TRUE(
       SUCCEEDED(surface.postMessage(LR"({"type":"queued-b"})")));
 
