@@ -77,6 +77,15 @@ canvas_enable_warnings(canvas_skia_renderer_test)
 gtest_discover_tests(canvas_skia_renderer_test)
 
 if(WIN32)
+    get_target_property(_canvas_windows_platform_interface_links
+                        canvas_windows_platform INTERFACE_LINK_LIBRARIES)
+    if(NOT "$<LINK_ONLY:d3dcompiler>" IN_LIST
+           _canvas_windows_platform_interface_links)
+        message(FATAL_ERROR
+            "canvas_windows_platform must propagate d3dcompiler as LINK_ONLY")
+    endif()
+    unset(_canvas_windows_platform_interface_links)
+
     add_library(canvas_windows_header_hygiene_compile_test OBJECT
                 compile/windows_header_hygiene_compile_test.cpp)
     target_link_libraries(canvas_windows_header_hygiene_compile_test

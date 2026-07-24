@@ -1,0 +1,21 @@
+D3D compiler link dependency red phase (2026-07-25)
+
+GitHub Actions Windows run 30123229856 compiled every production source,
+including canvas_windows_platform and canvas_windows, then failed at the final
+application link:
+
+  https://github.com/Mostorm-Labs/canvas/actions/runs/30123229856
+
+  skia.lib(gpu.GrD3DPipelineStateBuilder.obj): error LNK2019:
+      unresolved external symbol D3DCompile referenced in GrCompileHLSLShader
+  canvas_windows.exe: fatal error LNK1120: 1 unresolved externals
+
+D3DCompile is provided by the Windows SDK d3dcompiler import library. The
+locked static Skia package contains the call but its imported CMake target did
+not add that system library to the final link. Adding the library only to
+canvas_windows would fix one executable while leaving every test executable
+that links canvas_windows_platform vulnerable to the same unresolved symbol.
+
+The dependency belongs to canvas_windows_platform's implementation. Because
+that target is STATIC, it cannot resolve the symbol while creating its own
+archive; the dependency must reach each final executable link.

@@ -125,6 +125,7 @@ if(WIN32)
                                                          canvas::ipc
                                                          PRIVATE
                                                          canvas::webview2_loader
+                                                         d3dcompiler
                                                          shlwapi version
                                                          spdlog::spdlog)
     canvas_enable_warnings(canvas_windows_platform)
