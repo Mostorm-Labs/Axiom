@@ -26,6 +26,8 @@ jobs:
             ${{ github.workspace }}/vcpkg_installed
             ${{ github.workspace }}/.vcpkg-binary-cache
           key: canvas-vcpkg-${{ hashFiles('vcpkg.json') }}
+      - name: Prepare vcpkg binary cache
+        run: New-Item -ItemType Directory -Force "${{ github.workspace }}/.vcpkg-binary-cache" | Out-Null
       - name: Restore WebView2 SDK
         run: ./scripts/Restore-WebView2.ps1
       - name: Test and build embedded web content
