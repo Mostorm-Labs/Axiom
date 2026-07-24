@@ -124,14 +124,6 @@ if(WIN32)
 
     add_subdirectory(app/windows)
     add_dependencies(canvas_windows canvas_web_assets)
-    add_custom_command(TARGET canvas_windows POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E rm -rf
-                "$<TARGET_FILE_DIR:canvas_windows>/web"
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${_canvas_web_dist}"
-                "$<TARGET_FILE_DIR:canvas_windows>/web"
-        COMMENT "Copying Canvas embedded web assets"
-        VERBATIM)
     # A POST_BUILD command is sufficient when the executable relinks, but a
     # web-only edit can rebuild canvas_web_assets while leaving the executable
     # up to date. This per-configuration target makes the runtime copy explicit
