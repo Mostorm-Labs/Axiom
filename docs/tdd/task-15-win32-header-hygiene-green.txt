@@ -1,0 +1,47 @@
+Win32 header hygiene green phase (2026-07-25)
+
+Added NOMINMAX through add_compile_definitions in the root WIN32 directory
+scope, before any first-party target is declared. CMake directory properties
+are inherited by app/windows and tests, so the policy covers canvas_core,
+canvas_ipc, canvas_windows_platform, canvas_windows, and every Windows test
+target. It also covers tests that include Windows headers but do not link
+canvas_windows_platform; no target-link transitivity or source include order
+is required. WIN32_LEAN_AND_MEAN was deliberately not added because it does
+not control min/max and would change the set of APIs exposed by Windows.h.
+
+Added canvas_windows_header_hygiene_compile_test as an OBJECT library in the
+WIN32/BUILD_TESTING graph. The all-target Windows build must compile a probe
+that:
+
+  - verifies NOMINMAX exists before Windows.h;
+  - verifies Windows.h did not emit min or max;
+  - parses the Skia 148 SkRect header after Windows.h;
+  - calls unparenthesized std::min and std::numeric_limits<DWORD>::max(); and
+  - instantiates SkRect::MakeLTRB.
+
+The OBJECT target needs no executable or runtime environment and is compiled
+by the existing `cmake --build --preset windows-x64-release --parallel` step.
+
+Local checks on macOS:
+
+  cmake -S . -B out/build/win32-header-hygiene-local \
+      -DBUILD_TESTING=ON
+
+Result: CMake selected AppleClang successfully, parsed the changed root file,
+then stopped at the pre-existing `find_package(unofficial-skia)` requirement
+because this host has no installed unofficial-skia CMake package. Therefore a
+fresh local build and CTest discovery could not run and are not claimed.
+
+Static policy audit:
+
+  git diff --check
+  rg -n 'add_compile_definitions\(NOMINMAX\)' CMakeLists.txt
+  rg -l '#include <[Ww]indows\.h>' app src tests
+
+Result: passed. There is exactly one root-scope NOMINMAX definition before
+all first-party target declarations; the app and tests are descendant
+directories; no WIN32_LEAN_AND_MEAN definition remains; and the diff has no
+whitespace errors.
+
+This host also has no Windows SDK, so MSVC compilation of the probe and all
+Windows production translation units remains pending the next Windows CI run.

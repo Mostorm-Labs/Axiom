@@ -77,6 +77,12 @@ canvas_enable_warnings(canvas_skia_renderer_test)
 gtest_discover_tests(canvas_skia_renderer_test)
 
 if(WIN32)
+    add_library(canvas_windows_header_hygiene_compile_test OBJECT
+                compile/windows_header_hygiene_compile_test.cpp)
+    target_link_libraries(canvas_windows_header_hygiene_compile_test
+                          PRIVATE unofficial::skia::skia)
+    canvas_enable_warnings(canvas_windows_header_hygiene_compile_test)
+
     add_executable(canvas_embedded_mouse_session_test
                    unit/embedded_mouse_session_test.cpp)
     target_include_directories(canvas_embedded_mouse_session_test

@@ -6,6 +6,13 @@ endif()
 
 project(canvas VERSION 0.1.0 LANGUAGES CXX)
 
+if(WIN32)
+    # Keep the Win32 min/max macros out of every first-party translation unit.
+    # This directory-level policy also reaches app/windows and tests, including
+    # targets that include Windows headers without linking windows_platform.
+    add_compile_definitions(NOMINMAX)
+endif()
+
 find_package(unofficial-skia CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 

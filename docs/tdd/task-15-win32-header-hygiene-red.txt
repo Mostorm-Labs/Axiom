@@ -1,0 +1,29 @@
+Win32 header hygiene red phase (2026-07-25)
+
+GitHub Actions Windows run 30119922120 reached the MSVC Build step after
+configuration succeeded, then failed in canvas_windows_platform:
+
+  https://github.com/Mostorm-Labs/canvas/actions/runs/30119922120
+
+Windows.h had emitted its function-like min and max macros before three
+translation units parsed standard-library, Canvas, or Skia 148 headers:
+
+  - skia_d3d12_context.cpp failed in SkAssert.h, SkTPin.h, SkTFitsIn.h,
+    SkRect.h, and SkTArray.h with C2589 syntax errors at std::min/std::max;
+  - skia_swap_chain_layer.cpp failed in canvas/core/geometry.h and the same
+    Skia headers with C2589 syntax errors;
+  - document_store.cpp failed in its protected `(std::min)` expression because
+    the unprotected std::numeric_limits<DWORD>::max() token was expanded as the
+    Win32 max macro, producing C4003/C2589/C2672 diagnostics.
+
+This is a build-policy defect rather than three independent source defects.
+The repository contained no NOMINMAX definition.
+Defining or undefining macros in only the reported source files would leave
+other Windows translation units, the app target, and standalone Windows test
+targets vulnerable to the same include-order-dependent failure.
+
+The compile regression intentionally includes Windows.h before SkRect.h and
+uses unparenthesized std::min and numeric_limits::max. Without the build-level
+definition it fails either its explicit preprocessor contract or the same
+macro expansion seen in the CI log. The macOS host has no Windows SDK, so the
+RED compiler result is the authoritative MSVC CI run above.
