@@ -1,5 +1,6 @@
 #pragma once
 
+#include "canvas/app/whiteboard_lifecycle.h"
 #include "platform/windows/dcomp_host.h"
 #include "platform/windows/embedded_mouse_session.h"
 
@@ -36,8 +37,10 @@ struct WhiteboardRunOptions {
   std::optional<std::string> sessionToken;
 };
 
-class WhiteboardApp {
+class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
  public:
+  ~WhiteboardApp() override;
+
   int run(HINSTANCE instance, int commandShow,
           const WhiteboardRunOptions& options = {});
 
@@ -98,6 +101,13 @@ class WhiteboardApp {
                         NamedPipeServer::ConnectionId connectionId);
   void sendIpc(const ipc::Message& message,
                NamedPipeServer::ConnectionId connectionId);
+  void stopIpc();
+  std::uint32_t captureMessageError() noexcept override;
+  bool isWindowAlive() noexcept override;
+  void destroyWindow() noexcept override;
+  void stopAndJoinIpcServer() noexcept override;
+  void clearIpcCallbackQueue() noexcept override;
+  void clearWindowHandle() noexcept override;
   HRESULT renderIpcDocument();
   HRESULT renderDocument(const document::Document& source);
 
@@ -120,12 +130,14 @@ class WhiteboardApp {
   document::NodeId activeStrokeId_;
   document::Document document_;
   HWND window_ = nullptr;
-  std::unique_ptr<NamedPipeServer> ipcServer_;
   std::mutex ipcMessagesMutex_;
   std::deque<QueuedIpcMessage> ipcMessages_;
   std::size_t ipcQueuedBytes_ = 0;
   bool ipcMessagePosted_ = false;
   bool ipcQueueOverflowed_ = false;
+  // Declared after every state touched by its reader-thread callback so its
+  // implicit destruction also stops and joins the server first.
+  std::unique_ptr<NamedPipeServer> ipcServer_;
   std::optional<std::wstring> videoPath_;
   std::uint64_t strokeSerial_ = 0;
   HRESULT lastError_ = S_OK;

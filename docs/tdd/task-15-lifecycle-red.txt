@@ -1,0 +1,17 @@
+Task 15 Whiteboard lifecycle RED (macOS, 2026-07-25)
+
+The lifecycle regression test and cross-platform CMake target were added before
+the production seam. The original AppleClang x86_64 compile command was:
+
+  c++ -arch x86_64 -std=c++17 -stdlib=libc++ -Iinclude \
+    -I/Users/qing/opt/anaconda3/include -c \
+    tests/unit/whiteboard_lifecycle_test.cpp \
+    -o /tmp/whiteboard_lifecycle_red.o
+
+It failed as expected with:
+
+  fatal error: 'canvas/app/whiteboard_lifecycle.h' file not found
+
+This is the intended RED: no tested lifecycle seam yet guaranteed that the IPC
+server stops and joins before callback queue state is touched, or that WM_QUIT
+and GetMessage failure exits perform cleanup while preserving the message error.

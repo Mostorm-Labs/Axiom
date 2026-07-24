@@ -191,6 +191,8 @@ std::optional<std::wstring> percentEncodeQueryComponent(
 
 }  // namespace
 
+WhiteboardApp::~WhiteboardApp() { stopIpc(); }
+
 int WhiteboardApp::run(HINSTANCE instance, int commandShow,
                        const WhiteboardRunOptions& options) {
   lastError_ = S_OK;
@@ -574,10 +576,14 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
     DispatchMessageW(&message);
   }
 
+  const auto messageExit = canvas::app::finishWhiteboardMessageLoop(
+      messageResult, static_cast<std::intptr_t>(message.wParam), *this);
+
   UnregisterClassW(kWindowClassName, instance);
   if (FAILED(lastError_)) return hresultExitCode(lastError_);
-  return messageResult < 0 ? hresultExitCode(HRESULT_FROM_WIN32(GetLastError()))
-                           : static_cast<int>(message.wParam);
+  return messageExit.failed
+             ? hresultExitCode(HRESULT_FROM_WIN32(messageExit.errorCode))
+             : static_cast<int>(messageExit.quitCode);
 }
 
 LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
@@ -592,14 +598,8 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
-      app->ipcServer_.reset();
+      app->stopIpc();
       app->window_ = nullptr;
-      {
-        std::lock_guard<std::mutex> lock(app->ipcMessagesMutex_);
-        app->ipcMessages_.clear();
-        app->ipcQueuedBytes_ = 0;
-        app->ipcMessagePosted_ = false;
-      }
       (void)app->forwardMouseToEmbedded(window, WM_CANCELMODE, 0, 0);
       app->embeddedWebViews_.clear();
     }
@@ -1695,6 +1695,34 @@ void WhiteboardApp::sendIpc(
     NamedPipeServer::ConnectionId connectionId) {
   if (ipcServer_) ipcServer_->send(message, connectionId);
 }
+
+void WhiteboardApp::stopIpc() {
+  canvas::app::stopAndClearWhiteboardIpc(*this);
+}
+
+std::uint32_t WhiteboardApp::captureMessageError() noexcept {
+  return GetLastError();
+}
+
+bool WhiteboardApp::isWindowAlive() noexcept {
+  return window_ != nullptr && IsWindow(window_) != FALSE;
+}
+
+void WhiteboardApp::destroyWindow() noexcept {
+  if (window_ != nullptr) (void)DestroyWindow(window_);
+}
+
+void WhiteboardApp::stopAndJoinIpcServer() noexcept { ipcServer_.reset(); }
+
+void WhiteboardApp::clearIpcCallbackQueue() noexcept {
+  std::lock_guard<std::mutex> lock(ipcMessagesMutex_);
+  ipcMessages_.clear();
+  ipcQueuedBytes_ = 0;
+  ipcMessagePosted_ = false;
+  ipcQueueOverflowed_ = false;
+}
+
+void WhiteboardApp::clearWindowHandle() noexcept { window_ = nullptr; }
 
 HRESULT WhiteboardApp::renderIpcDocument() {
   return renderDocument(document_);

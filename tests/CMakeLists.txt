@@ -50,6 +50,15 @@ target_link_libraries(canvas_input_router_test PRIVATE canvas::core GTest::gtest
 canvas_enable_warnings(canvas_input_router_test)
 gtest_discover_tests(canvas_input_router_test)
 
+add_executable(canvas_whiteboard_lifecycle_test
+               unit/whiteboard_lifecycle_test.cpp)
+target_include_directories(canvas_whiteboard_lifecycle_test
+                           PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(canvas_whiteboard_lifecycle_test
+                      PRIVATE GTest::gtest_main)
+canvas_enable_warnings(canvas_whiteboard_lifecycle_test)
+gtest_discover_tests(canvas_whiteboard_lifecycle_test)
+
 add_executable(canvas_embedded_transform_test unit/embedded_transform_test.cpp)
 target_link_libraries(canvas_embedded_transform_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_embedded_transform_test)
