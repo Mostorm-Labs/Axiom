@@ -30,6 +30,7 @@ namespace canvas::windows {
 namespace {
 
 constexpr wchar_t kWindowClassName[] = L"MostormCanvasWindow";
+constexpr WORD kSystemArrowCursorId = 32512U;
 constexpr UINT kIpcMessage = WM_APP + 0x4D;
 constexpr std::size_t kMaximumQueuedIpcMessages = 128U;
 constexpr std::size_t kMaximumQueuedIpcBytes = 4U * 1024U * 1024U;
@@ -214,7 +215,8 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   windowClass.hInstance = instance;
   windowClass.lpfnWndProc = &WhiteboardApp::windowProc;
   windowClass.lpszClassName = kWindowClassName;
-  windowClass.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(OCR_NORMAL));
+  windowClass.hCursor =
+      LoadCursorW(nullptr, MAKEINTRESOURCEW(kSystemArrowCursorId));
   windowClass.style = CS_HREDRAW | CS_VREDRAW;
 
   if (RegisterClassExW(&windowClass) == 0) {

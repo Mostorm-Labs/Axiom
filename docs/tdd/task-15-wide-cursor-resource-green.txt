@@ -1,15 +1,16 @@
 Explicit wide cursor resource green phase (2026-07-25)
 
-Replaced IDC_ARROW at the LoadCursorW call with the explicit wide integer
-resource MAKEINTRESOURCEW(OCR_NORMAL). OCR_NORMAL and IDC_ARROW identify the
-same standard arrow cursor value (32512), while MAKEINTRESOURCEW produces the
-LPCWSTR-compatible resource pointer required by LoadCursorW. No global
-UNICODE or _UNICODE definition was added.
+The initial MAKEINTRESOURCEW(OCR_NORMAL) candidate was rejected by real SDK
+run 30122320834 because OCR_NORMAL is protected by OEMRESOURCE. The corrected
+LoadCursorW call names the documented standard arrow cursor resource ID as
+`kSystemArrowCursorId = 32512U` and passes it to MAKEINTRESOURCEW. The explicit
+W macro produces the LPCWSTR-compatible integer resource pointer without
+relying on IDC_ARROW, OCR_NORMAL, UNICODE, or OEMRESOURCE.
 
 Added the exact expression to the existing Windows-only OBJECT compile target:
 
   HCURSOR canvasWindowsWideCursorResourceCompileProbe() {
-    return LoadCursorW(nullptr, MAKEINTRESOURCEW(OCR_NORMAL));
+    return LoadCursorW(nullptr, MAKEINTRESOURCEW(kSystemArrowCursorId));
   }
 
 The `canvas_windows_header_hygiene_compile_test` target is built by the normal
@@ -19,11 +20,13 @@ user32 linkage requirements.
 
 Local static checks:
 
-  rg -n 'LoadCursorW.*IDC_ARROW|(^|[^W])MAKEINTRESOURCE\(' app src tests
-  rg -n '(^|[^A-Z_])(UNICODE|_UNICODE)([^A-Z_]|$)' CMakeLists.txt app src tests
+  rg -n 'OCR_NORMAL|LoadCursorW.*IDC_ARROW|(^|[^W])MAKEINTRESOURCE\(' \
+      app src tests
+  rg -n '(UNICODE|_UNICODE|OEMRESOURCE)' CMakeLists.txt app src tests
   git diff --check
 
 Result: passed. Both production and compile-contract sites use the explicit
-wide resource; no generic MAKEINTRESOURCE use or global UNICODE compile
-definition was found; and the diff has no whitespace errors. Compilation
+wide numeric resource; no OCR_NORMAL use in compiled code, generic
+MAKEINTRESOURCE, or global UNICODE/OEMRESOURCE definition remains; and the
+diff has no whitespace errors. Compilation of the corrected expression
 against the real Windows SDK remains pending the next Windows CI run.

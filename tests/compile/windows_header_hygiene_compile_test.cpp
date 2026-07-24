@@ -17,6 +17,8 @@
 
 #include "include/core/SkRect.h"
 
+constexpr WORD kSystemArrowCursorId = 32512U;
+
 static_assert(std::min(2, 3) == 2,
               "std::min must remain callable after Windows.h");
 static_assert(std::numeric_limits<DWORD>::max() > 0,
@@ -27,5 +29,5 @@ SkRect canvasWindowsHeaderHygieneCompileProbe() {
 }
 
 HCURSOR canvasWindowsWideCursorResourceCompileProbe() {
-  return LoadCursorW(nullptr, MAKEINTRESOURCEW(OCR_NORMAL));
+  return LoadCursorW(nullptr, MAKEINTRESOURCEW(kSystemArrowCursorId));
 }

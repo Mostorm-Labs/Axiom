@@ -19,3 +19,20 @@ Enabling UNICODE globally would change every encoding-neutral Win32 alias and
 is broader than this cursor resource mismatch. A cast would hide the type
 error without making the resource encoding explicit. The narrow failure is
 therefore corrected at this call site.
+
+The first attempted correction used MAKEINTRESOURCEW(OCR_NORMAL). Although
+OCR_NORMAL has the same numeric value as the arrow cursor, Windows SDK
+10.0.26100.0 only exposes the OCR_* names when OEMRESOURCE is defined. GitHub
+Actions Windows run 30122320834 therefore disproved that candidate in both the
+production source and compile contract:
+
+  https://github.com/Mostorm-Labs/canvas/actions/runs/30122320834
+
+  windows_header_hygiene_compile_test.cpp(30,31): error C2065:
+      'OCR_NORMAL': undeclared identifier
+  whiteboard_app.cpp(217,46): error C2065:
+      'OCR_NORMAL': undeclared identifier
+
+Defining OEMRESOURCE globally would widen the Windows header surface solely to
+recover a numeric resource name. The corrected implementation instead passes
+the documented standard arrow resource value directly to MAKEINTRESOURCEW.
