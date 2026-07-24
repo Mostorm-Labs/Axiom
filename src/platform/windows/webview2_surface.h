@@ -21,9 +21,10 @@ class DCompHost;
 //
 // Thread contract: construct, mutate, inspect, and destroy on the creating STA.
 // HRESULT-returning calls report RPC_E_WRONG_THREAD. The void EmbeddedSurface
-// overrides and accessors terminate on a contract violation. The destructor
-// terminates only on that wrong-thread violation; owner-STA cleanup errors are
-// returned by explicit close() and never leave local ownership behind.
+// overrides ignore setter failures for interface compatibility; accessors
+// terminate on a contract violation. The destructor terminates only on that
+// wrong-thread violation; owner-STA cleanup errors are returned by explicit
+// close() and never leave local ownership behind.
 class WebView2Surface final : public embed::EmbeddedSurface {
  public:
   enum class State { Created, Initializing, Ready, Failed, Closed };
@@ -73,6 +74,12 @@ class WebView2Surface final : public embed::EmbeddedSurface {
   // used only to balance WebView state after native capture is lost.
   HRESULT cancelMouseButtons(EmbeddedMouseButtons buttons);
   HRESULT forwardTouchMessage(UINT message, UINT32 pointerId);
+
+  // Return the current WebView2 setter result. A previous failure remains
+  // available through lastResult(), so callers that need this operation's
+  // result must use these checked entry points.
+  HRESULT setBoundsChecked(core::Rect bounds);
+  HRESULT setVisibleChecked(bool visible);
 
   void setBounds(core::Rect bounds) override;
   void setInteractive(bool interactive) override;

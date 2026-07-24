@@ -11,6 +11,12 @@ target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main
 canvas_enable_warnings(canvas_version_test)
 gtest_discover_tests(canvas_version_test)
 
+add_executable(canvas_ipc_protocol_test unit/ipc_protocol_test.cpp)
+target_link_libraries(canvas_ipc_protocol_test PRIVATE canvas::ipc
+                      GTest::gtest_main)
+canvas_enable_warnings(canvas_ipc_protocol_test)
+gtest_discover_tests(canvas_ipc_protocol_test)
+
 add_executable(canvas_geometry_test unit/geometry_test.cpp)
 target_link_libraries(canvas_geometry_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_geometry_test)
@@ -133,6 +139,16 @@ if(WIN32)
     canvas_enable_warnings(canvas_windows_composition_test)
     gtest_discover_tests(canvas_windows_composition_test
                          TEST_PREFIX "canvas_windows_composition_test.")
+
+    add_executable(canvas_named_pipe_server_test
+                   integration/named_pipe_server_test.cpp)
+    target_include_directories(canvas_named_pipe_server_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_named_pipe_server_test
+                          PRIVATE canvas::windows_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_named_pipe_server_test)
+    gtest_discover_tests(canvas_named_pipe_server_test
+                         TEST_PREFIX "canvas_named_pipe_server_test.")
 
     add_executable(canvas_webview2_surface_test
                    integration/webview2_surface_test.cpp)

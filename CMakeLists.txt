@@ -29,6 +29,12 @@ target_link_libraries(canvas_core PUBLIC unofficial::skia::skia
                        PRIVATE nlohmann_json::nlohmann_json)
 canvas_enable_warnings(canvas_core)
 
+add_library(canvas_ipc STATIC src/ipc/protocol.cpp src/ipc/client_session.cpp)
+add_library(canvas::ipc ALIAS canvas_ipc)
+target_include_directories(canvas_ipc PUBLIC include)
+target_link_libraries(canvas_ipc PUBLIC nlohmann_json::nlohmann_json)
+canvas_enable_warnings(canvas_ipc)
+
 if(WIN32)
     find_program(CANVAS_NODE_EXECUTABLE NAMES node.exe node)
     if(NOT CANVAS_NODE_EXECUTABLE)
@@ -99,15 +105,17 @@ if(WIN32)
                 src/platform/windows/qpc_clock.cpp
                 src/platform/windows/skia_d3d12_context.cpp
                 src/platform/windows/skia_swap_chain_layer.cpp
-                src/platform/windows/document_store.cpp)
+                src/platform/windows/document_store.cpp
+                src/platform/windows/named_pipe_server.cpp)
     add_library(canvas::windows_platform ALIAS canvas_windows_platform)
     target_include_directories(canvas_windows_platform PUBLIC
                                ${PROJECT_SOURCE_DIR}/include
                                ${PROJECT_SOURCE_DIR}/src)
-    target_link_libraries(canvas_windows_platform PUBLIC dcomp dxgi d3d12
+    target_link_libraries(canvas_windows_platform PUBLIC dcomp dxgi d3d12 advapi32
                                                          user32 ole32
                                                          unofficial::skia::skia
                                                          canvas::core
+                                                         canvas::ipc
                                                          PRIVATE
                                                          canvas::webview2_loader
                                                          shlwapi version

@@ -9,12 +9,18 @@
 #include "canvas/stroke/stroke_builder.h"
 #include "platform/windows/skia_d3d12_context.h"
 #include "platform/windows/skia_swap_chain_layer.h"
+#include "platform/windows/named_pipe_server.h"
 #include "platform/windows/webview2_surface.h"
+#include "canvas/ipc/protocol.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace canvas::windows {
@@ -26,6 +32,8 @@ struct WhiteboardRunOptions {
   std::optional<std::wstring> openPath;
   std::optional<std::wstring> savePath;
   std::optional<std::wstring> videoPath;
+  std::optional<std::wstring> ipcPipe;
+  std::optional<std::string> sessionToken;
 };
 
 class WhiteboardApp {
@@ -34,9 +42,20 @@ class WhiteboardApp {
           const WhiteboardRunOptions& options = {});
 
   static LRESULT CALLBACK windowProc(HWND window, UINT message,
-                                     WPARAM wParam, LPARAM lParam);
+                                       WPARAM wParam, LPARAM lParam);
 
  private:
+  struct HostedWebView {
+    document::NodeId nodeId;
+    std::unique_ptr<WebView2Surface> surface;
+  };
+
+  struct QueuedIpcMessage {
+    ipc::Message message;
+    NamedPipeServer::ConnectionId connectionId =
+        NamedPipeServer::kInvalidConnectionId;
+  };
+
   // Task 10 seam: samples stay native and are consumed by the future stroke
   // pipeline. No Electron IPC or rendering work belongs on this path.
   HRESULT onPointerSample(const input::PointerSample& sample);
@@ -54,13 +73,33 @@ class WhiteboardApp {
   SkiaSwapChainLayer& activeSwapChainLayer();
   bool populateSelfTestDocument();
   bool populateEmbeddedSelfTestDocument();
-  HRESULT openDocument(const std::wstring& path);
+  HRESULT openDocument(const std::wstring& path,
+                       std::string_view requestId = {},
+                       NamedPipeServer::ConnectionId connectionId =
+                           NamedPipeServer::kInvalidConnectionId);
   HRESULT saveDocument(const std::wstring& path) const;
-
-  struct HostedWebView {
-    document::NodeId nodeId;
-    std::unique_ptr<WebView2Surface> surface;
-  };
+  HRESULT restoreEmbeddedSurfaces(
+      const document::Document& source,
+      std::vector<HostedWebView>& destinations, bool visible);
+  HRESULT createEmbeddedSurface(const document::Node& node,
+                                std::vector<HostedWebView>& destinations,
+                                bool visible);
+  HRESULT setSurfaceBounds(WebView2Surface& surface, core::Rect bounds);
+  HRESULT setSurfaceVisible(WebView2Surface& surface, bool visible);
+  bool restorePreviousRender(const document::Document& previous,
+                             std::string_view requestId,
+                             std::string_view context,
+                             NamedPipeServer::ConnectionId connectionId);
+  void reportFatalFailure(HRESULT result, std::string_view requestId,
+                          std::string_view context,
+                          NamedPipeServer::ConnectionId connectionId);
+  void handleIpcMessages();
+  void handleIpcMessage(const ipc::Message& message,
+                        NamedPipeServer::ConnectionId connectionId);
+  void sendIpc(const ipc::Message& message,
+               NamedPipeServer::ConnectionId connectionId);
+  HRESULT renderIpcDocument();
+  HRESULT renderDocument(const document::Document& source);
 
   DCompHost composition_;
   SkiaD3D12Context gpu_;
@@ -80,6 +119,14 @@ class WhiteboardApp {
   input::RouteResult activeRoute_;
   document::NodeId activeStrokeId_;
   document::Document document_;
+  HWND window_ = nullptr;
+  std::unique_ptr<NamedPipeServer> ipcServer_;
+  std::mutex ipcMessagesMutex_;
+  std::deque<QueuedIpcMessage> ipcMessages_;
+  std::size_t ipcQueuedBytes_ = 0;
+  bool ipcMessagePosted_ = false;
+  bool ipcQueueOverflowed_ = false;
+  std::optional<std::wstring> videoPath_;
   std::uint64_t strokeSerial_ = 0;
   HRESULT lastError_ = S_OK;
   bool batchingPointerSamples_ = false;

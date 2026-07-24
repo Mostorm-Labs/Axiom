@@ -1044,9 +1044,20 @@ HRESULT WebView2Surface::forwardTouchMessage(UINT message, UINT32 pointerId) {
   return impl_->forwardTouchMessage(message, pointerId);
 }
 
+HRESULT WebView2Surface::setBoundsChecked(core::Rect bounds) {
+  const HRESULT threadResult = impl_->checkThread();
+  if (FAILED(threadResult)) return threadResult;
+  return impl_->setBounds(bounds);
+}
+
+HRESULT WebView2Surface::setVisibleChecked(bool visible) {
+  const HRESULT threadResult = impl_->checkThread();
+  if (FAILED(threadResult)) return threadResult;
+  return impl_->setVisible(visible);
+}
+
 void WebView2Surface::setBounds(core::Rect bounds) {
-  impl_->requireOwnerThread();
-  impl_->setBounds(bounds);
+  (void)setBoundsChecked(bounds);
 }
 
 void WebView2Surface::setInteractive(bool interactive) {
@@ -1054,8 +1065,7 @@ void WebView2Surface::setInteractive(bool interactive) {
 }
 
 void WebView2Surface::setVisible(bool visible) {
-  impl_->requireOwnerThread();
-  impl_->setVisible(visible);
+  (void)setVisibleChecked(visible);
 }
 
 WebView2Surface::State WebView2Surface::state() const noexcept {

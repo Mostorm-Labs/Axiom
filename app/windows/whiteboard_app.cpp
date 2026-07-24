@@ -3,6 +3,7 @@
 #include "canvas/document/embedded_transform.h"
 #include "canvas/storage/document_codec.h"
 #include "platform/windows/document_store.h"
+#include "platform/windows/named_pipe_server.h"
 #include "platform/windows/webview2_media_source.h"
 #include "platform/windows/webview2_video_restore.h"
 #include "platform/windows/win_pointer_adapter.h"
@@ -11,6 +12,7 @@
 #include <windowsx.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <initializer_list>
@@ -28,9 +30,49 @@ namespace canvas::windows {
 namespace {
 
 constexpr wchar_t kWindowClassName[] = L"MostormCanvasWindow";
+constexpr UINT kIpcMessage = WM_APP + 0x4D;
+constexpr std::size_t kMaximumQueuedIpcMessages = 128U;
+constexpr std::size_t kMaximumQueuedIpcBytes = 4U * 1024U * 1024U;
+constexpr std::size_t kMaximumEmbeddedSourceBytes = 1024U * 1024U;
+constexpr float kMaximumEmbeddedCoordinate = 1'000'000.0F;
 
 int hresultExitCode(HRESULT hr) {
   return FAILED(hr) ? static_cast<int>(hr) : 1;
+}
+
+bool isValidEmbeddedBounds(const core::Rect& bounds) {
+  if (!std::isfinite(bounds.x) || !std::isfinite(bounds.y) ||
+      !std::isfinite(bounds.width) || !std::isfinite(bounds.height) ||
+      bounds.width <= 0.0F || bounds.height <= 0.0F ||
+      bounds.width > kMaximumEmbeddedCoordinate ||
+      bounds.height > kMaximumEmbeddedCoordinate ||
+      std::fabs(bounds.x) > kMaximumEmbeddedCoordinate ||
+      std::fabs(bounds.y) > kMaximumEmbeddedCoordinate) {
+    return false;
+  }
+  const double right = static_cast<double>(bounds.x) + bounds.width;
+  const double bottom = static_cast<double>(bounds.y) + bounds.height;
+  return std::isfinite(right) && std::isfinite(bottom) &&
+         std::fabs(right) <= kMaximumEmbeddedCoordinate &&
+         std::fabs(bottom) <= kMaximumEmbeddedCoordinate;
+}
+
+std::optional<std::size_t> queuedIpcMessageBytes(const ipc::Message& message) {
+  try {
+    const std::size_t payloadBytes = message.payload.dump().size();
+    constexpr std::size_t kEnvelopeBytes = 96U;
+    if (message.type.size() > (std::numeric_limits<std::size_t>::max)() -
+                                  message.requestId.size() ||
+        payloadBytes > (std::numeric_limits<std::size_t>::max)() -
+                           message.type.size() - message.requestId.size() -
+                           kEnvelopeBytes) {
+      return std::nullopt;
+    }
+    return kEnvelopeBytes + message.type.size() + message.requestId.size() +
+           payloadBytes;
+  } catch (...) {
+    return std::nullopt;
+  }
 }
 
 input::PointerPhase pointerPhaseForMessage(UINT message) {
@@ -88,7 +130,7 @@ bool isEmbeddedMouseButtonUp(UINT message) {
 std::optional<std::wstring> utf8ToWide(std::string_view value) {
   if (value.empty()) return std::wstring{};
   if (value.size() >
-      static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
     return std::nullopt;
   }
   const int sourceLength = static_cast<int>(value.size());
@@ -107,7 +149,7 @@ std::optional<std::wstring> utf8ToWide(std::string_view value) {
 std::optional<std::string> wideToUtf8(std::wstring_view value) {
   if (value.empty()) return std::string{};
   if (value.size() >
-      static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+      static_cast<std::size_t>((std::numeric_limits<int>::max)())) {
     return std::nullopt;
   }
   const int sourceLength = static_cast<int>(value.size());
@@ -152,6 +194,8 @@ std::optional<std::wstring> percentEncodeQueryComponent(
 int WhiteboardApp::run(HINSTANCE instance, int commandShow,
                        const WhiteboardRunOptions& options) {
   lastError_ = S_OK;
+  videoPath_ = options.videoPath;
+  ipcQueueOverflowed_ = false;
   if (instance == nullptr) {
     return hresultExitCode(E_INVALIDARG);
   }
@@ -184,6 +228,7 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
     UnregisterClassW(kWindowClassName, instance);
     return hresultExitCode(hr);
   }
+  window_ = window;
 
   const HRESULT compositionResult = composition_.initialize(window);
   if (FAILED(compositionResult)) {
@@ -206,7 +251,9 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
         return node.layer == document::LayerClass::Embedded &&
                std::holds_alternative<document::EmbeddedNode>(node.payload);
       });
-  const bool diagnosticLayers = options.selfTestLayers ||
+  const bool ipcEnabled = options.ipcPipe.has_value() &&
+                          options.sessionToken.has_value();
+  const bool diagnosticLayers = ipcEnabled || options.selfTestLayers ||
                                 options.selfTestEmbedded ||
                                 options.selfTestDocument ||
                                 openedDocumentHasEmbedded;
@@ -238,12 +285,14 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
   }
   if (diagnosticLayers) {
     baseLayer_.setClearColorArgb(0xFF00AA00U);
-    const bool populated = options.openPath
+    const bool populated = ipcEnabled
+                               ? true
+                               : (options.openPath
                                ? true
                                : (options.selfTestEmbedded ||
                                           options.selfTestDocument
                                       ? populateEmbeddedSelfTestDocument()
-                                      : populateSelfTestDocument());
+                                      : populateSelfTestDocument()));
     if (!populated) {
       DestroyWindow(window);
       UnregisterClassW(kWindowClassName, instance);
@@ -260,10 +309,12 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       if (node == nullptr) return E_INVALIDARG;
       auto surface = std::make_unique<WebView2Surface>(
           composition_, window, std::move(surfaceOptions));
-      surface->setBounds(node->bounds);
+      HRESULT result = setSurfaceBounds(*surface, node->bounds);
+      if (FAILED(result)) return result;
       surface->setInteractive(false);
-      surface->setVisible(true);
-      HRESULT result = surface->initialize();
+      result = setSurfaceVisible(*surface, true);
+      if (FAILED(result)) return result;
+      result = surface->initialize();
       if (SUCCEEDED(result)) result = surface->navigate(uri);
       if (SUCCEEDED(result) && initialMessage) {
         result = surface->postMessage(*initialMessage);
@@ -274,7 +325,14 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
       return S_OK;
     };
 
-    if (options.selfTestEmbedded && !options.openPath) {
+    if (ipcEnabled) {
+      if (options.openPath) {
+        layerResult =
+            restoreEmbeddedSurfaces(document_, embeddedWebViews_, true);
+      }
+      // Without --open, Electron commands add embedded nodes on the UI thread.
+      // Do not create diagnostic content or a WebView before a command arrives.
+    } else if (options.selfTestEmbedded && !options.openPath) {
       WebView2Surface::Options contentOptions;
       contentOptions.canvasLocalFolder = L"web";
       layerResult = addWebView(
@@ -446,6 +504,49 @@ int WhiteboardApp::run(HINSTANCE instance, int commandShow,
     return hresultExitCode(renderResult);
   }
 
+  if (ipcEnabled) {
+    ipcServer_ = std::make_unique<NamedPipeServer>();
+    std::string pipeError;
+    const bool started = ipcServer_->start(
+        *options.ipcPipe, *options.sessionToken,
+        [this, window](const ipc::Message& message,
+                       NamedPipeServer::ConnectionId connectionId) {
+          const auto bytes = queuedIpcMessageBytes(message);
+          bool postIpc = false;
+          bool closeForOverflow = false;
+          {
+            std::lock_guard<std::mutex> lock(ipcMessagesMutex_);
+            if (!bytes || *bytes > kMaximumQueuedIpcBytes ||
+                ipcMessages_.size() >= kMaximumQueuedIpcMessages ||
+                *bytes > kMaximumQueuedIpcBytes - ipcQueuedBytes_) {
+              closeForOverflow = !ipcQueueOverflowed_;
+              ipcQueueOverflowed_ = true;
+            } else {
+              ipcMessages_.push_back(QueuedIpcMessage{message, connectionId});
+              ipcQueuedBytes_ += *bytes;
+              if (!ipcMessagePosted_) {
+                ipcMessagePosted_ = true;
+                postIpc = true;
+              }
+            }
+          }
+          if (closeForOverflow) {
+            OutputDebugStringA("Canvas IPC queue overflow; closing window\n");
+            (void)PostMessageW(window, WM_CLOSE, 0, 0);
+            return;
+          }
+          // The pipe thread never touches Document, D3D, DComp, or WebView.
+          // The UI thread drains this queue in windowProc below.
+          if (postIpc) (void)PostMessageW(window, kIpcMessage, 0, 0);
+        },
+        pipeError);
+    if (!started) {
+      DestroyWindow(window);
+      UnregisterClassW(kWindowClassName, instance);
+      return hresultExitCode(E_FAIL);
+    }
+  }
+
   // Saving is an explicit command-line operation, intentionally performed
   // outside all pointer callbacks. Copying first gives the store an immutable
   // snapshot even if a future caller invokes save from another UI action.
@@ -491,10 +592,25 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
+      app->ipcServer_.reset();
+      app->window_ = nullptr;
+      {
+        std::lock_guard<std::mutex> lock(app->ipcMessagesMutex_);
+        app->ipcMessages_.clear();
+        app->ipcQueuedBytes_ = 0;
+        app->ipcMessagePosted_ = false;
+      }
       (void)app->forwardMouseToEmbedded(window, WM_CANCELMODE, 0, 0);
       app->embeddedWebViews_.clear();
     }
     PostQuitMessage(0);
+    return 0;
+  }
+
+  if (message == kIpcMessage) {
+    auto* app = reinterpret_cast<WhiteboardApp*>(
+        GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (app != nullptr) app->handleIpcMessages();
     return 0;
   }
 
@@ -1120,7 +1236,8 @@ bool WhiteboardApp::populateSelfTestDocument() {
   embedded.layer = document::LayerClass::Embedded;
   embedded.bounds = core::Rect{440.0F, 240.0F, 400.0F, 240.0F};
   embedded.payload = document::EmbeddedNode{
-      document::EmbeddedKind::Web, "about:blank", "Embedded placeholder"};
+      document::EmbeddedKind::Web, "https://example.com/",
+      "Embedded placeholder"};
   if (!document_.add(std::move(embedded))) return false;
   for (std::size_t row = 0; row < 10; ++row) {
     const float y = 260.0F + static_cast<float>(row) * 22.0F;
@@ -1255,7 +1372,9 @@ bool WhiteboardApp::populateEmbeddedSelfTestDocument() {
   return true;
 }
 
-HRESULT WhiteboardApp::openDocument(const std::wstring& path) {
+HRESULT WhiteboardApp::openDocument(const std::wstring& path,
+                                    std::string_view requestId,
+                                    NamedPipeServer::ConnectionId connectionId) {
   std::vector<std::uint8_t> bytes;
   std::string storeError;
   if (!DocumentStore::load(std::filesystem::path(path), bytes, storeError)) {
@@ -1267,7 +1386,8 @@ HRESULT WhiteboardApp::openDocument(const std::wstring& path) {
     return HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
   }
   std::string decodeError;
-  if (!storage::DocumentCodec::decodeInto(bytes, document_, decodeError)) {
+  document::Document candidate;
+  if (!storage::DocumentCodec::decodeInto(bytes, candidate, decodeError)) {
     if (!decodeError.empty()) {
       OutputDebugStringA(("Canvas document decode failed: " + decodeError +
                           "\n")
@@ -1275,6 +1395,44 @@ HRESULT WhiteboardApp::openDocument(const std::wstring& path) {
     }
     return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
   }
+
+  // Startup has no composition tree yet. The decoded candidate is still
+  // atomic, and run() restores its surfaces after the UI is initialized.
+  if (window_ == nullptr) {
+    document_ = std::move(candidate);
+    return S_OK;
+  }
+
+  // Loading from IPC is a UI-thread transaction: construct every candidate
+  // surface hidden, render the candidate, then atomically exchange ownership.
+  // If any step fails, both the old Document and its visible surfaces remain.
+  std::vector<HostedWebView> candidateSurfaces;
+  HRESULT result = restoreEmbeddedSurfaces(candidate, candidateSurfaces, false);
+  if (FAILED(result)) return result;
+  result = renderDocument(candidate);
+  if (FAILED(result)) {
+    candidateSurfaces.clear();
+    if (!restorePreviousRender(document_, requestId,
+                               "open-document render rollback failed",
+                               connectionId)) {
+      return lastError_;
+    }
+    return result;
+  }
+  for (const auto& hosted : candidateSurfaces) {
+    result = setSurfaceVisible(*hosted.surface, true);
+    if (FAILED(result)) {
+      candidateSurfaces.clear();
+      if (!restorePreviousRender(document_, requestId,
+                                 "open-document visibility rollback failed",
+                                 connectionId)) {
+        return lastError_;
+      }
+      return result;
+    }
+  }
+  document_ = std::move(candidate);
+  embeddedWebViews_.swap(candidateSurfaces);
   return S_OK;
 }
 
@@ -1299,6 +1457,549 @@ HRESULT WhiteboardApp::saveDocument(const std::wstring& path) const {
     return HRESULT_FROM_WIN32(ERROR_WRITE_FAULT);
   }
   return S_OK;
+}
+
+HRESULT WhiteboardApp::restoreEmbeddedSurfaces(
+    const document::Document& source, std::vector<HostedWebView>& destinations,
+    bool visible) {
+  if (!destinations.empty()) return E_INVALIDARG;
+  for (const document::Node& node : source.nodes()) {
+    if (node.layer != document::LayerClass::Embedded ||
+        !std::holds_alternative<document::EmbeddedNode>(node.payload)) {
+      continue;
+    }
+    const HRESULT result = createEmbeddedSurface(node, destinations, visible);
+    if (FAILED(result)) {
+      destinations.clear();
+      return result;
+    }
+  }
+  return S_OK;
+}
+
+HRESULT WhiteboardApp::createEmbeddedSurface(
+    const document::Node& node, std::vector<HostedWebView>& destinations,
+    bool visible) {
+  if (window_ == nullptr || node.id.empty() || node.id.size() > 1024U ||
+      !isValidEmbeddedBounds(node.bounds) ||
+      node.layer != document::LayerClass::Embedded) {
+    return E_INVALIDARG;
+  }
+  const auto* embedded = std::get_if<document::EmbeddedNode>(&node.payload);
+  if (embedded == nullptr || embedded->source.empty() ||
+      embedded->source.size() > kMaximumEmbeddedSourceBytes) {
+    return E_INVALIDARG;
+  }
+  const auto source = utf8ToWide(embedded->source);
+  const auto wideNodeId = utf8ToWide(node.id);
+  if (!source || !wideNodeId || source->empty() || wideNodeId->empty() ||
+      wideNodeId->size() > 256U) {
+    return E_INVALIDARG;
+  }
+
+  WebView2Surface::Options options;
+  std::wstring navigationUri = *source;
+  std::optional<std::wstring> initialMessage;
+  const auto usesCanvasLocal = [&source] {
+    constexpr std::wstring_view kPrefix = L"https://canvas.local/";
+    return source->size() >= kPrefix.size() &&
+           _wcsnicmp(source->c_str(), kPrefix.data(), kPrefix.size()) == 0;
+  };
+
+  switch (embedded->kind) {
+    case document::EmbeddedKind::Web: {
+      const auto navigation =
+          WebView2Surface::classifyNavigation(*source, false);
+      if (navigation == WebView2Surface::NavigationClass::Https) {
+        break;
+      }
+      if (navigation == WebView2Surface::NavigationClass::LocalVirtualHost &&
+          usesCanvasLocal()) {
+        options.canvasLocalFolder = L"web";
+        break;
+      }
+      return E_ACCESSDENIED;
+    }
+    case document::EmbeddedKind::RichText: {
+      constexpr std::wstring_view kRichTextPage =
+          L"https://canvas.local/richtext.html";
+      if (source->size() < kRichTextPage.size() ||
+          _wcsnicmp(source->c_str(), kRichTextPage.data(),
+                    kRichTextPage.size()) != 0 ||
+          (source->size() > kRichTextPage.size() &&
+           (*source)[kRichTextPage.size()] != L'?') ||
+          !usesCanvasLocal()) {
+        return E_ACCESSDENIED;
+      }
+      options.canvasLocalFolder = L"web";
+      const auto encodedNodeId = percentEncodeQueryComponent(*wideNodeId);
+      if (!encodedNodeId) return E_INVALIDARG;
+      navigationUri = L"https://canvas.local/richtext.html?nodeId=" +
+                      *encodedNodeId;
+      break;
+    }
+    case document::EmbeddedKind::Video: {
+      const auto plan = detail::buildVideoRestorePlan(*wideNodeId, *source);
+      if (!plan) return E_INVALIDARG;
+      options.canvasLocalFolder = L"web";
+      navigationUri = plan->navigationUri;
+      if (videoPath_) {
+        detail::LocalMediaSource mediaSource;
+        const HRESULT result =
+            detail::approveLocalMediaFile(*videoPath_, mediaSource);
+        if (FAILED(result)) return result;
+        options.mediaCanvasLocalFolder = mediaSource.folder;
+        initialMessage =
+            detail::buildSetVideoSourceMessage(*wideNodeId, mediaSource.uri);
+      } else {
+        switch (plan->mediaAction) {
+          case detail::VideoRestoreMediaAction::None:
+            break;
+          case detail::VideoRestoreMediaAction::UsePersistedRemote:
+            initialMessage = plan->initialMessage;
+            break;
+          case detail::VideoRestoreMediaAction::ApprovePersistedLocalFile: {
+            detail::LocalMediaSource mediaSource;
+            const HRESULT result =
+                detail::approveLocalMediaFile(*source, mediaSource);
+            if (FAILED(result)) return result;
+            options.mediaCanvasLocalFolder = mediaSource.folder;
+            initialMessage = detail::buildSetVideoSourceMessage(*wideNodeId,
+                                                                 mediaSource.uri);
+            break;
+          }
+          case detail::VideoRestoreMediaAction::Reject:
+            return E_ACCESSDENIED;
+        }
+      }
+      if ((plan->mediaAction != detail::VideoRestoreMediaAction::None ||
+           videoPath_) && !initialMessage) {
+        return E_INVALIDARG;
+      }
+      break;
+    }
+  }
+
+  auto surface = std::make_unique<WebView2Surface>(composition_, window_,
+                                                   std::move(options));
+  HRESULT result = setSurfaceBounds(*surface, node.bounds);
+  if (FAILED(result)) return result;
+  surface->setInteractive(false);
+  result = setSurfaceVisible(*surface, visible);
+  if (FAILED(result)) return result;
+  result = surface->initialize();
+  if (SUCCEEDED(result)) result = surface->navigate(navigationUri);
+  if (SUCCEEDED(result) && initialMessage) result = surface->postMessage(*initialMessage);
+  if (FAILED(result)) return result;
+  try {
+    destinations.push_back(HostedWebView{node.id, std::move(surface)});
+  } catch (...) {
+    return E_OUTOFMEMORY;
+  }
+  return S_OK;
+}
+
+HRESULT WhiteboardApp::setSurfaceBounds(WebView2Surface& surface,
+                                        core::Rect bounds) {
+  if (!isValidEmbeddedBounds(bounds)) return E_INVALIDARG;
+  return surface.setBoundsChecked(bounds);
+}
+
+HRESULT WhiteboardApp::setSurfaceVisible(WebView2Surface& surface,
+                                         bool visible) {
+  return surface.setVisibleChecked(visible);
+}
+
+bool WhiteboardApp::restorePreviousRender(
+    const document::Document& previous, std::string_view requestId,
+    std::string_view context, NamedPipeServer::ConnectionId connectionId) {
+  const HRESULT result = renderDocument(previous);
+  if (SUCCEEDED(result)) return true;
+  reportFatalFailure(result, requestId, context, connectionId);
+  return false;
+}
+
+void WhiteboardApp::reportFatalFailure(HRESULT result,
+                                       std::string_view requestId,
+                                       std::string_view context,
+                                       NamedPipeServer::ConnectionId connectionId) {
+  if (SUCCEEDED(result)) result = E_FAIL;
+  lastError_ = result;
+  const std::string detail(context);
+  OutputDebugStringA(("Canvas fatal failure: " + detail + "\n").c_str());
+  sendIpc(ipc::Message{
+      1, "fatal-error",
+      "fatal-" + (requestId.empty() ? std::string("native")
+                                     : std::string(requestId)),
+      nlohmann::json{{"error", detail},
+                     {"hresult", static_cast<std::int64_t>(result)}}},
+      connectionId);
+  if (window_ != nullptr && IsWindow(window_)) {
+    (void)PostMessageW(window_, WM_CLOSE, 0, 0);
+  }
+}
+
+void WhiteboardApp::handleIpcMessages() {
+  if (FAILED(lastError_)) return;
+  constexpr std::size_t kMaximumMessagesPerUiTurn = 16U;
+  std::deque<QueuedIpcMessage> messages;
+  bool repost = false;
+  {
+    std::lock_guard<std::mutex> lock(ipcMessagesMutex_);
+    for (std::size_t index = 0;
+         index < kMaximumMessagesPerUiTurn && !ipcMessages_.empty(); ++index) {
+      const auto bytes = queuedIpcMessageBytes(ipcMessages_.front().message);
+      if (bytes && *bytes <= ipcQueuedBytes_) {
+        ipcQueuedBytes_ -= *bytes;
+      } else {
+        // The queue only receives messages with a recorded finite budget.
+        // Keep draining if a future change violates that invariant.
+        ipcQueuedBytes_ = 0;
+      }
+      messages.push_back(std::move(ipcMessages_.front()));
+      ipcMessages_.pop_front();
+    }
+    if (ipcMessages_.empty()) {
+      ipcMessagePosted_ = false;
+    } else {
+      // The message that invoked this handler is now consumed. Reserve exactly
+      // one successor so a busy pipe cannot flood the UI message queue.
+      ipcMessagePosted_ = true;
+      repost = true;
+    }
+  }
+  for (const auto& queued : messages) {
+    if (ipcServer_ && ipcServer_->isCurrentConnection(queued.connectionId)) {
+      handleIpcMessage(queued.message, queued.connectionId);
+      // A failed rollback has already queued WM_CLOSE. Do not let later
+      // commands observe or mutate unrecoverable state before destruction.
+      if (FAILED(lastError_)) return;
+    }
+  }
+  // Commands processed above may be slow enough for the pipe to enqueue more
+  // work after the first check. Recheck only when no successor was reserved.
+  if (!repost) {
+    std::lock_guard<std::mutex> lock(ipcMessagesMutex_);
+    if (!ipcMessages_.empty() && !ipcMessagePosted_) {
+      ipcMessagePosted_ = true;
+      repost = true;
+    }
+  }
+  if (repost && window_ != nullptr) {
+    (void)PostMessageW(window_, kIpcMessage, 0, 0);
+  }
+}
+
+void WhiteboardApp::sendIpc(
+    const ipc::Message& message,
+    NamedPipeServer::ConnectionId connectionId) {
+  if (ipcServer_) ipcServer_->send(message, connectionId);
+}
+
+HRESULT WhiteboardApp::renderIpcDocument() {
+  return renderDocument(document_);
+}
+
+HRESULT WhiteboardApp::renderDocument(const document::Document& source) {
+  HRESULT result = baseLayer_.render(source, document::LayerClass::Base);
+  if (SUCCEEDED(result)) {
+    result = embeddedLayer_.render(source, document::LayerClass::Embedded);
+  }
+  if (SUCCEEDED(result)) {
+    result = annotationLayer_.render(source, document::LayerClass::Annotation);
+  }
+  if (SUCCEEDED(result)) {
+    result = chromeLayer_.render(source, document::LayerClass::Chrome);
+  }
+  return result;
+}
+
+void WhiteboardApp::handleIpcMessage(
+    const ipc::Message& message,
+    NamedPipeServer::ConnectionId connectionId) {
+  if (message.type == "hello") {
+    // start() occurs only after window creation, D3D12, the DComp tree, and
+    // first render are complete. NamedPipeServer has authenticated hello
+    // before it queues this message, making this the readiness boundary.
+    sendIpc(ipc::Message{1, "ready", message.requestId,
+                         nlohmann::json{{"protocolVersion", 1}}},
+            connectionId);
+    return;
+  }
+
+  bool accepted = true;
+  std::string error;
+  bool emitDocumentState = false;
+  const auto stringField = [&message](const char* name)
+      -> std::optional<std::string> {
+    const auto value = message.payload.find(name);
+    if (value == message.payload.end() || !value->is_string() ||
+        value->get_ref<const std::string&>().empty()) {
+      return std::nullopt;
+    }
+    return value->get<std::string>();
+  };
+  const auto setMode = [this](std::string_view mode) -> bool {
+    if (mode == "draw") {
+      inputRouter_.setMode(input::InputMode::Draw);
+    } else if (mode == "select") {
+      inputRouter_.setMode(input::InputMode::Select);
+    } else if (mode == "interact") {
+      inputRouter_.setMode(input::InputMode::Interact);
+    } else {
+      return false;
+    }
+    return true;
+  };
+
+  try {
+    if (message.type == "shutdown") {
+      sendIpc(ipc::Message{1, "response", message.requestId,
+                           nlohmann::json{{"accepted", true}}},
+              connectionId);
+      if (window_ != nullptr && IsWindow(window_)) {
+        (void)PostMessageW(window_, WM_CLOSE, 0, 0);
+      }
+      return;
+    }
+    if (message.type == "set-tool") {
+      const auto tool = stringField("tool");
+      const auto fingerDraw = message.payload.find("fingerDrawEnabled");
+      if (!tool) {
+        error = "set-tool requires a tool";
+      } else if (fingerDraw != message.payload.end() &&
+                 !fingerDraw->is_boolean()) {
+        error = "fingerDrawEnabled must be a boolean";
+      } else if (!setMode(*tool)) {
+        error = "unsupported tool";
+      } else if (fingerDraw != message.payload.end()) {
+        inputRouter_.setFingerDrawEnabled(fingerDraw->get<bool>());
+      }
+    } else if (message.type == "set-mode") {
+      const auto mode = stringField("mode");
+      if (!mode) error = "set-mode requires a mode";
+      else if (!setMode(*mode)) error = "unsupported mode";
+    } else if (message.type == "enter-interaction") {
+      inputRouter_.setMode(input::InputMode::Interact);
+    } else if (message.type == "leave-interaction") {
+      inputRouter_.setMode(input::InputMode::Draw);
+    } else if (message.type == "open-document") {
+      const auto path = stringField("path");
+      if (!path) error = "open-document requires a path";
+      else if (const auto widePath = utf8ToWide(*path)) {
+        const HRESULT result =
+            openDocument(*widePath, message.requestId, connectionId);
+        if (FAILED(result)) {
+          error = FAILED(lastError_)
+                      ? "could not open document; rollback failed and the "
+                        "application is closing"
+                      : "could not open document; previous state retained";
+        } else {
+          emitDocumentState = true;
+        }
+      } else error = "path is not valid UTF-8";
+    } else if (message.type == "save-document") {
+      const auto path = stringField("path");
+      if (!path) error = "save-document requires a path";
+      else if (const auto widePath = utf8ToWide(*path)) {
+        if (FAILED(saveDocument(*widePath))) error = "could not save document";
+      } else error = "path is not valid UTF-8";
+    } else if (message.type == "create-embedded") {
+      const auto kind = stringField("kind");
+      document::EmbeddedKind embeddedKind = document::EmbeddedKind::Web;
+      if (kind && *kind == "video") embeddedKind = document::EmbeddedKind::Video;
+      else if (kind && (*kind == "rich-text" || *kind == "richtext")) {
+        embeddedKind = document::EmbeddedKind::RichText;
+      } else if (kind && *kind != "web") error = "unsupported embedded kind";
+      if (error.empty()) {
+        document::Node node;
+        node.id = "embedded-" + message.requestId;
+        node.layer = document::LayerClass::Embedded;
+        node.bounds = core::Rect{100.0F, 100.0F, 360.0F, 240.0F};
+        const auto source = stringField("source");
+        const auto title = stringField("title");
+        const std::string persistentSource = source.value_or(
+            embeddedKind == document::EmbeddedKind::RichText
+                ? "https://canvas.local/richtext.html"
+                : (embeddedKind == document::EmbeddedKind::Video
+                       ? "https://canvas.local/video.html"
+                       : "https://example.com/"));
+        node.payload = document::EmbeddedNode{embeddedKind, persistentSource,
+                                               title.value_or("Electron object")};
+        std::vector<HostedWebView> created;
+        const HRESULT surfaceResult = createEmbeddedSurface(node, created, false);
+        if (FAILED(surfaceResult)) {
+          error = "could not create embedded surface";
+        } else if (FAILED(setSurfaceVisible(*created.front().surface, true))) {
+          error = "could not show embedded surface; no node was created";
+        } else {
+          const document::Document previous = document_;
+          if (!document_.add(node)) {
+            error = "could not create embedded node";
+          } else {
+            try {
+              embeddedWebViews_.push_back(std::move(created.front()));
+            } catch (...) {
+              if (!document_.erase(node.id)) {
+                reportFatalFailure(
+                    E_UNEXPECTED, message.requestId,
+                    "create-embedded allocation rollback failed", connectionId);
+                error = "could not retain embedded surface; rollback failed "
+                        "and the application is closing";
+              } else {
+                error = "could not retain embedded surface; no node was created";
+              }
+            }
+            const HRESULT renderResult =
+                error.empty() ? renderIpcDocument() : S_OK;
+            if (FAILED(renderResult)) {
+              const document::NodeId id = node.id;
+              const bool removed = document_.erase(id);
+              embeddedWebViews_.pop_back();
+              const bool renderRestored = restorePreviousRender(
+                  previous, message.requestId,
+                  "create-embedded render rollback failed", connectionId);
+              if (!removed || !renderRestored) {
+                if (!removed) {
+                  reportFatalFailure(
+                      E_UNEXPECTED, message.requestId,
+                      "create-embedded document rollback failed", connectionId);
+                }
+                error = "could not render document; rollback failed and the "
+                        "application is closing";
+              } else {
+                error =
+                    "could not render document; embedded node was rolled back";
+              }
+            }
+            if (error.empty()) emitDocumentState = true;
+          }
+        }
+      }
+    } else if (message.type == "set-embedded-bounds") {
+      const auto id = stringField("id");
+      const auto x = message.payload.find("x");
+      const auto y = message.payload.find("y");
+      const auto width = message.payload.find("width");
+      const auto height = message.payload.find("height");
+      if (!id || x == message.payload.end() || y == message.payload.end() ||
+          width == message.payload.end() || height == message.payload.end() ||
+          !x->is_number() || !y->is_number() || !width->is_number() ||
+          !height->is_number()) {
+        error = "set-embedded-bounds requires id, x, y, width, and height";
+      } else {
+        const core::Rect bounds{x->get<float>(), y->get<float>(),
+                                width->get<float>(), height->get<float>()};
+        const document::Node* node = document_.find(*id);
+        if (!isValidEmbeddedBounds(bounds) || node == nullptr ||
+            node->layer != document::LayerClass::Embedded ||
+            !std::holds_alternative<document::EmbeddedNode>(node->payload)) {
+          error = "invalid embedded bounds or node id";
+        } else {
+          const core::Rect previousBounds = node->bounds;
+          document::Document candidate = document_;
+          WebView2Surface* surface = embeddedWebView(*id);
+          if (surface == nullptr) {
+            error = "embedded surface is unavailable";
+          } else if (!candidate.setBounds(*id, bounds)) {
+            error = "could not resize embedded node; bounds unchanged";
+          } else {
+            const HRESULT surfaceResult = setSurfaceBounds(*surface, bounds);
+            if (FAILED(surfaceResult)) {
+              const HRESULT rollbackResult =
+                  setSurfaceBounds(*surface, previousBounds);
+              if (FAILED(rollbackResult)) {
+                reportFatalFailure(
+                    rollbackResult, message.requestId,
+                    "set-embedded-bounds surface rollback failed", connectionId);
+                error = "could not resize embedded surface; rollback failed "
+                        "and the application is closing";
+              } else {
+                error = "could not resize embedded surface; bounds unchanged";
+              }
+            } else {
+              const HRESULT renderResult = renderDocument(candidate);
+              if (FAILED(renderResult)) {
+                const HRESULT surfaceRollback =
+                    setSurfaceBounds(*surface, previousBounds);
+                const bool renderRestored = restorePreviousRender(
+                    document_, message.requestId,
+                    "set-embedded-bounds render rollback failed", connectionId);
+                if (FAILED(surfaceRollback) || !renderRestored) {
+                  if (FAILED(surfaceRollback)) {
+                    reportFatalFailure(
+                        surfaceRollback, message.requestId,
+                        "set-embedded-bounds surface rollback failed",
+                        connectionId);
+                  }
+                  error = "could not render document; rollback failed and the "
+                          "application is closing";
+                } else {
+                  error = "could not render document; previous bounds restored";
+                }
+              } else {
+                document_ = std::move(candidate);
+                emitDocumentState = true;
+              }
+            }
+          }
+        }
+      }
+    } else if (message.type == "delete-node") {
+      const auto id = stringField("id");
+      const document::Node* node = id ? document_.find(*id) : nullptr;
+      if (node == nullptr) error = "unknown node id";
+      else {
+        document::Document candidate = document_;
+        if (!candidate.erase(*id)) {
+          error = "could not delete node";
+        } else {
+          const HRESULT renderResult = renderDocument(candidate);
+          if (FAILED(renderResult)) {
+            const bool renderRestored = restorePreviousRender(
+                document_, message.requestId,
+                "delete-node render rollback failed", connectionId);
+            error = renderRestored
+                        ? "could not render document; node was not deleted"
+                        : "could not render document; rollback failed and the "
+                          "application is closing";
+          } else {
+            document_ = std::move(candidate);
+            embeddedWebViews_.erase(
+                std::remove_if(
+                    embeddedWebViews_.begin(), embeddedWebViews_.end(),
+                    [this](const HostedWebView& view) {
+                      const document::Node* retained =
+                          document_.find(view.nodeId);
+                      return retained == nullptr ||
+                             retained->layer !=
+                                 document::LayerClass::Embedded ||
+                             !std::holds_alternative<document::EmbeddedNode>(
+                                 retained->payload);
+                    }),
+                embeddedWebViews_.end());
+            emitDocumentState = true;
+          }
+        }
+      }
+    } else {
+      accepted = false;
+      error = "IPC message is not a launcher command";
+    }
+  } catch (const nlohmann::json::exception&) {
+    error = "invalid command payload";
+  }
+
+  accepted = accepted && error.empty();
+  nlohmann::json response{{"accepted", accepted}};
+  if (!error.empty()) response["error"] = error;
+  sendIpc(ipc::Message{1, "response", message.requestId, std::move(response)},
+          connectionId);
+  if (accepted && emitDocumentState) {
+    sendIpc(ipc::Message{1, "document-state", "state-" + message.requestId,
+                         nlohmann::json{{"nodeCount", document_.nodes().size()}}},
+            connectionId);
+  }
 }
 
 }  // namespace canvas::windows

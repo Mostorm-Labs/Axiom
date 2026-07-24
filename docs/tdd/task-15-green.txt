@@ -1,0 +1,62 @@
+Task 15 green phase (updated 2026-07-24)
+
+Implemented a version 1 authenticated JSONL control protocol with strict
+launcher-command and native-event direction allowlists. The protocol rejects
+raw pointer, stroke, and video-frame messages; bounds inbound JSONL lines by
+bytes; bounds outbound JSON by byte, depth, and node budgets; enforces a
+256-UTF-8-byte request-ID limit; and requires an authenticated hello before a
+client session accepts commands.
+
+Added the Windows named-pipe server with a current-user/SYSTEM ACL, local-only
+single-instance pipe, overlapped cancellation, bounded read/write queues, and
+connection generations so a response from a disconnected client cannot cross
+into a replacement connection. The pipe thread only queues commands; Document,
+D3D, DComp, and WebView work is drained on the window UI thread.
+
+Wired native startup, authenticated readiness, synchronous HRESULT/render
+rollback transactions for create/open/set-bounds/delete commands, checked
+WebView2 setters, fatal shutdown, startup --open surface restoration, and
+bounded IPC queue draining.
+Added a locked Electron harness with context isolation, sandboxing, no renderer
+access to the session token, bounded framing/backpressure, reconnect attempts,
+and a three-second graceful native shutdown window.
+
+Real checks on this macOS host used Apple clang 17.0.0, C++17, RTTI disabled,
+and strict warnings treated as errors:
+
+  clang++ -std=c++17 -fno-rtti \
+      -Wall -Wextra -Wpedantic -Werror ... \
+      tests/unit/ipc_protocol_test.cpp src/ipc/protocol.cpp \
+      src/ipc/client_session.cpp
+
+Result: 15/15 IpcProtocol tests passed. Coverage includes authenticated hello,
+command/event direction separation, raw-pointer rejection, strict envelopes,
+the exact 256/257 UTF-8 byte request-ID boundary, 1 MiB framing boundaries,
+fragmented CRLF input, bounded outbound JSON, and excessive-depth rejection.
+
+Electron checks completed on the same macOS host:
+
+  cd tools/electron-host
+  npm ci
+  npm run build
+  node --check dist/main.js
+  node --check dist/preload.js
+  npm audit
+
+Result: dependency installation, strict TypeScript build, and both Node syntax
+checks passed. npm audit reported 0 vulnerabilities. git diff --check also
+passed.
+
+Not run or inferred from macOS: the MSVC/CMake Windows build; Windows CTest;
+canvas_named_pipe_server_test; Win32 NamedPipe execution; WebView2 execution;
+the Electron-to-native end-to-end process; disconnect/reconnect and graceful
+shutdown behavior; touch, Chinese IME, or video behavior; or touch-to-visible-
+ink p95 below 50 ms on the i5-1235U reference display. These remain explicit
+pending evidence until real Windows CI or target-hardware results are recorded.
+
+WebView controller creation and navigation completion are asynchronous
+admission after the synchronous transaction returns. An accepted command does
+not prove that its surface reached Ready or that navigation completed. Native
+`embedded-state` Ready/Failed completion events and rollback after an
+asynchronous controller/navigation failure are not implemented and are not
+claimed by these results.

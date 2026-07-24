@@ -154,6 +154,48 @@ TEST(WebView2Surface, RejectsOversizedNativeMessagesBeforeRetainingThem) {
   EXPECT_EQ(surface.close(), S_OK);
 }
 
+TEST(WebView2Surface,
+     CheckedSettersReturnCurrentResultWithoutClearingStickyFailure) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface surface(host, nullptr);
+
+  EXPECT_EQ(surface.state(),
+            canvas::windows::WebView2Surface::State::Created);
+  EXPECT_EQ(surface.setBoundsChecked(
+                canvas::core::Rect{0.0F, 0.0F, -1.0F, 10.0F}),
+            E_INVALIDARG);
+  EXPECT_EQ(surface.lastResult(), E_INVALIDARG);
+
+  EXPECT_EQ(surface.setBoundsChecked(
+                canvas::core::Rect{0.0F, 0.0F, 10.0F, 10.0F}),
+            S_OK);
+  EXPECT_EQ(surface.setVisibleChecked(false), S_OK);
+  EXPECT_EQ(surface.lastResult(), E_INVALIDARG);
+  EXPECT_EQ(surface.state(),
+            canvas::windows::WebView2Surface::State::Created);
+  EXPECT_EQ(surface.close(), S_OK);
+}
+
+TEST(WebView2Surface, CheckedSettersReportWrongThread) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface surface(host, nullptr);
+
+  HRESULT boundsResult = S_OK;
+  HRESULT visibleResult = S_OK;
+  std::thread wrongThread([&] {
+    boundsResult = surface.setBoundsChecked(
+        canvas::core::Rect{0.0F, 0.0F, 10.0F, 10.0F});
+    visibleResult = surface.setVisibleChecked(false);
+  });
+  wrongThread.join();
+
+  EXPECT_EQ(boundsResult, RPC_E_WRONG_THREAD);
+  EXPECT_EQ(visibleResult, RPC_E_WRONG_THREAD);
+  EXPECT_EQ(surface.state(),
+            canvas::windows::WebView2Surface::State::Created);
+  EXPECT_EQ(surface.close(), S_OK);
+}
+
 TEST(WebView2Surface, CloseRejectsTheWrongApartmentWithoutReleasingOwnership) {
   ScopedCom com;
   ASSERT_TRUE(SUCCEEDED(com.result()));
