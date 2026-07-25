@@ -36,15 +36,32 @@ WINDOWS-ONLY CONTRACT (wired into Windows Build)
   source preflight and fails archive validation, so cleanup is also exercised
   after staging and ZIP creation rather than only on early validation exits.
 
-LOCAL VALIDATION BOUNDARY
-  PowerShell (`pwsh`) is not installed in the current macOS environment, and
-  the Visual Studio/D3D12/WebView2 build cannot run on macOS. Therefore the
-  PowerShell behavioral contract and production Windows packaging remain for
-  the next windows-2022 GitHub Actions run. No tag was pushed, so actual
-  GitHub Release creation/update is also not exercised by this evidence.
+WINDOWS CI GREEN
+  Run: https://github.com/Mostorm-Labs/canvas/actions/runs/30140278423
+  Source commit: 4c10b894a403a2f7ed011d923be6a8b343857d17
+  Result: success in 3m 22s on windows-2022.
+
+  The run passed the native build, all 156 CTest entries, the focused
+  Composition integration tests, the Node workflow contract, the real
+  PowerShell packaging behavior contract, whitespace validation, production
+  portable packaging, and artifact upload.
+
+  Artifact: canvas-windows-x64-pr-1-f8d91fa58757
+  Download: https://github.com/Mostorm-Labs/canvas/actions/runs/30140278423/artifacts/8614245546
+  Size: 3.01 MB
+  GitHub artifact digest:
+    sha256:f79a6450f05c74384024133c6d55ae2569799e228b3c192d025c8a1ffb188e87
+
+  The artifact contains the versioned portable ZIP and its generated SHA-256
+  checksum. GitHub retains this pull-request artifact for 30 days.
+
+TAG-RELEASE VALIDATION BOUNDARY
+  No `v*` tag was pushed, so this pull-request run correctly skipped the
+  release job. Actual GitHub Release creation/update remains intentionally
+  unexercised until a release version is explicitly approved and tagged.
 
   `actionlint` is not installed locally. The Node contract uses narrow,
   indentation-aware job and step block extraction to verify ownership,
   ordering, `continue-on-error`, job-output/artifact pairing, and tag-only
-  release permission. GitHub Actions parsing on the next run remains the
-  authoritative workflow validation.
+  release permission. The successful GitHub Actions run above is the
+  authoritative parse and execution validation for the current workflow.
