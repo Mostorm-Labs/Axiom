@@ -50,6 +50,12 @@ class InitialLoadTracker final {
     }
   }
 
+  // A replacement Navigate() can synchronously complete the navigation it
+  // supersedes before WebView2 reports NavigationStarting for the replacement.
+  // Retire the old identity immediately before entering WebView2 so that the
+  // cancelled completion cannot terminate the one-shot initial load.
+  void retireActiveNavigation() noexcept { activeNavigationId_ = 0U; }
+
   bool completeSuccessForNavigation(std::uint64_t navigationId) noexcept {
     if (state_ != InitialLoadState::Pending || navigationId == 0U ||
         navigationId != activeNavigationId_) {

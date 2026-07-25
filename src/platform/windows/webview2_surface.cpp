@@ -342,6 +342,13 @@ struct WebView2Surface::Impl final
     // if its notification causes the owning WebView2Surface to be destroyed.
     const auto keepAlive = shared_from_this();
     (void)keepAlive;
+    // A replacement Navigate() may synchronously report the superseded
+    // navigation as failed before NavigationStarting supplies the new id.
+    // Validation and URI ownership have succeeded at this point, so retire
+    // only now: rejected or allocation-failed requests must leave the current
+    // navigation eligible to complete the initial load.
+    activeNavigationId = 0;
+    initialLoad.retireActiveNavigation();
     HRESULT hr = S_OK;
     try {
       hr = webView->Navigate(pendingNavigation->c_str());
@@ -697,10 +704,14 @@ struct WebView2Surface::Impl final
     if (FAILED(checkThread()) || state != State::Ready || args == nullptr) {
       return S_FALSE;
     }
+    // There is intentionally no active id while a replacement Navigate() is
+    // synchronously retiring its predecessor. Ignore completions in that gap
+    // before even consulting their result; they cannot belong to the new page.
+    if (activeNavigationId == 0) return S_OK;
     UINT64 navigationId = 0;
     HRESULT successResult = args->get_NavigationId(&navigationId);
     if (FAILED(successResult)) return failInitialNavigation(successResult);
-    if (activeNavigationId == 0 || navigationId != activeNavigationId) {
+    if (navigationId != activeNavigationId) {
       return S_OK;
     }
     BOOL succeeded = FALSE;
