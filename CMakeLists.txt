@@ -159,7 +159,8 @@ if(APPLE)
     find_library(CANVAS_QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
 
     add_library(canvas_macos_platform STATIC
-                src/platform/macos/metal_host.mm)
+                src/platform/macos/metal_host.mm
+                src/platform/macos/metal_view.mm)
     add_library(canvas::macos_platform ALIAS canvas_macos_platform)
     target_include_directories(canvas_macos_platform PUBLIC
                                ${PROJECT_SOURCE_DIR}/src)
@@ -167,12 +168,14 @@ if(APPLE)
                           ${CANVAS_APPKIT_FRAMEWORK}
                           ${CANVAS_METAL_FRAMEWORK}
                           ${CANVAS_QUARTZCORE_FRAMEWORK})
+    target_link_libraries(canvas_macos_platform PRIVATE
+                          canvas::core
+                          unofficial::skia::skia)
     target_compile_options(canvas_macos_platform PRIVATE -fobjc-arc)
     canvas_enable_warnings(canvas_macos_platform)
 
-    # This is only the native AppKit/Metal host. The next increment will bind
-    # the C++/Skia rendering core; no WebKit, network, Swift, or Electron work
-    # is part of this target.
+    # This target binds the shared C++/Skia renderer to CAMetalLayer. WebKit,
+    # network, input, and Electron control remain separate later increments.
     add_subdirectory(app/macos)
 endif()
 

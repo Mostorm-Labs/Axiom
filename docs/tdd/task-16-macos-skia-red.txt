@@ -1,0 +1,32 @@
+macOS Skia/Metal vertical slice RED phase (2026-07-26)
+
+The pure C++ Retina/layer-plan test and the no-GPU source contract were added
+before the production adapter. Both failed for the new capability, as expected.
+
+$ xcrun --sdk macosx clang++ -arch x86_64 -std=c++17 -Wall -Wextra \
+    -Wpedantic -fno-rtti -Isrc \
+    -I/Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest/include \
+    -fsyntax-only tests/unit/macos_skia_frame_plan_test.cpp
+tests/unit/macos_skia_frame_plan_test.cpp:1:10: fatal error:
+    'platform/macos/skia_frame_plan.h' file not found
+
+$ cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_skia_host_contract_test.cmake
+CMake Error at tests/contracts/macos_skia_host_contract_test.cmake:13 (message):
+  The Apple Skia dependency must explicitly enable Metal
+
+The first failure proves the Retina pixel-size and native paint-layer plan did
+not exist. The second proves the manifest had no Metal-enabled Skia build, so
+the existing CAMetalLayer clear pass could not use the shared Skia renderer.
+
+During implementation review, the expanded reentrancy contract also failed
+before detach ordering was changed:
+
+$ cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_metal_host_thread_contract_test.cmake
+CMake Error at tests/contracts/macos_metal_host_thread_contract_test.cmake:40
+  MetalHost must become logically detached before the AppKit layer callback
+  can re-enter
+
+This exposed that setLayer:nil could synchronously call back while the old
+attachment was still published by MetalHost.

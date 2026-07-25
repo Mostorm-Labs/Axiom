@@ -1,6 +1,11 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
+
+namespace canvas::document {
+class Document;
+}
 
 namespace canvas::macos {
 
@@ -23,10 +28,18 @@ class MetalHost {
 
   bool attachToView(void* nativeView);
   void detachFromView();
-  void resize(double widthInPoints, double heightInPoints,
-              double backingScale);
+  void resize(double widthInPoints, double heightInPoints, double backingScale);
+  // The host retains the immutable rendering view, while the owner may keep a
+  // mutable shared_ptr and update it on the AppKit main thread before calling
+  // invalidate(). This avoids copying the document on the pen-preview path.
+  void setDocument(std::shared_ptr<const document::Document> document);
   void invalidate();
+  // Reassert a pending frame at an AppKit lifecycle boundary even when the
+  // earlier setNeedsDisplay request happened before the view entered a window.
+  void reschedulePendingFrame();
   void drawIfNeeded();
+  std::uint64_t nativeDisplayRequestCount() const noexcept;
+  std::uint64_t committedFrameCount() const noexcept;
   bool isReady() const noexcept;
 
  private:

@@ -1,6 +1,6 @@
 add_executable(canvas_macos MACOSX_BUNDLE main.mm)
 target_include_directories(canvas_macos PRIVATE ${PROJECT_SOURCE_DIR}/src)
-target_link_libraries(canvas_macos PRIVATE canvas::macos_platform)
+target_link_libraries(canvas_macos PRIVATE canvas::macos_platform canvas::core)
 canvas_enable_warnings(canvas_macos)
 target_compile_options(canvas_macos PRIVATE -fobjc-arc)
 

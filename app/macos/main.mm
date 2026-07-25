@@ -1,59 +1,10 @@
 #import <AppKit/AppKit.h>
 
-#include "platform/macos/metal_host.h"
+#include "canvas/document/document.h"
+#include "platform/macos/metal_view.h"
 
 #include <memory>
-
-@interface CanvasMetalView : NSView
-@end
-
-@implementation CanvasMetalView {
-  std::unique_ptr<canvas::macos::MetalHost> metalHost_;
-}
-
-- (instancetype)initWithFrame:(NSRect)frame {
-  self = [super initWithFrame:frame];
-  if (self != nil) {
-    metalHost_ = std::make_unique<canvas::macos::MetalHost>();
-    if (!metalHost_->attachToView((__bridge void*)self)) return nil;
-    [self resizeDrawable];
-  }
-  return self;
-}
-
-- (void)dealloc {
-  metalHost_.reset();
-}
-
-- (void)setFrameSize:(NSSize)newSize {
-  [super setFrameSize:newSize];
-  [self resizeDrawable];
-}
-
-- (void)viewDidChangeBackingProperties {
-  [super viewDidChangeBackingProperties];
-  [self resizeDrawable];
-}
-
-- (void)viewDidMoveToWindow {
-  [super viewDidMoveToWindow];
-  [self resizeDrawable];
-}
-
-- (void)drawRect:(NSRect)dirtyRect {
-  (void)dirtyRect;
-  metalHost_->drawIfNeeded();
-}
-
-- (void)resizeDrawable {
-  if (!metalHost_) return;
-  NSScreen* screen = self.window.screen;
-  if (screen == nil) screen = NSScreen.mainScreen;
-  const CGFloat scale = screen != nil ? screen.backingScaleFactor : 1.0;
-  metalHost_->resize(self.bounds.size.width, self.bounds.size.height, scale);
-}
-
-@end
+#include <utility>
 
 @interface CanvasApplicationDelegate : NSObject <NSApplicationDelegate>
 @property(nonatomic, strong) NSWindow* window;
@@ -64,15 +15,32 @@
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
   (void)notification;
   const NSRect frame = NSMakeRect(0.0, 0.0, 1280.0, 720.0);
-  const NSWindowStyleMask style = NSWindowStyleMaskTitled |
-      NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable |
-      NSWindowStyleMaskResizable;
+  const NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                                  NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable;
   self.window = [[NSWindow alloc] initWithContentRect:frame
-                                             styleMask:style
-                                               backing:NSBackingStoreBuffered
-                                                 defer:NO];
+                                            styleMask:style
+                                              backing:NSBackingStoreBuffered
+                                                defer:NO];
   self.window.title = @"Mostorm Canvas";
-  self.window.contentView = [[CanvasMetalView alloc] initWithFrame:frame];
+  auto document = std::make_shared<canvas::document::Document>();
+  canvas::document::StrokeNode stroke;
+  stroke.points = {{{120.0F, 180.0F}, 0.6F, 1},
+                   {{280.0F, 110.0F}, 0.8F, 2},
+                   {{460.0F, 240.0F}, 1.0F, 3},
+                   {{680.0F, 150.0F}, 0.7F, 4}};
+  stroke.width = 8.0F;
+  stroke.colorArgb = 0xFF2563EB;
+  if (!document->add({"macos-skia-sample",
+                      canvas::document::LayerClass::Annotation,
+                      {116.0F, 106.0F, 568.0F, 138.0F},
+                      {},
+                      std::move(stroke)})) {
+    [NSApp terminate:nil];
+    return;
+  }
+  CanvasMetalView* view = [[CanvasMetalView alloc] initWithFrame:frame];
+  [view setCanvasDocument:document];
+  self.window.contentView = view;
   [self.window center];
   [self.window makeKeyAndOrderFront:nil];
   [NSApp activateIgnoringOtherApps:YES];

@@ -1,0 +1,52 @@
+macOS AppKit frame scheduling GREEN phase (2026-07-26)
+
+CanvasMetalView now uses the supported layer callbacks instead of drawRect.
+It advertises wantsUpdateLayer/updateLayer for AppKit-managed updates and, for
+the actual custom layer-hosting CAMetalLayer path, acts as the layer's weak
+CALayerDelegate and calls MetalHost::drawIfNeeded from displayLayer. A native
+frame request marks both the NSView and CAMetalLayer dirty; FrameInvalidation
+still coalesces callbacks, so there is no display link, timer, or busy loop.
+Detach clears the weak layer delegate before removing the native layer.
+
+viewDidMoveToWindow resizes and then calls reschedulePendingFrame. That method
+checks real pending work but deliberately ignores the old displayScheduled
+coalescing result and reasserts the native display request. This covers a
+Document invalidation issued before the view had a window.
+
+Behavioral integration check:
+
+  MTL_DEBUG_LAYER=1 ctest --test-dir out/build/macos-arm64 \
+    -R MacosAppKitFrameScheduling --output-on-failure
+
+The test uses the production CanvasMetalView and MetalHost in a real AppKit
+window. It binds a Document before window attachment, clears the original
+native dirty signals while leaving the host frame pending, verifies that
+viewDidMoveToWindow issues a new native display request, drives the real
+CALayer callback, and requires committedFrameCount > 0. Result: 1/1 passed;
+Metal logged "Metal API Validation Enabled" and emitted no validation error.
+
+Full regression:
+
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+    ctest --preset macos-arm64-release
+
+Result: 119/119 passed with 0 failures, including the runtime AppKit/Metal
+scheduling test and both no-GPU macOS contracts.
+
+Actual application first-frame check:
+
+  MTL_DEBUG_LAYER=1 \
+    out/build/macos-arm64/app/macos/canvas_macos.app/Contents/MacOS/canvas_macos
+  screencapture -x -l 55693 /tmp/canvas-macos-first-frame.png
+
+The window-only 2784x1728 Retina capture was visually inspected and shows the
+white Skia surface plus the complete blue four-point sample stroke. A pixel
+classification found 3,664,160 near-white pixels and 19,935 saturated blue
+pixels. SHA-256:
+
+  84431004a55ad42dfcd7eccb7a25ad9670b771cb34aa34fc768dd21002bdcb5d
+
+The process log contained the Metal Validation enabled line and no validation
+diagnostic. This establishes the real initial visual frame on this Mac. It
+does not establish touch latency; i5-1235U touch-to-visible-ink p95 below 50 ms
+remains a target-hardware check.
