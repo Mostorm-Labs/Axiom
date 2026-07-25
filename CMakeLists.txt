@@ -6,6 +6,10 @@ endif()
 
 project(canvas VERSION 0.1.0 LANGUAGES CXX)
 
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 if(WIN32)
     # Keep the Win32 min/max macros out of every first-party translation unit.
     # This directory-level policy also reaches app/windows and tests, including
@@ -147,6 +151,29 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:canvas_windows>/web"
         COMMENT "Synchronizing Canvas embedded web assets for this configuration"
         VERBATIM)
+endif()
+
+if(APPLE)
+    find_library(CANVAS_APPKIT_FRAMEWORK AppKit REQUIRED)
+    find_library(CANVAS_METAL_FRAMEWORK Metal REQUIRED)
+    find_library(CANVAS_QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+
+    add_library(canvas_macos_platform STATIC
+                src/platform/macos/metal_host.mm)
+    add_library(canvas::macos_platform ALIAS canvas_macos_platform)
+    target_include_directories(canvas_macos_platform PUBLIC
+                               ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_platform PUBLIC
+                          ${CANVAS_APPKIT_FRAMEWORK}
+                          ${CANVAS_METAL_FRAMEWORK}
+                          ${CANVAS_QUARTZCORE_FRAMEWORK})
+    target_compile_options(canvas_macos_platform PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_platform)
+
+    # This is only the native AppKit/Metal host. The next increment will bind
+    # the C++/Skia rendering core; no WebKit, network, Swift, or Electron work
+    # is part of this target.
+    add_subdirectory(app/macos)
 endif()
 
 if(BUILD_TESTING)

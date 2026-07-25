@@ -85,6 +85,23 @@ target_link_libraries(canvas_webview2_initial_load_seam_test
 canvas_enable_warnings(canvas_webview2_initial_load_seam_test)
 gtest_discover_tests(canvas_webview2_initial_load_seam_test)
 
+add_executable(canvas_frame_invalidation_test
+               unit/frame_invalidation_test.cpp)
+target_include_directories(canvas_frame_invalidation_test
+                           PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(canvas_frame_invalidation_test PRIVATE GTest::gtest_main)
+canvas_enable_warnings(canvas_frame_invalidation_test)
+gtest_discover_tests(canvas_frame_invalidation_test)
+
+if(APPLE)
+    # This source-level contract runs without a GPU. The runtime ownership
+    # violation deliberately terminates, so it is asserted structurally here.
+    add_test(NAME canvas_macos_metal_host_thread_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_metal_host_thread_contract_test.cmake)
+endif()
+
 add_executable(canvas_embedded_transform_test unit/embedded_transform_test.cpp)
 target_link_libraries(canvas_embedded_transform_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_embedded_transform_test)

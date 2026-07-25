@@ -1,0 +1,32 @@
+macOS frame-invalidations review GREEN phase (2026-07-26)
+
+$ cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_metal_host_thread_contract_test.cmake
+$ xcrun --sdk macosx clang++ -arch x86_64 -std=c++17 -Wall -Wextra \
+    -Wpedantic -fno-rtti -Isrc \
+    -I/Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest/include \
+    -fsyntax-only tests/unit/frame_invalidation_test.cpp
+$ xcrun --sdk macosx clang++ -arch x86_64 -std=c++17 -Wall -Wextra \
+    -Wpedantic -Isrc \
+    -fobjc-arc -fsyntax-only src/platform/macos/metal_host.mm
+$ xcrun --sdk macosx clang++ -arch x86_64 -std=c++17 -Wall -Wextra \
+    -Wpedantic -Isrc \
+    -fobjc-arc -fsyntax-only app/macos/main.mm
+$ xcrun --sdk macosx clang++ -arch x86_64 -std=c++17 -fno-rtti -Isrc \
+    -I/Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest \
+    -I/Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest/include \
+    tests/unit/frame_invalidation_test.cpp \
+    /Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest/src/gtest-all.cc \
+    /Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest/src/gtest_main.cc \
+    -pthread -o /tmp/canvas_frame_invalidation_test_x86_64
+$ /tmp/canvas_frame_invalidation_test_x86_64
+[==========] Running 8 tests from 1 test case.
+[  PASSED  ] 8 tests.
+$ git diff --check
+
+The frame test is a pure C++ state-machine test and the owner-thread/reentrant
+ordering check is source-level, so both run without a Metal-capable GPU or a
+vcpkg configuration. The test covers the reentrant begin guard, drawable and
+encoding failure recovery, an invalidation during rendering, and reset while a
+claim is outstanding. Every command succeeded. No AppKit GUI or Metal runtime
+was launched or claimed as verified.
