@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <wrl/client.h>
 
+#include <atomic>
 #include <chrono>
 #include <iomanip>
 #include <optional>
@@ -60,19 +61,50 @@ class ScopedTestWindow final {
   HWND window_ = nullptr;
 };
 
+class ScopedSurfaceClose final {
+ public:
+  explicit ScopedSurfaceClose(canvas::windows::WebView2Surface& surface)
+      : surface_(surface) {}
+  ~ScopedSurfaceClose() { (void)surface_.close(); }
+
+  ScopedSurfaceClose(const ScopedSurfaceClose&) = delete;
+  ScopedSurfaceClose& operator=(const ScopedSurfaceClose&) = delete;
+
+ private:
+  canvas::windows::WebView2Surface& surface_;
+};
+
 template <typename Predicate>
 bool pumpUntil(Predicate predicate, std::chrono::milliseconds timeout) {
   const auto deadline = std::chrono::steady_clock::now() + timeout;
-  while (std::chrono::steady_clock::now() < deadline) {
+  for (;;) {
     MSG message{};
     while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE)) {
       TranslateMessage(&message);
       DispatchMessageW(&message);
     }
     if (predicate()) return true;
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline) return predicate();
+    auto remaining =
+        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+    if (remaining.count() == 0) remaining = std::chrono::milliseconds(1);
+
+    // WebView2 completes environment/controller creation on the creating STA.
+    // Wait alertably for either that continuation or new window input instead
+    // of polling with a non-alertable sleep between PeekMessage passes.
+    const DWORD result = MsgWaitForMultipleObjectsEx(
+        0, nullptr, static_cast<DWORD>(remaining.count()), QS_ALLINPUT,
+        MWMO_INPUTAVAILABLE | MWMO_ALERTABLE);
+    if (result == WAIT_FAILED) return predicate();
   }
-  return predicate();
+}
+
+std::atomic_bool gAlertableContinuationRan{false};
+
+void CALLBACK markAlertableContinuation(ULONG_PTR) {
+  gAlertableContinuationRan.store(true, std::memory_order_relaxed);
 }
 
 bool hasMessage(const canvas::windows::WebView2Surface& surface,
@@ -81,6 +113,18 @@ bool hasMessage(const canvas::windows::WebView2Surface& surface,
     if (captured == message) return true;
   }
   return false;
+}
+
+TEST(WebView2SurfaceTestPump, ServicesAlertableStaContinuations) {
+  gAlertableContinuationRan.store(false, std::memory_order_relaxed);
+  ASSERT_NE(QueueUserAPC(markAlertableContinuation, GetCurrentThread(), 0),
+            0U);
+
+  EXPECT_TRUE(pumpUntil(
+      [] {
+        return gAlertableContinuationRan.load(std::memory_order_relaxed);
+      },
+      std::chrono::milliseconds(100)));
 }
 
 TEST(WebView2Surface, ChildVisualRequiresAnInitializedHostAndValidSlot) {
@@ -234,6 +278,7 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   testOptions.allowTestDataUrls = true;
   canvas::windows::WebView2Surface surface(host, testWindow.get(),
                                             std::move(testOptions));
+  ScopedSurfaceClose closeSurface(surface);
   surface.setBounds(canvas::core::Rect{0.0F, 0.0F, 640.0F, 480.0F});
   ASSERT_TRUE(SUCCEEDED(surface.initialize()));
   EXPECT_EQ(surface.navigate(L"http://canvas.local/"), E_ACCESSDENIED);
@@ -278,15 +323,34 @@ TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {
   constexpr std::wstring_view kQueuedAHostMessage =
       LR"json({"type":"host-message","value":"{\"type\":\"queued-a\"}"})json";
 
+  // Environment/controller startup can include a cold WebView2 Runtime launch
+  // on CI. Give that asynchronous phase its own event-driven deadline, while
+  // still surfacing a real Failed state and HRESULT immediately.
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.state() !=
+               canvas::windows::WebView2Surface::State::Initializing;
+      },
+      std::chrono::seconds(30)))
+      << "WebView2 initialization timed out with HRESULT 0x" << std::hex
+      << static_cast<unsigned long>(surface.lastResult());
+  ASSERT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready)
+      << "WebView2 failed with HRESULT 0x" << std::hex
+      << static_cast<unsigned long>(surface.lastResult());
+
   ASSERT_TRUE(pumpUntil(
       [&] {
         return surface.state() ==
-                   canvas::windows::WebView2Surface::State::Ready &&
+                   canvas::windows::WebView2Surface::State::Failed ||
                hasMessage(surface, LR"({"type":"ready"})");
       },
       std::chrono::seconds(5)))
-      << "WebView2 failed with HRESULT 0x" << std::hex
+      << "WebView2 page readiness timed out with HRESULT 0x" << std::hex
       << static_cast<unsigned long>(surface.lastResult());
+  ASSERT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready)
+      << "WebView2 navigation failed with HRESULT 0x" << std::hex
+      << static_cast<unsigned long>(surface.lastResult());
+  ASSERT_TRUE(hasMessage(surface, LR"({"type":"ready"})"));
   EXPECT_TRUE(pumpUntil(
       [&] {
         return hasMessage(surface, kQueuedBHostMessage) &&
