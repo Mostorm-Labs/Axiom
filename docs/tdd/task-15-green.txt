@@ -1,4 +1,4 @@
-Task 15 green phase (updated 2026-07-24)
+Task 15 green phase (updated 2026-07-25)
 
 Implemented a version 1 authenticated JSONL control protocol with strict
 launcher-command and native-event direction allowlists. The protocol rejects
@@ -47,12 +47,18 @@ Result: dependency installation, strict TypeScript build, and both Node syntax
 checks passed. npm audit reported 0 vulnerabilities. git diff --check also
 passed.
 
-Not run or inferred from macOS: the MSVC/CMake Windows build; Windows CTest;
-canvas_named_pipe_server_test; Win32 NamedPipe execution; WebView2 execution;
-the Electron-to-native end-to-end process; disconnect/reconnect and graceful
-shutdown behavior; touch, Chinese IME, or video behavior; or touch-to-visible-
-ink p95 below 50 ms on the i5-1235U reference display. These remain explicit
-pending evidence until real Windows CI or target-hardware results are recorded.
+Windows GitHub Actions evidence for commit 72aa273 is retained in run
+https://github.com/Mostorm-Labs/canvas/actions/runs/30135159635 and build job
+https://github.com/Mostorm-Labs/canvas/actions/runs/30135159635/job/89617432607.
+The production build, full CTest suite (155/155), dedicated Composition
+integration tests (9/9), and whitespace check all passed.
+
+Still not established by this headless CI: the Electron-to-native GUI E2E path,
+including process lifecycle, runtime disconnect/reconnect, and graceful
+shutdown; WebView2 asynchronous Ready/Failed completion; touch routing, Chinese
+IME, approved video playback, or layer ordering; and touch-to-visible-ink p95
+below 50 ms on the i5-1235U touch display. These remain explicit pending
+runtime or target-hardware evidence.
 
 WebView controller creation and navigation completion are asynchronous
 admission after the synchronous transaction returns. An accepted command does

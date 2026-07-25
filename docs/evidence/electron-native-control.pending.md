@@ -1,9 +1,10 @@
 # Electron/native control Windows evidence pending
 
 Task 15's platform-neutral protocol and Electron TypeScript checks pass on the
-macOS authoring host. This file is a Windows verification procedure, not a
-record of results. Do not mark any item complete without retaining the real
-Windows logs or hardware evidence.
+macOS authoring host. This file records the automated Windows CI result and the
+remaining Windows runtime and target-hardware verification procedure. Do not
+mark any manual item complete without retaining the real Windows logs or
+hardware evidence.
 
 ## Build and native tests
 
@@ -27,6 +28,19 @@ Confirm both targeted filters discover at least one test. Preserve the MSVC
 configure/build output and full CTest log. The named-pipe test must demonstrate
 that reconnecting creates a new connection generation and that a stale response
 cannot be delivered to the new client.
+
+### Recorded Windows CI result
+
+[Windows Build run 30135159635](https://github.com/Mostorm-Labs/canvas/actions/runs/30135159635)
+([build job 89617432607](https://github.com/Mostorm-Labs/canvas/actions/runs/30135159635/job/89617432607))
+completed successfully for commit `72aa273`. The job passed the production
+build, full CTest suite (155/155), dedicated Composition integration tests
+(9/9), and whitespace check.
+
+This automated result does not establish the Electron/native GUI E2E path,
+WebView2 asynchronous Ready/Failed completion, touch, Chinese IME, video or
+layer-ordering behavior, or touch-to-visible-ink latency. Those checks remain
+pending below.
 
 ## Electron-to-native process and command smoke test
 
@@ -123,6 +137,7 @@ repeat at least 30 strokes across the center and edges, and report p50/p95/p99.
 The p95 gate is below 50 ms. API timestamps cannot replace this measurement
 because they exclude panel scan-out and display latency.
 
-All sections above remain pending on this macOS host. Windows CI may supply the
-build and automated-test results; E2E, touch/IME/video, and latency claims still
-require the stated Windows runtime or target-hardware evidence.
+Windows CI has supplied the build and automated-test results recorded above.
+Electron/native GUI E2E, WebView2 asynchronous Ready/Failed completion,
+touch/IME/video/layer-ordering behavior, and latency claims remain pending and
+still require the stated Windows runtime or target-hardware evidence.
