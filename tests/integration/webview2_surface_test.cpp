@@ -10,11 +10,13 @@
 #include <atomic>
 #include <chrono>
 #include <iomanip>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -260,6 +262,197 @@ TEST(WebView2Surface, CloseRejectsTheWrongApartmentWithoutReleasingOwnership) {
             canvas::windows::WebView2Surface::State::Created);
   EXPECT_EQ(surface.close(), S_OK);
   EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Closed);
+}
+
+TEST(WebView2Surface, ControllerReadyPrecedesAnyInitialNavigation) {
+  ScopedCom com;
+  ASSERT_TRUE(SUCCEEDED(com.result()));
+  ScopedTestWindow testWindow;
+  ASSERT_TRUE(testWindow.registered());
+  canvas::windows::DCompHost host;
+  ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
+  canvas::windows::WebView2Surface surface(host, testWindow.get());
+  ScopedSurfaceClose closeSurface(surface);
+
+  ASSERT_EQ(surface.initialize(), S_OK);
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.state() !=
+               canvas::windows::WebView2Surface::State::Initializing;
+      },
+      std::chrono::seconds(30)));
+  ASSERT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready);
+  EXPECT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::NotRequested);
+}
+
+TEST(WebView2Surface, InitialDataNavigationCompletesReadyExactlyOnce) {
+  ScopedCom com;
+  ASSERT_TRUE(SUCCEEDED(com.result()));
+  ScopedTestWindow testWindow;
+  ASSERT_TRUE(testWindow.registered());
+  canvas::windows::DCompHost host;
+  ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
+  canvas::windows::WebView2Surface::Options options;
+  options.allowTestDataUrls = true;
+  canvas::windows::WebView2Surface surface(host, testWindow.get(), options);
+  ScopedSurfaceClose closeSurface(surface);
+
+  std::vector<canvas::windows::WebView2Surface::InitialLoadCompletion>
+      completions;
+  ASSERT_EQ(surface.setInitialLoadCompletionHandler(
+                [&completions](auto completion) {
+                  completions.push_back(completion);
+                }),
+            S_OK);
+  ASSERT_EQ(surface.initialize(), S_OK);
+  ASSERT_EQ(surface.navigate(L"data:text/html,%3C!doctype%20html%3Eok"),
+            S_OK);
+  EXPECT_EQ(surface.setInitialLoadCompletionHandler([](auto) {}),
+            E_UNEXPECTED);
+  ASSERT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Pending);
+  ASSERT_EQ(surface.postMessage(LR"({\"type\":\"initial\"})"), S_OK);
+
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.initialLoadState() !=
+               canvas::windows::WebView2Surface::InitialLoadState::Pending;
+      },
+      std::chrono::seconds(30)));
+  EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready);
+  EXPECT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Ready);
+  ASSERT_EQ(completions.size(), 1U);
+  EXPECT_EQ(completions.front().state,
+            canvas::windows::WebView2Surface::InitialLoadState::Ready);
+  EXPECT_EQ(completions.front().result, S_OK);
+}
+
+TEST(WebView2Surface, InitialLoadTracksTheSupersedingNavigationOnly) {
+  ScopedCom com;
+  ASSERT_TRUE(SUCCEEDED(com.result()));
+  ScopedTestWindow testWindow;
+  ASSERT_TRUE(testWindow.registered());
+  canvas::windows::DCompHost host;
+  ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
+  canvas::windows::WebView2Surface::Options options;
+  options.allowTestDataUrls = true;
+  canvas::windows::WebView2Surface surface(host, testWindow.get(), options);
+  ScopedSurfaceClose closeSurface(surface);
+
+  int completionCalls = 0;
+  ASSERT_EQ(surface.setInitialLoadCompletionHandler(
+                [&completionCalls](auto completion) {
+                  if (completion.state ==
+                      canvas::windows::WebView2Surface::InitialLoadState::Ready) {
+                    ++completionCalls;
+                  }
+                }),
+            S_OK);
+  ASSERT_EQ(surface.initialize(), S_OK);
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.state() !=
+               canvas::windows::WebView2Surface::State::Initializing;
+      },
+      std::chrono::seconds(30)));
+  ASSERT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready);
+  ASSERT_EQ(surface.navigate(L"data:text/html,first"), S_OK);
+  ASSERT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Pending);
+  ASSERT_EQ(surface.navigate(L"data:text/html,second"), S_OK);
+
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.initialLoadState() !=
+               canvas::windows::WebView2Surface::InitialLoadState::Pending;
+      },
+      std::chrono::seconds(30)));
+  EXPECT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Ready);
+  EXPECT_EQ(completionCalls, 1);
+}
+
+TEST(WebView2Surface, CloseWhileInitialLoadIsPendingDoesNotNotify) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface::Options options;
+  options.allowTestDataUrls = true;
+  canvas::windows::WebView2Surface surface(host, nullptr, options);
+  int completionCalls = 0;
+  ASSERT_EQ(surface.setInitialLoadCompletionHandler(
+                [&completionCalls](auto) { ++completionCalls; }),
+            S_OK);
+  ASSERT_EQ(surface.navigate(L"data:text/html,pending"), S_OK);
+  ASSERT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Pending);
+  EXPECT_EQ(surface.close(), S_OK);
+  EXPECT_EQ(completionCalls, 0);
+  EXPECT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Pending);
+}
+
+TEST(WebView2Surface, HandlerMustBeInstalledBeforeTheFirstNavigateRequest) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface surface(host, nullptr);
+
+  EXPECT_EQ(surface.navigate(L"file:///C:/Windows/win.ini"), E_ACCESSDENIED);
+  EXPECT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::NotRequested);
+  EXPECT_EQ(surface.setInitialLoadCompletionHandler([](auto) {}),
+            E_UNEXPECTED);
+  EXPECT_EQ(surface.close(), S_OK);
+}
+
+TEST(WebView2Surface,
+     SynchronousInitialFailureHandlerMayDestroyTheOwningSurface) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface::Options options;
+  options.allowTestDataUrls = true;
+  auto surface = std::make_unique<canvas::windows::WebView2Surface>(
+      host, nullptr, options);
+  auto* rawSurface = surface.get();
+  using InitialLoadState =
+      canvas::windows::WebView2Surface::InitialLoadState;
+  int completionCalls = 0;
+  ASSERT_EQ(rawSurface->setInitialLoadCompletionHandler(
+                [&surface, &completionCalls](auto completion) {
+                  ++completionCalls;
+                  EXPECT_EQ(completion.state, InitialLoadState::Failed);
+                  EXPECT_EQ(completion.result, E_INVALIDARG);
+                  surface.reset();
+                }),
+            S_OK);
+  ASSERT_EQ(rawSurface->navigate(L"data:text/html,pending"), S_OK);
+
+  EXPECT_EQ(rawSurface->initialize(), E_INVALIDARG);
+  EXPECT_EQ(completionCalls, 1);
+  EXPECT_EQ(surface.get(), nullptr);
+}
+
+TEST(WebView2Surface, InitialLoadFailureAlsoPreservesSurfaceFailedState) {
+  canvas::windows::DCompHost host;
+  canvas::windows::WebView2Surface::Options options;
+  options.allowTestDataUrls = true;
+  canvas::windows::WebView2Surface surface(host, nullptr, options);
+  std::vector<canvas::windows::WebView2Surface::InitialLoadCompletion>
+      completions;
+  ASSERT_EQ(surface.setInitialLoadCompletionHandler(
+                [&completions](auto completion) {
+                  completions.push_back(completion);
+                }),
+            S_OK);
+  ASSERT_EQ(surface.navigate(L"data:text/html,pending"), S_OK);
+
+  EXPECT_EQ(surface.initialize(), E_INVALIDARG);
+  EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Failed);
+  EXPECT_EQ(surface.initialLoadState(),
+            canvas::windows::WebView2Surface::InitialLoadState::Failed);
+  ASSERT_EQ(completions.size(), 1U);
+  EXPECT_EQ(completions.front().state,
+            canvas::windows::WebView2Surface::InitialLoadState::Failed);
+  EXPECT_EQ(completions.front().result, E_INVALIDARG);
+  EXPECT_EQ(surface.close(), S_OK);
 }
 
 TEST(WebView2Surface, HostsContentBelowInkAndGatesSyntheticClicksByMode) {

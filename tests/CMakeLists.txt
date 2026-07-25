@@ -6,6 +6,11 @@ add_test(NAME canvas_webview2_restore_script_contract
                  -DRESTORE_SCRIPT=${CMAKE_SOURCE_DIR}/scripts/Restore-WebView2.ps1
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/restore_webview2_contract_test.cmake)
 
+add_test(NAME canvas_webview2_initial_load_fail_source_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DSURFACE_SOURCE=${CMAKE_SOURCE_DIR}/src/platform/windows/webview2_surface.cpp
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/webview2_initial_load_fail_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)
@@ -67,6 +72,15 @@ target_compile_definitions(canvas_embedded_load_tracker_test
                            PRIVATE CANVAS_EMBEDDED_LOAD_TRACKER_TEST_SEAM=1)
 canvas_enable_warnings(canvas_embedded_load_tracker_test)
 gtest_discover_tests(canvas_embedded_load_tracker_test)
+
+add_executable(canvas_webview2_initial_load_seam_test
+               unit/webview2_initial_load_seam_test.cpp)
+target_include_directories(canvas_webview2_initial_load_seam_test
+                           PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(canvas_webview2_initial_load_seam_test
+                      PRIVATE GTest::gtest_main)
+canvas_enable_warnings(canvas_webview2_initial_load_seam_test)
+gtest_discover_tests(canvas_webview2_initial_load_seam_test)
 
 add_executable(canvas_embedded_transform_test unit/embedded_transform_test.cpp)
 target_link_libraries(canvas_embedded_transform_test PRIVATE canvas::core GTest::gtest_main)

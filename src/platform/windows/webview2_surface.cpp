@@ -2,6 +2,7 @@
 
 #include "platform/windows/dcomp_host.h"
 #include "platform/windows/webview2_close_seam.h"
+#include "platform/windows/webview2_initial_load_seam.h"
 #include "platform/windows/webview2_message_log.h"
 #include "platform/windows/webview2_virtual_host_path.h"
 
@@ -317,6 +318,7 @@ struct WebView2Surface::Impl final
   HRESULT navigate(std::wstring_view requestedUri) {
     const HRESULT threadResult = checkThread();
     if (FAILED(threadResult)) return threadResult;
+    initialLoad.noteNavigationRequest();
     if (requestedUri.size() > detail::kWebView2MaxNavigationCodeUnits) {
       return E_INVALIDARG;
     }
@@ -332,18 +334,43 @@ struct WebView2Surface::Impl final
     } catch (...) {
       return remember(E_OUTOFMEMORY);
     }
+    (void)initialLoad.request();
     pendingHostMessages.clear();
     navigationComplete = false;
     if (!webView) return S_OK;
+    // Navigate may synchronously raise a terminal event. Keep the PImpl alive
+    // if its notification causes the owning WebView2Surface to be destroyed.
+    const auto keepAlive = shared_from_this();
+    (void)keepAlive;
     HRESULT hr = S_OK;
     try {
       hr = webView->Navigate(pendingNavigation->c_str());
     } catch (...) {
-      return fail(E_OUTOFMEMORY);
+      return failInitialNavigation(E_OUTOFMEMORY);
     }
-    if (FAILED(hr)) return fail(hr);
+    if (FAILED(hr)) return failInitialNavigation(hr);
     pendingNavigation.reset();
     return S_OK;
+  }
+
+  HRESULT setInitialLoadCompletionHandler(
+      InitialLoadCompletionHandler handler) {
+    const HRESULT threadResult = checkThread();
+    if (FAILED(threadResult)) return threadResult;
+    if (state == State::Closed) return RO_E_CLOSED;
+    if (!handler) return E_INVALIDARG;
+
+    try {
+      auto bridge = [handler = std::move(handler)](
+                        detail::InitialLoadCompletion completion) mutable {
+        handler({toPublicInitialLoadState(completion.state),
+                 static_cast<HRESULT>(completion.result)});
+      };
+      return initialLoad.setCompletionHandler(std::move(bridge)) ? S_OK
+                                                                  : E_UNEXPECTED;
+    } catch (...) {
+      return E_OUTOFMEMORY;
+    }
   }
 
   HRESULT postMessage(std::wstring_view message) {
@@ -412,6 +439,7 @@ struct WebView2Surface::Impl final
     // Every operation is attempted even after a failure. Local ownership is
     // then released unconditionally so an explicit close cannot leave a
     // half-closed apartment-bound object behind.
+    initialLoad.cancel();
     closeResult = detail::runWebView2CloseOperations(*this);
     releaseOwnership();
     state = State::Closed;
@@ -659,7 +687,7 @@ struct WebView2Surface::Impl final
       const std::wstring uri = std::move(*pendingNavigation);
       pendingNavigation.reset();
       hr = webView->Navigate(uri.c_str());
-      if (FAILED(hr)) return fail(hr);
+      if (FAILED(hr)) return failInitialNavigation(hr);
     }
     return S_OK;
   }
@@ -671,21 +699,22 @@ struct WebView2Surface::Impl final
     }
     UINT64 navigationId = 0;
     HRESULT successResult = args->get_NavigationId(&navigationId);
-    if (FAILED(successResult)) return fail(successResult);
+    if (FAILED(successResult)) return failInitialNavigation(successResult);
     if (activeNavigationId == 0 || navigationId != activeNavigationId) {
       return S_OK;
     }
     BOOL succeeded = FALSE;
     successResult = args->get_IsSuccess(&succeeded);
-    if (FAILED(successResult)) return fail(successResult);
-    if (succeeded == FALSE) return fail(E_FAIL);
+    if (FAILED(successResult)) return failInitialNavigation(successResult);
+    if (succeeded == FALSE) return failInitialNavigation(E_FAIL);
 
     navigationComplete = true;
     for (const auto& message : pendingHostMessages.values()) {
       const HRESULT result = webView->PostWebMessageAsString(message.c_str());
-      if (FAILED(result)) return fail(result);
+      if (FAILED(result)) return failInitialNavigation(result);
     }
     pendingHostMessages.clear();
+    (void)initialLoad.completeSuccessForNavigation(navigationId);
     return S_OK;
   }
 
@@ -760,15 +789,32 @@ struct WebView2Surface::Impl final
           if (!self || args == nullptr) return S_OK;
           LPWSTR rawUri = nullptr;
           const HRESULT uriResult = args->get_Uri(&rawUri);
-          const bool allowed =
-              SUCCEEDED(uriResult) && rawUri != nullptr &&
-              isAllowedNavigationForOptions(rawUri, self->options);
-          CoTaskMemFree(rawUri);
-          if (!allowed) return args->put_Cancel(TRUE);
+          if (FAILED(uriResult) || rawUri == nullptr) {
+            CoTaskMemFree(rawUri);
+            const HRESULT failure = FAILED(uriResult) ? uriResult : E_POINTER;
+            (void)self->failInitialNavigation(failure);
+            return failure;
+          }
           UINT64 navigationId = 0;
           const HRESULT idResult = args->get_NavigationId(&navigationId);
-          if (FAILED(idResult)) return idResult;
+          if (FAILED(idResult)) {
+            CoTaskMemFree(rawUri);
+            (void)self->failInitialNavigation(idResult);
+            return idResult;
+          }
+          const bool allowed =
+              isAllowedNavigationForOptions(rawUri, self->options);
+          CoTaskMemFree(rawUri);
+          if (!allowed) {
+            const HRESULT cancelResult = args->put_Cancel(TRUE);
+            if (self->initialLoad.activeNavigationId() == navigationId) {
+              (void)self->failInitialNavigation(
+                  FAILED(cancelResult) ? cancelResult : E_ACCESSDENIED);
+            }
+            return cancelResult;
+          }
           self->activeNavigationId = navigationId;
+          self->initialLoad.acceptNavigation(navigationId);
           self->navigationComplete = false;
           return S_OK;
         });
@@ -867,9 +913,35 @@ struct WebView2Surface::Impl final
   }
 
   HRESULT fail(HRESULT result) {
-    lastResult = FAILED(result) ? result : E_FAIL;
+    const HRESULT failure = FAILED(result) ? result : E_FAIL;
+    // A synchronous completion handler may destroy the owning surface. Keep
+    // the PImpl alive through notification and return only the local result.
+    const auto keepAlive = shared_from_this();
+    (void)keepAlive;
+    lastResult = failure;
     state = State::Failed;
-    return lastResult;
+    (void)initialLoad.completeFailure(static_cast<std::int32_t>(failure));
+    return failure;
+  }
+
+  HRESULT failInitialNavigation(HRESULT result) {
+    const HRESULT failure = FAILED(result) ? result : E_FAIL;
+    return fail(failure);
+  }
+
+  static InitialLoadState toPublicInitialLoadState(
+      detail::InitialLoadState state) noexcept {
+    switch (state) {
+      case detail::InitialLoadState::NotRequested:
+        return InitialLoadState::NotRequested;
+      case detail::InitialLoadState::Pending:
+        return InitialLoadState::Pending;
+      case detail::InitialLoadState::Ready:
+        return InitialLoadState::Ready;
+      case detail::InitialLoadState::Failed:
+        return InitialLoadState::Failed;
+    }
+    std::terminate();
   }
 
   HRESULT removeEventHandlers() noexcept override {
@@ -975,6 +1047,7 @@ struct WebView2Surface::Impl final
   std::optional<std::wstring> pendingNavigation;
   detail::WebView2PendingMessageQueue pendingHostMessages;
   detail::WebView2MessageLog capturedMessages;
+  detail::InitialLoadTracker initialLoad;
   bool navigationComplete = false;
   UINT64 activeNavigationId = 0;
 
@@ -1025,6 +1098,11 @@ HRESULT WebView2Surface::navigate(std::wstring_view uri) {
   return impl_->navigate(uri);
 }
 
+HRESULT WebView2Surface::setInitialLoadCompletionHandler(
+    InitialLoadCompletionHandler handler) {
+  return impl_->setInitialLoadCompletionHandler(std::move(handler));
+}
+
 HRESULT WebView2Surface::postMessage(std::wstring_view message) {
   return impl_->postMessage(message);
 }
@@ -1071,6 +1149,12 @@ void WebView2Surface::setVisible(bool visible) {
 WebView2Surface::State WebView2Surface::state() const noexcept {
   impl_->requireOwnerThread();
   return impl_->state;
+}
+
+WebView2Surface::InitialLoadState WebView2Surface::initialLoadState() const
+    noexcept {
+  impl_->requireOwnerThread();
+  return Impl::toPublicInitialLoadState(impl_->initialLoad.state());
 }
 
 HRESULT WebView2Surface::lastResult() const noexcept {

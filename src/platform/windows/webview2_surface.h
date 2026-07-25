@@ -5,6 +5,7 @@
 
 #include <windows.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -28,6 +29,18 @@ class DCompHost;
 class WebView2Surface final : public embed::EmbeddedSurface {
  public:
   enum class State { Created, Initializing, Ready, Failed, Closed };
+
+  // Controller readiness is intentionally separate from the first document
+  // being ready to receive queued host messages.
+  enum class InitialLoadState { NotRequested, Pending, Ready, Failed };
+
+  struct InitialLoadCompletion {
+    InitialLoadState state = InitialLoadState::NotRequested;
+    HRESULT result = S_OK;
+  };
+
+  using InitialLoadCompletionHandler =
+      std::function<void(InitialLoadCompletion completion)>;
 
   enum class NavigationClass {
     Denied,
@@ -59,6 +72,9 @@ class WebView2Surface final : public embed::EmbeddedSurface {
   // transitions the object to Closed.
   HRESULT close();
   HRESULT navigate(std::wstring_view uri);
+  // Must run on the creating STA, before the first navigate request. The
+  // handler is consumed at the sole Ready or Failed terminal completion.
+  HRESULT setInitialLoadCompletionHandler(InitialLoadCompletionHandler handler);
   // Queues a protocol JSON string until the current navigation completes, so
   // page listeners cannot miss an initialization message.
   HRESULT postMessage(std::wstring_view message);
@@ -86,6 +102,7 @@ class WebView2Surface final : public embed::EmbeddedSurface {
   void setVisible(bool visible) override;
 
   State state() const noexcept;
+  InitialLoadState initialLoadState() const noexcept;
   HRESULT lastResult() const noexcept;
   bool interactive() const noexcept;
   const std::vector<std::wstring>& capturedMessages() const noexcept;

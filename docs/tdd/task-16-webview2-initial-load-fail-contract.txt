@@ -1,0 +1,26 @@
+Task 16 WebView2 initial-load fail reentrancy contract (macOS, 2026-07-26)
+
+RED probe
+
+  cmake -DPROBE_OLD_FAIL=ON \
+    -DSURFACE_SOURCE=src/platform/windows/webview2_surface.cpp \
+    -P tests/scripts/webview2_initial_load_fail_contract_test.cmake
+
+Result: failed as intended with "Impl::fail must normalize into local
+failure". The probe substitutes the reviewed old shape, which dispatched the
+completion handler and then returned the member lastResult without retaining
+the PImpl.
+
+GREEN contract
+
+  cmake -DSURFACE_SOURCE=src/platform/windows/webview2_surface.cpp \
+    -P tests/scripts/webview2_initial_load_fail_contract_test.cmake
+
+Result: passed. The narrow contract extracts only Impl::fail and requires, in
+order, a local normalized failure, shared_from_this retention, completion
+dispatch using the local failure, and return of that local failure. It also
+explicitly rejects return lastResult after callback dispatch.
+
+The same green command is registered as
+canvas_webview2_initial_load_fail_source_contract in tests/CMakeLists.txt so it
+runs on ordinary non-Windows and Windows CTest hosts.
