@@ -55,10 +55,25 @@ WINDOWS CI GREEN
   The artifact contains the versioned portable ZIP and its generated SHA-256
   checksum. GitHub retains this pull-request artifact for 30 days.
 
-TAG-RELEASE VALIDATION BOUNDARY
-  No `v*` tag was pushed, so this pull-request run correctly skipped the
-  release job. Actual GitHub Release creation/update remains intentionally
-  unexercised until a release version is explicitly approved and tagged.
+TAG-RELEASE GREEN
+  Version: `v0.1.0-alpha.1` (pre-release)
+  Tag target: `ee06c803a96737bf6e45e674d6a61c8f611a5fcb`
+  Release: https://github.com/Mostorm-Labs/canvas/releases/tag/v0.1.0-alpha.1
+  Workflow run: https://github.com/Mostorm-Labs/canvas/actions/runs/30146198941
+  Build job: https://github.com/Mostorm-Labs/canvas/actions/runs/30146198941/job/89648502771
+  Release job: https://github.com/Mostorm-Labs/canvas/actions/runs/30146198941/job/89650390793
+
+  The tag run completed successfully through the native build, all 156 CTest
+  entries, Composition integration tests, packaging contract, whitespace,
+  portable ZIP creation, artifact upload, and Release upload. The published
+  assets were downloaded and verified locally with the generated checksum:
+
+  ZIP: https://github.com/Mostorm-Labs/canvas/releases/download/v0.1.0-alpha.1/canvas-windows-x64-v0.1.0-alpha.1.zip
+  SHA-256: https://github.com/Mostorm-Labs/canvas/releases/download/v0.1.0-alpha.1/canvas-windows-x64-v0.1.0-alpha.1.zip.sha256
+  ZIP size: 3,154,977 bytes
+  `shasum -a 256 -c canvas-windows-x64-v0.1.0-alpha.1.zip.sha256`: OK
+  Archive inspection: executable, README, rich-text/video pages, and web
+  assets present.
 
   `actionlint` is not installed locally. The Node contract uses narrow,
   indentation-aware job and step block extraction to verify ownership,
