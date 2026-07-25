@@ -13,10 +13,9 @@ namespace canvas::app {
 
 class EmbeddedLoadTrackerTestAccess {
  public:
-  static EmbeddedLoadTracker withTokenAndResource(
-      EmbeddedLoadTracker::Token nextToken,
-      std::pmr::memory_resource& resource) {
-    return EmbeddedLoadTracker(nextToken, resource);
+  static void setNextToken(EmbeddedLoadTracker& tracker,
+                           EmbeddedLoadTracker::Token nextToken) noexcept {
+    tracker.nextToken_ = nextToken;
   }
 };
 
@@ -52,6 +51,24 @@ class ThrowNextAllocationResource final : public std::pmr::memory_resource {
 
   std::pmr::memory_resource* upstream_ = std::pmr::new_delete_resource();
   bool failNext_ = false;
+};
+
+class ScopedDefaultMemoryResource final {
+ public:
+  explicit ScopedDefaultMemoryResource(
+      std::pmr::memory_resource& resource) noexcept
+      : previous_(std::pmr::set_default_resource(&resource)) {}
+
+  ~ScopedDefaultMemoryResource() {
+    std::pmr::set_default_resource(previous_);
+  }
+
+  ScopedDefaultMemoryResource(const ScopedDefaultMemoryResource&) = delete;
+  ScopedDefaultMemoryResource& operator=(
+      const ScopedDefaultMemoryResource&) = delete;
+
+ private:
+  std::pmr::memory_resource* previous_;
 };
 
 TEST(EmbeddedLoadTrackerTest,
@@ -91,6 +108,24 @@ TEST(EmbeddedLoadTrackerTest, GenerationMismatchStillDeletesTheRecord) {
 
   EXPECT_FALSE(tracker.consume(*token, 13U));
   EXPECT_FALSE(tracker.consume(*token, 12U));
+}
+
+TEST(EmbeddedLoadTrackerTest,
+     ExactTokenKeepsSameNodeLoadsAcrossGenerationsIsolated) {
+  EmbeddedLoadTracker tracker;
+  const auto previous =
+      tracker.begin("same-node", "previous-request", 4U, 12U);
+  const auto expected =
+      tracker.begin("same-node", "expected-request", 5U, 13U);
+  ASSERT_TRUE(previous);
+  ASSERT_TRUE(expected);
+
+  EXPECT_FALSE(tracker.consume(*previous, 13U));
+  const auto record = tracker.consume(*expected, 13U);
+  ASSERT_TRUE(record);
+  EXPECT_EQ(record->requestId, "expected-request");
+  EXPECT_EQ(record->connectionId, 5U);
+  EXPECT_EQ(record->documentGeneration, 13U);
 }
 
 TEST(EmbeddedLoadTrackerTest, CancelsOneTokenWithoutAffectingOthers) {
@@ -182,9 +217,9 @@ TEST(EmbeddedLoadTrackerTest, AcceptsAnEmptyStartupRecoveryOrigin) {
 }
 
 TEST(EmbeddedLoadTrackerTest, DoesNotWrapAfterIssuingTheMaximumToken) {
-  auto tracker = EmbeddedLoadTrackerTestAccess::withTokenAndResource(
-      std::numeric_limits<EmbeddedLoadTracker::Token>::max(),
-      *std::pmr::get_default_resource());
+  EmbeddedLoadTracker tracker;
+  EmbeddedLoadTrackerTestAccess::setNextToken(
+      tracker, std::numeric_limits<EmbeddedLoadTracker::Token>::max());
 
   const auto maximum = tracker.begin("last-node", "last-request", 1U, 80U);
 
@@ -197,9 +232,12 @@ TEST(EmbeddedLoadTrackerTest, DoesNotWrapAfterIssuingTheMaximumToken) {
 }
 
 TEST(EmbeddedLoadTrackerTest, BurnsTokenWhenRecordAllocationFails) {
+  // The PMR default is process-global. GoogleTest runs tests serially within
+  // this process; declaration order additionally guarantees that the tracker
+  // dies before the default is restored and the resource is destroyed.
   ThrowNextAllocationResource resource;
-  auto tracker =
-      EmbeddedLoadTrackerTestAccess::withTokenAndResource(1U, resource);
+  ScopedDefaultMemoryResource scopedDefault(resource);
+  EmbeddedLoadTracker tracker;
   resource.failNextAllocation();
 
   const auto failed = tracker.begin("node", "request", 2U, 90U);

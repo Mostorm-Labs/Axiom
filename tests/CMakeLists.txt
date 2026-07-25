@@ -68,8 +68,6 @@ add_executable(canvas_embedded_load_tracker_test
                unit/embedded_load_tracker_test.cpp)
 target_link_libraries(canvas_embedded_load_tracker_test
                       PRIVATE canvas::core GTest::gtest_main)
-target_compile_definitions(canvas_embedded_load_tracker_test
-                           PRIVATE CANVAS_EMBEDDED_LOAD_TRACKER_TEST_SEAM=1)
 canvas_enable_warnings(canvas_embedded_load_tracker_test)
 gtest_discover_tests(canvas_embedded_load_tracker_test)
 

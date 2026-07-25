@@ -35,10 +35,6 @@ add_library(canvas::core ALIAS canvas_core)
 target_include_directories(canvas_core PUBLIC include)
 target_link_libraries(canvas_core PUBLIC unofficial::skia::skia
                        PRIVATE nlohmann_json::nlohmann_json)
-if(BUILD_TESTING)
-    target_compile_definitions(canvas_core
-                                PRIVATE CANVAS_EMBEDDED_LOAD_TRACKER_TEST_SEAM=1)
-endif()
 canvas_enable_warnings(canvas_core)
 
 add_library(canvas_ipc STATIC src/ipc/protocol.cpp src/ipc/client_session.cpp)

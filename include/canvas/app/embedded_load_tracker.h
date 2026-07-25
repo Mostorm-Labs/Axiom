@@ -11,9 +11,7 @@
 
 namespace canvas::app {
 
-#if defined(CANVAS_EMBEDDED_LOAD_TRACKER_TEST_SEAM)
 class EmbeddedLoadTrackerTestAccess;
-#endif
 
 struct EmbeddedLoadRecord {
   std::uint64_t token = 0;
@@ -38,11 +36,11 @@ class EmbeddedLoadTracker {
       std::uint64_t connectionId,
       std::uint64_t documentGeneration) noexcept;
 
-  // A terminal callback owns the record once it calls consume. A callback for
-  // an obsolete document generation must also retire the token, but receives
-  // no record to act on.
+  // A terminal callback owns the record once it calls consume. The expected
+  // document generation must match the record; a mismatch still retires the
+  // token but returns no record to act on.
   [[nodiscard]] std::optional<EmbeddedLoadRecord> consume(
-      Token token, std::uint64_t currentDocumentGeneration) noexcept;
+      Token token, std::uint64_t expectedDocumentGeneration) noexcept;
 
   [[nodiscard]] bool cancel(Token token) noexcept;
   [[nodiscard]] std::size_t cancelNode(
@@ -52,12 +50,7 @@ class EmbeddedLoadTracker {
   void cancelAll() noexcept;
 
  private:
-#if defined(CANVAS_EMBEDDED_LOAD_TRACKER_TEST_SEAM)
   friend class EmbeddedLoadTrackerTestAccess;
-
-  EmbeddedLoadTracker(Token nextToken,
-                      std::pmr::memory_resource& resource) noexcept;
-#endif
 
   Token nextToken_ = 1;
   bool tokensExhausted_ = false;

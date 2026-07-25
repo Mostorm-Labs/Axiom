@@ -5,12 +5,6 @@
 
 namespace canvas::app {
 
-#if defined(CANVAS_EMBEDDED_LOAD_TRACKER_TEST_SEAM)
-EmbeddedLoadTracker::EmbeddedLoadTracker(
-    Token nextToken, std::pmr::memory_resource& resource) noexcept
-    : nextToken_(nextToken == 0U ? 1U : nextToken), records_(&resource) {}
-#endif
-
 std::optional<EmbeddedLoadTracker::Token> EmbeddedLoadTracker::begin(
     const document::NodeId& nodeId, const std::string& requestId,
     std::uint64_t connectionId, std::uint64_t documentGeneration) noexcept {
@@ -42,13 +36,13 @@ std::optional<EmbeddedLoadTracker::Token> EmbeddedLoadTracker::begin(
 }
 
 std::optional<EmbeddedLoadRecord> EmbeddedLoadTracker::consume(
-    Token token, std::uint64_t currentDocumentGeneration) noexcept {
+    Token token, std::uint64_t expectedDocumentGeneration) noexcept {
   const auto found = records_.find(token);
   if (found == records_.end()) return std::nullopt;
 
   EmbeddedLoadRecord record = std::move(found->second);
   records_.erase(found);
-  if (record.documentGeneration != currentDocumentGeneration) {
+  if (record.documentGeneration != expectedDocumentGeneration) {
     return std::nullopt;
   }
   return record;
