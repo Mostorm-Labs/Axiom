@@ -1,0 +1,50 @@
+Task 16: Windows portable artifact and tag Release workflow
+Recorded: 2026-07-25 (Asia/Shanghai)
+
+RED
+  node --test tests/contracts/windows_release_workflow.test.mjs
+  Result before implementation: 5 tests, 0 passed, 5 failed.
+  Missing contracts: v* tag trigger, post-test artifact, release job,
+  portable packager, and download/runtime documentation.
+
+GREEN (macOS static contract)
+  node --test tests/contracts/windows_release_workflow.test.mjs
+  Result after the initial implementation: 5 tests, 5 passed, 0 failed.
+
+SECURITY REVIEW RED
+  node --test tests/contracts/windows_release_workflow.test.mjs
+  Result after adding path/workflow structure contracts: 6 tests, 5 passed,
+  1 failed. The packager had no root-source reparse-point or overlap guards.
+
+SECURITY REVIEW GREEN (macOS static contract)
+  node --test tests/contracts/windows_release_workflow.test.mjs
+  Result: 7 tests, 7 passed, 0 failed.
+
+  git diff --check
+  Result: exit 0.
+
+WINDOWS-ONLY CONTRACT (wired into Windows Build)
+  ./tests/contracts/Test-WindowsPortablePackage.ps1
+
+  The behavioral contract creates a fake executable and web runtime, runs the
+  real packager, expands the ZIP, and verifies its required layout and
+  SHA-256. Negative cases cover missing assets, unsafe versions, source/output
+  ancestor and descendant overlap, case-insensitive equality, README overlap,
+  and a real web-directory junction when the runner filesystem supports it.
+  Every negative case asserts that no ZIP, checksum, or `.canvas-package-*`
+  staging path remains. An optional zero-byte CSS asset deliberately passes
+  source preflight and fails archive validation, so cleanup is also exercised
+  after staging and ZIP creation rather than only on early validation exits.
+
+LOCAL VALIDATION BOUNDARY
+  PowerShell (`pwsh`) is not installed in the current macOS environment, and
+  the Visual Studio/D3D12/WebView2 build cannot run on macOS. Therefore the
+  PowerShell behavioral contract and production Windows packaging remain for
+  the next windows-2022 GitHub Actions run. No tag was pushed, so actual
+  GitHub Release creation/update is also not exercised by this evidence.
+
+  `actionlint` is not installed locally. The Node contract uses narrow,
+  indentation-aware job and step block extraction to verify ownership,
+  ordering, `continue-on-error`, job-output/artifact pairing, and tag-only
+  release permission. GitHub Actions parsing on the next run remains the
+  authoritative workflow validation.

@@ -15,6 +15,21 @@ Canvas is the Mostorm cross-platform collaborative whiteboard. The first milesto
 CMake restores the locked npm workspace, builds the rich-text/video assets,
 and copies them beside `canvas_windows.exe` under `web/`.
 
+## Windows downloads
+
+Every successful pull-request or manually dispatched Windows workflow uploads
+a versioned native portable ZIP to the workflow run's **Artifacts** section in
+[GitHub Actions](https://github.com/Mostorm-Labs/canvas/actions). Artifacts are
+retained for 30 days. Builds created from a `v*` Git tag are also published,
+together with a SHA-256 checksum, on
+[GitHub Releases](https://github.com/Mostorm-Labs/canvas/releases). Tags with a
+hyphen, such as `v0.1.0-alpha.1`, produce a prerelease.
+
+Extract the complete ZIP before running `canvas_windows.exe`; the adjacent
+`web/` directory is required. The current download is an unsigned native
+portable build and requires the Microsoft Edge WebView2 Runtime. The Electron
+launcher is not included yet.
+
 ## Embedded-content diagnostic
 
 From PowerShell at the repository root:
