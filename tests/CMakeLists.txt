@@ -131,6 +131,15 @@ if(WIN32)
     canvas_enable_warnings(canvas_webview2_close_seam_test)
     gtest_discover_tests(canvas_webview2_close_seam_test)
 
+    add_executable(canvas_webview2_navigation_uri_test
+                   unit/webview2_navigation_uri_test.cpp)
+    target_include_directories(canvas_webview2_navigation_uri_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_webview2_navigation_uri_test
+                          PRIVATE urlmon oleaut32 GTest::gtest_main)
+    canvas_enable_warnings(canvas_webview2_navigation_uri_test)
+    gtest_discover_tests(canvas_webview2_navigation_uri_test)
+
     add_executable(canvas_webview2_virtual_host_path_test
                    unit/webview2_virtual_host_path_test.cpp)
     target_include_directories(canvas_webview2_virtual_host_path_test

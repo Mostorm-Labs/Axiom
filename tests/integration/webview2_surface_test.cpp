@@ -117,6 +117,14 @@ bool hasMessage(const canvas::windows::WebView2Surface& surface,
   return false;
 }
 
+std::wstring dataMessagePage(std::wstring_view marker) {
+  std::wstring page =
+      L"data:text/html,%3Cscript%3Echrome.webview.postMessage(%22";
+  page.append(marker);
+  page += L"%22)%3C/script%3E";
+  return page;
+}
+
 TEST(WebView2SurfaceTestPump, ServicesAlertableStaContinuations) {
   gAlertableContinuationRan.store(false, std::memory_order_relaxed);
   ASSERT_NE(QueueUserAPC(markAlertableContinuation, GetCurrentThread(), 0),
@@ -372,6 +380,84 @@ TEST(WebView2Surface, InitialLoadTracksTheSupersedingNavigationOnly) {
   EXPECT_EQ(surface.initialLoadState(),
             canvas::windows::WebView2Surface::InitialLoadState::Ready);
   EXPECT_EQ(completionCalls, 1);
+}
+
+TEST(WebView2Surface,
+     SerialNavigationKeepsOnlyTheLatestRequestAndDoesNotStarveAfterFragment) {
+  ScopedCom com;
+  ASSERT_TRUE(SUCCEEDED(com.result()));
+  ScopedTestWindow testWindow;
+  ASSERT_TRUE(testWindow.registered());
+  canvas::windows::DCompHost host;
+  ASSERT_TRUE(SUCCEEDED(host.initialize(testWindow.get())));
+  canvas::windows::WebView2Surface::Options options;
+  options.allowTestDataUrls = true;
+  canvas::windows::WebView2Surface surface(host, testWindow.get(), options);
+  ScopedSurfaceClose closeSurface(surface);
+
+  int completionCalls = 0;
+  ASSERT_EQ(surface.setInitialLoadCompletionHandler(
+                [&completionCalls](auto completion) {
+                  if (completion.state ==
+                      canvas::windows::WebView2Surface::InitialLoadState::Ready) {
+                    ++completionCalls;
+                  }
+                }),
+            S_OK);
+  ASSERT_EQ(surface.initialize(), S_OK);
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.state() !=
+               canvas::windows::WebView2Surface::State::Initializing;
+      },
+      std::chrono::seconds(30)));
+  ASSERT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready);
+
+  const std::wstring pageA = dataMessagePage(L"serial-a");
+  const std::wstring pageB = dataMessagePage(L"serial-b");
+  const std::wstring pageC = dataMessagePage(L"serial-c");
+  const std::wstring pageD = dataMessagePage(L"serial-d");
+  ASSERT_EQ(surface.navigate(pageA), S_OK);
+  // The duplicate URI is intentional: URI text cannot be used as a request
+  // token, so the adapter must serialize the native calls instead.
+  ASSERT_EQ(surface.navigate(pageA), S_OK);
+  ASSERT_EQ(surface.navigate(pageB), S_OK);
+  ASSERT_EQ(surface.navigate(pageC), S_OK);
+  ASSERT_EQ(surface.navigate(pageD), S_OK);
+
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.state() ==
+                   canvas::windows::WebView2Surface::State::Failed ||
+               (hasMessage(surface, L"serial-d") && completionCalls == 1 &&
+                surface.initialLoadState() ==
+                    canvas::windows::WebView2Surface::InitialLoadState::Ready);
+      },
+      std::chrono::seconds(30)));
+  ASSERT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready)
+      << "WebView2 failed with HRESULT 0x" << std::hex
+      << static_cast<unsigned long>(surface.lastResult());
+  EXPECT_EQ(completionCalls, 1);
+
+  // Once D is committed, D#fragment is a same-document/no-start request.
+  // A subsequent full-document request must still be admitted and complete;
+  // this catches a stale pending-start slot that would otherwise starve D.
+  std::wstring fragmentD = pageD;
+  fragmentD += L"#fragment";
+  const std::wstring afterFragment = dataMessagePage(L"after-fragment");
+  ASSERT_EQ(surface.navigate(fragmentD), S_OK);
+  ASSERT_EQ(surface.navigate(afterFragment), S_OK);
+  ASSERT_TRUE(pumpUntil(
+      [&] {
+        return surface.state() ==
+                   canvas::windows::WebView2Surface::State::Failed ||
+               hasMessage(surface, L"after-fragment");
+      },
+      std::chrono::seconds(30)));
+  EXPECT_EQ(surface.state(), canvas::windows::WebView2Surface::State::Ready)
+      << "WebView2 failed with HRESULT 0x" << std::hex
+      << static_cast<unsigned long>(surface.lastResult());
+  EXPECT_TRUE(hasMessage(surface, L"after-fragment"));
 }
 
 TEST(WebView2Surface, CloseWhileInitialLoadIsPendingDoesNotNotify) {

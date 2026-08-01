@@ -71,6 +71,16 @@ class BoundedWebView2MessageQueue final {
     totalCodeUnits_ = 0U;
   }
 
+  // Detach the current generation before entering arbitrary WebView2 code.
+  // A synchronous callback may clear or append to this queue; iterating the
+  // detached vector remains valid and any newly queued values stay isolated.
+  std::vector<std::wstring> takeValues() noexcept {
+    std::vector<std::wstring> detached;
+    detached.swap(values_);
+    totalCodeUnits_ = 0U;
+    return detached;
+  }
+
   std::size_t totalCodeUnits() const noexcept { return totalCodeUnits_; }
 
   const std::vector<std::wstring>& values() const noexcept { return values_; }

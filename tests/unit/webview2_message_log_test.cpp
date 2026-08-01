@@ -71,3 +71,23 @@ TEST(WebView2PendingMessageQueue, HasTheSmallerCountBoundAndSameByteBudget) {
   for (const auto& value : queue.values()) retainedCodeUnits += value.size();
   EXPECT_EQ(queue.totalCodeUnits(), retainedCodeUnits);
 }
+
+TEST(WebView2PendingMessageQueue,
+     TakeValuesDetachesTheGenerationBeforeReentrantMutation) {
+  canvas::windows::detail::WebView2PendingMessageQueue queue;
+  ASSERT_EQ(queue.tryPush(L"old-a"),
+            canvas::windows::detail::MessagePushResult::Added);
+  ASSERT_EQ(queue.tryPush(L"old-b"),
+            canvas::windows::detail::MessagePushResult::Added);
+
+  auto detached = queue.takeValues();
+  ASSERT_EQ(queue.tryPush(L"new-generation"),
+            canvas::windows::detail::MessagePushResult::Added);
+
+  ASSERT_EQ(detached.size(), 2U);
+  EXPECT_EQ(detached[0], L"old-a");
+  EXPECT_EQ(detached[1], L"old-b");
+  ASSERT_EQ(queue.values().size(), 1U);
+  EXPECT_EQ(queue.values().front(), L"new-generation");
+  EXPECT_EQ(queue.totalCodeUnits(), std::wstring(L"new-generation").size());
+}

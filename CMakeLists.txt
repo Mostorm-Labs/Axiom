@@ -128,6 +128,7 @@ if(WIN32)
                                                          canvas::webview2_loader
                                                          d3dcompiler
                                                          shlwapi version
+                                                         urlmon oleaut32
                                                          spdlog::spdlog)
     canvas_enable_warnings(canvas_windows_platform)
 
