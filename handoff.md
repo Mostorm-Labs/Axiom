@@ -2,7 +2,7 @@
 
 > 文档版本：2026-08-01
 >
-> 状态快照：2026-08-01 21:47（Asia/Shanghai）。这是一次性快照；接手时以
+> 状态快照：2026-08-01 22:12（Asia/Shanghai）。这是一次性快照；接手时以
 > `git fetch`、`git status`、GitHub PR/Actions API 的实时结果为准，不要因为本文件中的
 > SHA、测试数量或“最新运行”字样而跳过重新核对。
 >
@@ -108,7 +108,7 @@ pending host message；`data:` fragment 只有在 navigation complete、active i
 `docs/tdd/task-17-embedded-load-batch-*.txt`，`0258173` 的证据在
 `docs/tdd/task-18-embedded-load-completion-inbox-*.txt`。仅从 Windows 远端分支查看
 `docs/tdd/` 不会看到这些本地-only 分支文件。Windows `a9912da` 和 macOS `9adb455` 已在远端，不再依赖本机 patch 才能恢复；
-但它当前的失败 CI 运行和诊断结论仍应由接手者通过 GitHub Actions URL 重新核对。
+但历史失败 CI 运行和诊断结论仍应由接手者通过 GitHub Actions URL 重新核对。
 
 
 ## 2. GitHub PR、CI 和 Release 状态
@@ -117,7 +117,7 @@ pending host message；`data:` fragment 只有在 navigation complete、active i
 
 - PR：Build the Windows whiteboard vertical slice（https://github.com/Mostorm-Labs/canvas/pull/1）
 - 分支：codex/windows-vertical-slice → main
-- 状态：Draft / Open；最新 check 已通过，PR 可继续进行 macOS rebase 和后续功能开发。
+- 状态：Draft / Open；最新 check 已通过，macOS rebase 已完成，可继续后续功能开发。
 - 远端 branch head：`a9912da6db3742cf3af2c4bdafca43c73b127edf`（最新代码 commit `eb1d948d5efc09e21ca8687f3522e9d7f8656e15`）
 - 最新绿色运行：Windows Build run [30697532044](https://github.com/Mostorm-Labs/canvas/actions/runs/30697532044)
 - build job：[91362837977](https://github.com/Mostorm-Labs/canvas/actions/runs/30697532044/job/91362837977)
@@ -893,10 +893,10 @@ docs/evidence/*.pending.md               尚未完成的 Windows/GUI/硬件验�
 
 - [ ] 能从远端 clone/fetch 并定位 PR #1、PR #2 和本地-only 的 e6148a2/0258173。
 - [x] 确认 `eb1d948` 的 Windows run 30697532044 已绿色：200/200 CTest、Composition、package、whitespace、metadata、artifact 全部通过。
-- [x] macOS Task 19/20 已提交、rebase、推送，Task 19 RED/GREEN 与 Task 20 GREEN evidence 均在远端；Windows URL/COM 修复已在 `eb1d948` 远端。
-- [ ] Windows URL canonicalization、COM reentrancy、SourceChanged stale identity 有独立测试和复审记录。
+- [x] macOS Task 19/20/21 已提交、rebase、推送，Task 19 RED/GREEN、Task 20/21 GREEN evidence 均在远端；Windows URL/COM 修复已在 `eb1d948` 远端。
+- [x] Windows URL canonicalization、COM reentrancy、SourceChanged stale identity 已由 `87ebf01`→`f8478b2`→`eb1d948` 收敛，并在 run 30697532044 的 200/200 CTest、contract 和独立 review 中验证。
 - [x] Windows full CI 的 Build、CTest、Composition、package、whitespace、artifact 已全绿并写入本文件 evidence。
-- [x] macOS 三层宿主/WK surface 在 Task 20 基线 full CTest 157/157，Task 21 `9adb455` 已独立 review、提交并推送；fresh full CTest 165/165、focused 12/12 已记录。
+- [x] macOS 三层宿主/WK surface 在 Task 19/20 基线 full CTest 157/157，Task 21 `9adb455` 已独立 review、提交并推送；fresh full CTest 165/165、focused 12/12 已记录。
 - [x] PR #2 Task 20 head `3601da2` 的 Windows Build run 30698953072 已全绿，artifact `canvas-windows-x64-pr-2-f3edd04012ef` 已记录。
 - [x] PR #2 Task 21 head `9adb455` 的 Windows Build run 30702348950 已完成并全绿；build job `91375451176`，release job `91375736804`（PR 事件 skipped），artifact `canvas-windows-x64-pr-2-0459b8f1a9e6`，artifact id `8819253543`，约 3,167,064 bytes，未过期。
 - [ ] EmbeddedLoadBatch/CompletionInbox 已重新审查并推送，之后才接入 WhiteboardApp。
