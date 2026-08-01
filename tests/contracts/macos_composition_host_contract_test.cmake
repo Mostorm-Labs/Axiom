@@ -44,6 +44,16 @@ foreach(required_host_token IN ITEMS
 endforeach()
 
 if(NOT composition_source MATCHES
+       "CanvasEmbeddedContainerView")
+    message(FATAL_ERROR "The embedded container must use the flipped AppKit host")
+endif()
+
+if(NOT composition_source MATCHES
+       "- \\(BOOL\\)isFlipped")
+    message(FATAL_ERROR "The embedded container must expose flipped coordinates")
+endif()
+
+if(NOT composition_source MATCHES
        "createMetalRenderResources\(\)")
     message(FATAL_ERROR "The two surfaces must be given one shared resource group")
 endif()

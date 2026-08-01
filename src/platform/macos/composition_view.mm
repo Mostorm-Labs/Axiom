@@ -8,6 +8,21 @@
 #include <memory>
 #include <utility>
 
+// Document/Metal geometry is expressed from the top-left. Keeping the
+// middle native-view host flipped makes a WKWebView frame use the same point
+// coordinates as ink and chrome instead of AppKit's default bottom-left
+// coordinate system.
+@interface CanvasEmbeddedContainerView : NSView
+@end
+
+@implementation CanvasEmbeddedContainerView
+
+- (BOOL)isFlipped {
+  return YES;
+}
+
+@end
+
 @implementation CanvasCompositionView {
   CanvasMetalView* baseMetalView_;
   NSView* embeddedContainerView_;
@@ -28,7 +43,8 @@
             initWithFrame:bounds
               surfaceRole:canvas::macos::MetalSurfaceRole::Base
           renderResources:renderResources_];
-  embeddedContainerView_ = [[NSView alloc] initWithFrame:bounds];
+  embeddedContainerView_ =
+      [[CanvasEmbeddedContainerView alloc] initWithFrame:bounds];
   overlayMetalView_ = [[CanvasMetalView alloc]
             initWithFrame:bounds
               surfaceRole:canvas::macos::MetalSurfaceRole::Overlay

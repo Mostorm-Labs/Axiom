@@ -32,8 +32,11 @@ invalidation.
 The app bundle is generated under `out/build/macos-arm64/app/macos/`. Base
 draws only `Base`; Overlay draws only `Annotation` and `Chrome`; both retain
 one Metal/Skia resource group while presenting independently. The middle
-container is ready for future WKWebView children. This increment still has no
-actual WKWebView implementation, input adapter, or Electron control.
+container can host the minimal `WKWebViewSurface` lifecycle adapter, whose
+WebKit implementation is private and whose bounds are expressed in AppKit
+points. It supports attach/detach/reattach, visibility, and a native hit-test
+gate; it deliberately does not yet implement navigation readiness, input
+adaptation, IME, or Electron control.
 
 ## Windows downloads
 

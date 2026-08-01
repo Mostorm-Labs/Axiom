@@ -157,18 +157,21 @@ if(APPLE)
     find_library(CANVAS_APPKIT_FRAMEWORK AppKit REQUIRED)
     find_library(CANVAS_METAL_FRAMEWORK Metal REQUIRED)
     find_library(CANVAS_QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+    find_library(CANVAS_WEBKIT_FRAMEWORK WebKit REQUIRED)
 
     add_library(canvas_macos_platform STATIC
                 src/platform/macos/composition_view.mm
                 src/platform/macos/metal_host.mm
-                src/platform/macos/metal_view.mm)
+                src/platform/macos/metal_view.mm
+                src/platform/macos/wkwebview_surface.mm)
     add_library(canvas::macos_platform ALIAS canvas_macos_platform)
     target_include_directories(canvas_macos_platform PUBLIC
                                ${PROJECT_SOURCE_DIR}/src)
     target_link_libraries(canvas_macos_platform PUBLIC
                           ${CANVAS_APPKIT_FRAMEWORK}
                           ${CANVAS_METAL_FRAMEWORK}
-                          ${CANVAS_QUARTZCORE_FRAMEWORK})
+                          ${CANVAS_QUARTZCORE_FRAMEWORK}
+                          ${CANVAS_WEBKIT_FRAMEWORK})
     target_link_libraries(canvas_macos_platform PRIVATE
                           canvas::core
                           unofficial::skia::skia)

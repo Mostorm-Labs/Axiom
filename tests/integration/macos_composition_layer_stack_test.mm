@@ -87,12 +87,15 @@ TEST_F(MacosCompositionLayerStack,
   ASSERT_NE(base, nil);
   ASSERT_NE(embedded, nil);
   ASSERT_NE(overlay, nil);
+  EXPECT_TRUE([embedded isFlipped]);
   EXPECT_EQ(composition.subviews[0], base);
   EXPECT_EQ(composition.subviews[1], embedded);
   EXPECT_EQ(composition.subviews[2], overlay);
   EXPECT_TRUE(NSEqualRects(base.frame, composition.bounds));
   EXPECT_TRUE(NSEqualRects(embedded.frame, composition.bounds));
   EXPECT_TRUE(NSEqualRects(overlay.frame, composition.bounds));
+  EXPECT_TRUE(NSEqualRects(embedded.frame, base.frame));
+  EXPECT_TRUE(NSEqualRects(embedded.frame, overlay.frame));
 
   ASSERT_TRUE([base.layer isKindOfClass:[CAMetalLayer class]]);
   ASSERT_TRUE([overlay.layer isKindOfClass:[CAMetalLayer class]]);
