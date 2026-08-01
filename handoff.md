@@ -550,6 +550,8 @@ x86_64 Objective-C++ strict syntax 通过、clang static analyzer 无诊断、`g
 - runtime test 验证层顺序、opacity、共享资源和 frame commit，但还没有逐像素 readback 证明透明 overlay 不污染中间内容；source contract 也是结构性检查。
 - `MetalRenderResources` 的每个 `shared_ptr` 拷贝都可能成为最后 owner，最终释放必须发生在 AppKit 主线程；当前 header 已说明此约束，未来 surface factory 也必须遵守。
 - 当前只有 RED evidence 文件，没有单独的 Task 19 GREEN evidence；提交前应补一份记录 123/123、定向测试、review 结论和未运行项目的 GREEN 文档。
+- README/既有 Task 16 macOS GREEN 记录仍按旧的单 Metal surface 描述；Task 19 提交时必须逐项更新，避免新账号误以为旧证据覆盖三层宿主。
+- 两个 surface 当前在 AppKit 主线程串行使用共享 `SkiaRenderer`；若未来把渲染移到异步线程，必须增加同步或拆分 renderer/context，不能直接复用当前无锁对象。
 - PR #2 仍以旧 Windows SHA `80ba591` 为 base、远端头仍是 672ef32，且没有 GitHub macOS CI；本地通过不能替代 rebase 后的重跑和远端证据。
 
 接下来应先保全 WIP，再等待/跟随 Windows 基线收敛，rebase 后重跑所有 macOS 验证。
