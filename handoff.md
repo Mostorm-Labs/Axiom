@@ -2,7 +2,7 @@
 
 > 文档版本：2026-08-01
 >
-> 状态快照：2026-08-01 19:30（Asia/Shanghai）。这是一次性快照；接手时以
+> 状态快照：2026-08-01 21:47（Asia/Shanghai）。这是一次性快照；接手时以
 > `git fetch`、`git status`、GitHub PR/Actions API 的实时结果为准，不要因为本文件中的
 > SHA、测试数量或“最新运行”字样而跳过重新核对。
 >
@@ -16,17 +16,17 @@
 
 Canvas 当前不是一个已经完成的商业化多人协作产品，而是一个以 C++/Skia 原生渲染为核心的跨平台白板垂直切片：
 
-- Windows 原生路径已经具备共享文档模型、Skia + D3D12/DirectComposition 涂写、Win32 pen/touch 输入、WebView2 网页/富文本/视频承载、命名管道 IPC、Electron 控制和 Windows portable 发布流程。当前远端头 `eb1d948` 已推送，最新 Windows CI run `30697532044` 已全绿：200/200 CTest、Composition、打包契约、whitespace、metadata 和 portable artifact 均通过。修复包含 WebView2 启动期 host-message generation 保留，以及严格限定的已提交 `data:` fragment 快路径。
-- macOS Apple Silicon 路径已有 AppKit + CAMetalLayer + Skia Ganesh 的真实首帧渲染，并已在 rebase 后的 `d65afe9` 及其后续提交中实现固定三层宿主和 Task 20 最小 WKWebView 宿主。当前远端 head `3601da2` 已推送到 PR #2，rebase 后本地 full CTest 为 157/157；Windows Build run 30698953072 仍在执行。WKWebView 的完整导航/Ready、输入适配和 Electron 仍未接入。
+- Windows 原生路径已经具备共享文档模型、Skia + D3D12/DirectComposition 涂写、Win32 pen/touch 输入、WebView2 网页/富文本/视频承载、命名管道 IPC、Electron 控制和 Windows portable 发布流程。当前 branch head 为 docs commit `a9912da`，最新代码 commit 仍为 `eb1d948`；runs 30697532044 与 30700281564 均全绿：200/200 CTest、Composition、打包契约、whitespace、metadata 和 portable artifact 均通过。修复包含 WebView2 启动期 host-message generation 保留，以及严格限定的已提交 `data:` fragment 快路径。
+- macOS Apple Silicon 路径已有 AppKit + CAMetalLayer + Skia Ganesh 的真实首帧渲染、固定三层宿主、WKWebView 宿主和 Task 21 首文档导航/Ready 生命周期。当前远端 head `9adb455` 已推送到 PR #2；本地正确 overlay 下 configure、串行 Release build、full CTest 165/165 和 Task 21 focused 12/12 均通过。PR #2 的 Windows Build run 30698953072（Task 20 head）和 30702348950（Task 21 head）均已全绿。Pointer/IME、Electron/macOS CI 和真实 GUI 仍未接入。
 - EmbeddedLoadBatch 和 EmbeddedLoadCompletionInbox 已在本地完成平台无关的异步加载基础，但两个提交尚未推送到 GitHub，也尚未接入 WhiteboardApp。
 - 当前没有多人协作网络同步、CRDT/OT、账号/权限、房间/Presence、服务端，也没有 Android/iOS 实现。
 - 当前没有可宣称的 i5-1235U 触控屏“肉眼跟手”或 p95 < 50 ms 测量。这个指标必须在真实 Windows 触控设备上用高速摄像机测量。
 
 接手时最重要的顺序是：
 
-1. 等待并记录 PR #2 Windows Build run 30698953072 的最终结果；若失败，按既定实现代理→reviewer 流程处理。
+1. 将 PR #2 head `9adb455` 对应的 Windows Build run 30702348950 及 artifact 写入证据，并保持 hardware/GUI 检查 pending。
 2. 复核并推送两个异步加载基础提交，将其接入 WhiteboardApp 的原子文档加载事务。
-3. 继续实现 macOS navigation/Ready、PointerKind/pen/touch/IME、Electron/native IPC，以及 embedded-state；随后规划 Android/iOS 平台层。
+3. 继续实现 macOS PointerKind/pen/touch/IME、Electron/native IPC，以及 embedded-state；随后规划 Android/iOS 平台层。
 4. 最后做真实 Windows 设备、Electron GUI、触控延迟和 Release 验收；i5-1235U 触控屏 p95 <50 ms 仍必须由实机测量。
 
 ## 1. 仓库、远端和工作树事实
@@ -42,15 +42,15 @@ origin = git@github.com:Mostorm-Labs/canvas.git
 | 引用 | 短 SHA | 完整 SHA | 状态 |
 |---|---|---|---|
 | origin/main | cd445fc | `cd445fc4d24b849944958a6b108187727023d520` | 初始空壳基线 |
-| origin/codex/windows-vertical-slice | eb1d948 | `eb1d948d5efc09e21ca8687f3522e9d7f8656e15` | Windows PR #1 的远端头，已推送；最新 CI 全绿 |
-| origin/codex/macos-platform | 3601da2 | `3601da2478289044517c3726534a4ecf3e097a98` | macOS PR #2 的远端头；已 rebase 到 Windows eb1d948 并 force-with-lease 推送 |
+| origin/codex/windows-vertical-slice | a9912da | `a9912da6db3742cf3af2c4bdafca43c73b127edf` | Windows PR #1 的远端头；最新 docs push 的 run 30700281564 全绿 |
+| origin/codex/macos-platform | 9adb455 | `9adb4556cf1abeb24a64f920bfe77c9359c0a4e5` | macOS PR #2 的远端头；Task 21 已推送，Windows Build run 30702348950 全绿 |
 
 本机 worktree：
 
 | 路径 | 分支 / HEAD | 远端情况 | 当前状态 |
 |---|---|---|---|
-| /Users/qing/Documents/myself/projects/canvas-task16 | codex/windows-vertical-slice / `eb1d948d5efc09e21ca8687f3522e9d7f8656e15` | 与 origin/codex/windows-vertical-slice 一致，当前仅 handoff 文档 WIP | Windows runtime 修复已 scoped commit 并推送；run 30697532044 全绿。handoff 文档仍须独立提交，不能混入其他平台改动 |
-| /Users/qing/Documents/myself/projects/canvas-macos | codex/macos-platform / `3601da2478289044517c3726534a4ecf3e097a98` | 与 origin/codex/macos-platform 一致，已 rebase 到 eb1d948 | clean；Task 19/20 代码与 evidence 已提交并推送；本地 macOS full CTest 157/157 |
+| /Users/qing/Documents/myself/projects/canvas-task16 | codex/windows-vertical-slice / `a9912da6db3742cf3af2c4bdafca43c73b127edf` | 与 origin/codex/windows-vertical-slice 一致，当前仅 handoff 文档 WIP | Windows runtime 修复已 scoped commit 并推送；runs 30697532044、30700281564 全绿。handoff 文档仍须独立提交，不能混入其他平台改动 |
+| /Users/qing/Documents/myself/projects/canvas-macos | codex/macos-platform / `9adb4556cf1abeb24a64f920bfe77c9359c0a4e5` | 与 origin/codex/macos-platform 一致，已推送 Task 21 | Task 19/20/21 代码与 evidence 已提交并推送；本地 configure/build/full CTest 165/165、Task 21 focused 12/12 |
 | /Users/qing/Documents/myself/projects/canvas-embedded-batch | codex/embedded-load-batch / `e6148a29f75152e82a36479f6136171687c15601` | 没有远端分支 | clean，本地-only |
 | /Users/qing/Documents/myself/projects/canvas-completion-inbox | codex/embedded-completion-inbox / `025817394a4e662159bef85b749280efa530f7b6` | 没有远端分支 | clean，本地-only |
 | /Users/qing/Documents/myself/projects/canvas-atomic-open | codex/atomic-document-open / `025817394a4e662159bef85b749280efa530f7b6` | 没有远端分支 | 只是从 Inbox 基线建立的空 worktree，尚无 atomic-open 实现 |
@@ -86,9 +86,10 @@ pending host message；`data:` fragment 只有在 navigation complete、active i
 仍已提交且 canonical document key 相同的情况下才绕过 `NavigationStarting` 预期。新文档
 `SourceChanged` 会撤销旧完成证据，避免 stale key 向错误页面 flush 消息。
 
-当前 macOS Task 19/20 已提交并推送；macOS worktree 当前 clean。最近两个 scoped 代码提交为
-`d65afe9`（Task 19 layer stack）和 `d5d51e8`（Task 20 WKWebView host，均为 rebase 后 SHA）。
-Task 20 evidence 为 `15d61f1`/`3601da2`。
+当前 macOS Task 19/20/21 已提交并推送；macOS worktree 当前 clean。Task 21 提交为
+`9adb455`（WKWebView navigation/Ready lifecycle），Task 21 evidence 为
+`docs/tdd/task-21-macos-wkwebview-navigation-{red,green}.txt`。Task 20 evidence 为
+`15d61f1`/`3601da2`。
 
 ~~~text
 （无未提交文件）
@@ -96,8 +97,8 @@ Task 20 evidence 为 `15d61f1`/`3601da2`。
 
 两个列表都是本地工作状态，不在远端。不要使用 git reset --hard、git checkout -- 或清理未跟踪文件来“整理”工作区。
 
-> **跨机器交接警告：**另一个账号从 GitHub clone 已能看到 Windows `eb1d948` 和 macOS
-> `3601da2` 的已提交代码/evidence；仍看不到没有远端分支的 e6148a2/0258173。离开当前机器前
+> **跨机器交接警告：**另一个账号从 GitHub clone 已能看到 Windows `a9912da` 和 macOS
+> `9adb455` 的已提交代码/evidence；仍看不到没有远端分支的 e6148a2/0258173。离开当前机器前
 > 若要继续这些本地-only 对象，仍应执行第 6 节“阶段 A”的 bundle 备份。
 
 三个本地-only 提交对应的证据文件也只存在于各自分支：
@@ -105,7 +106,7 @@ Task 20 evidence 为 `15d61f1`/`3601da2`。
 `docs/tdd/task-16-macos-*.txt`，`e6148a2` 的证据在
 `docs/tdd/task-17-embedded-load-batch-*.txt`，`0258173` 的证据在
 `docs/tdd/task-18-embedded-load-completion-inbox-*.txt`。仅从 Windows 远端分支查看
-`docs/tdd/` 不会看到这些本地-only 分支文件。Windows `eb1d948` 和 macOS `3601da2` 已在远端，不再依赖本机 patch 才能恢复；
+`docs/tdd/` 不会看到这些本地-only 分支文件。Windows `a9912da` 和 macOS `9adb455` 已在远端，不再依赖本机 patch 才能恢复；
 但它当前的失败 CI 运行和诊断结论仍应由接手者通过 GitHub Actions URL 重新核对。
 
 
@@ -116,7 +117,7 @@ Task 20 evidence 为 `15d61f1`/`3601da2`。
 - PR：Build the Windows whiteboard vertical slice（https://github.com/Mostorm-Labs/canvas/pull/1）
 - 分支：codex/windows-vertical-slice → main
 - 状态：Draft / Open；最新 check 已通过，PR 可继续进行 macOS rebase 和后续功能开发。
-- 远端头：`eb1d948d5efc09e21ca8687f3522e9d7f8656e15`
+- 远端 branch head：`a9912da6db3742cf3af2c4bdafca43c73b127edf`（最新代码 commit `eb1d948d5efc09e21ca8687f3522e9d7f8656e15`）
 - 最新绿色运行：Windows Build run [30697532044](https://github.com/Mostorm-Labs/canvas/actions/runs/30697532044)
 - build job：[91362837977](https://github.com/Mostorm-Labs/canvas/actions/runs/30697532044/job/91362837977)
 
@@ -143,6 +144,14 @@ gh run view 30697532044 --repo Mostorm-Labs/canvas --json jobs,headSha,conclusio
 gh api repos/Mostorm-Labs/canvas/actions/runs/30697532044/artifacts
 ~~~
 
+随后 docs-only head `a9912da6db3742cf3af2c4bdafca43c73b127edf` 的验证也已完成：run
+[30700281564](https://github.com/Mostorm-Labs/canvas/actions/runs/30700281564)，job
+[91369983853](https://github.com/Mostorm-Labs/canvas/actions/runs/30700281564/job/91369983853)。
+Configure、Build、200/200 CTest、Composition、packaging contract、whitespace、metadata、
+portable package 和 artifact upload 全部通过；artifact 为
+`canvas-windows-x64-pr-1-7b92537f0a2f`，约 3,167,064 bytes，artifact id `8818623066`，未过期。
+该 run 的 PR `release` job skipped 仍是预期行为。
+
 历史失败 run `30696437691`（`f8478b2`）只保留作诊断背景：当时 200 项中 198 通过，失败为
 `SerialNavigationKeepsOnlyTheLatestRequestAndDoesNotStarveAfterFragment` 与
 `HostsContentBelowInkAndGatesSyntheticClicksByMode`；最终已由 `eb1d948` 修复并在本 run
@@ -167,16 +176,47 @@ workflow，不能把旧 ZIP 私下改名当成新版本。
 - PR：Add the macOS native platform foundation（https://github.com/Mostorm-Labs/canvas/pull/2）
 - 分支：codex/macos-platform → codex/windows-vertical-slice
 - 状态：Draft / Open；base 已更新到 Windows `eb1d948`，GitHub 无 macOS runner，但会运行 Windows Build
-- 远端头：`3601da2478289044517c3726534a4ecf3e097a98`
+- 远端头：`9adb4556cf1abeb24a64f920bfe77c9359c0a4e5`
 - rebase/push：已完成，使用带旧远端 SHA `672ef32` 的显式 `--force-with-lease`
 - rebase 后提交：`fc16496`（Skia Metal）、`ff03ed2`/`d65afe9`（Task 19 evidence/stack）、
-  `d5d51e8`（Task 20 WKWebView host）、`15d61f1`/`3601da2`（Task 20 evidence）
-- 本地 macOS：configure/build 通过，focused WK 3/3，full CTest 157/157，worktree clean
-- PR Windows check：run [30698953072](https://github.com/Mostorm-Labs/canvas/actions/runs/30698953072) 执行中；当前处于 vcpkg install
+  `d5d51e8`（Task 20 WKWebView host）、`15d61f1`/`3601da2`（Task 20 evidence）、
+  `9adb455`（Task 21 WKWebView navigation/Ready lifecycle）
+- 本地 macOS：正确 overlay 下 configure、串行 Release build、focused 12/12、full CTest 165/165，worktree clean
+- PR Windows checks：Task 20 head 的 run [30698953072](https://github.com/Mostorm-Labs/canvas/actions/runs/30698953072) 和 Task 21 head 的 run [30702348950](https://github.com/Mostorm-Labs/canvas/actions/runs/30702348950) 均已全绿；Task 21 build job 为 [91375451176](https://github.com/Mostorm-Labs/canvas/actions/runs/30702348950/job/91375451176)
 
-PR #2 的 rebase 已完成。接手者只需继续监控 run 30698953072；若完整绿色，将其真实 job/
-artifact 写入本节。若失败，必须判断是 manifest/cache 外部问题还是 Windows 代码/CMake 回归，
-不得重写已通过的 macOS测试来掩盖 Windows 失败。
+PR #2 Task 20 head 的 Windows 远端验证已完成。run [30698953072](https://github.com/Mostorm-Labs/canvas/actions/runs/30698953072)
+（head `3601da2478289044517c3726534a4ecf3e097a98`）结果：Configure、Build、200/200 CTest、
+Composition、release packaging contract、whitespace、metadata、portable package 和 artifact
+upload 全部通过。首次 vcpkg cache miss 花费约 27 分钟并成功保存 cache，不是 billing blocker。
+build job 为 [91366454552](https://github.com/Mostorm-Labs/canvas/actions/runs/30698953072/job/91366454552)。
+PR artifact 为 `canvas-windows-x64-pr-2-f3edd04012ef`，约 3,167,064 bytes，未过期，下载 API URL：
+`https://api.github.com/repos/Mostorm-Labs/canvas/actions/artifacts/8818476342/zip`。
+`release` job skipped 是 PR 事件的预期行为；推送 `v*` tag 才会创建 Release。
+
+Task 21 的 macOS 本机证据在 `9adb455`：WKWebView action/response 双重 fail-closed policy、
+HTTPS/package-root file/受限 data URL、latest-wins generation、同步 reentry identity、
+late completion URI、weak delegate 和 close 状态均已实现。overlay 配置下 focused CTest
+12/12、fresh full CTest 165/165 通过；真实 macOS GitHub runner、HTTPS redirect 专项运行时
+测试、Electron/Pointer/IME、真实 GUI 和 i5-1235U <50 ms 仍 pending。Task 21 证据文件为：
+`docs/tdd/task-21-macos-wkwebview-navigation-{red,green}.txt`（仅 macOS worktree 可见）。
+
+Task 21 head 的 Windows Build 已完成并全绿。恢复后仍应先查询实时状态：
+
+~~~bash
+gh run list --repo Mostorm-Labs/canvas --branch codex/macos-platform \
+  --workflow 319742650 --limit 5 \
+  --json databaseId,status,conclusion,headSha,url
+~~~
+
+Task 21 head 的实际 Windows 结果（head SHA `9adb4556cf1abeb24a64f920bfe77c9359c0a4e5`）为：
+run [30702348950](https://github.com/Mostorm-Labs/canvas/actions/runs/30702348950)，build job
+[91375451176](https://github.com/Mostorm-Labs/canvas/actions/runs/30702348950/job/91375451176)；
+Configure、Build、CTest 200/200、Composition integration、release packaging contract、
+whitespace、package metadata、Windows portable package 和 artifact upload 全部通过。PR 事件的
+release job [91375736804](https://github.com/Mostorm-Labs/canvas/actions/runs/30702348950/job/91375736804)
+为 skipped，符合 workflow 设计。artifact 为 `canvas-windows-x64-pr-2-0459b8f1a9e6`，artifact id
+`8819253543`，大小 3,167,064 bytes，未过期；下载 API URL：
+`https://api.github.com/repos/Mostorm-Labs/canvas/actions/artifacts/8819253543/zip`。
 
 ### Windows Build / Release workflow
 
@@ -302,7 +342,7 @@ macOS 代码位于 src/platform/macos/ 和 app/macos/。`f856aac` 提供单表�
 - `MetalHost` 强制 AppKit 主线程，CAMetalDrawable texture 被包装为 Skia backend render target；Retina backing scale、事件驱动首帧、无 drawable 重试、resize、detach/reattach 均有本机测试覆盖。
 - 默认 overlay 拥有 hit-test；显式开启 `embeddedInteractionEnabled` 后，当前实现把命中交给 embedded container。该策略符合 Task 19 RED，但还不是最终 PointerKind/实际 child 命中路由。
 - macOS demo 已从单一 `CanvasMetalView` 切换到 `CanvasCompositionView`。
-- 当前目标是 Apple Silicon arm64；Task 20 已增加真实 WKWebView child 的最小生命周期/几何宿主，但完整 navigation delegate/Ready、pen/touch/mouse/IME 输入适配、Electron/native IPC 和 macOS Release workflow 仍未完成。Task 19/20 已推送到 PR #2 远端头 `3601da2`；Windows worktree 不包含这些 macOS-only 后继提交。
+- 当前目标是 Apple Silicon arm64；Task 20 的真实 WKWebView child 已在 Task 21 增加首文档 navigation/Ready、双重 policy、latest-wins 和 close/reentry 生命周期。Task 19/20/21 已推送到 PR #2 远端头 `9adb455`；pen/touch/mouse/IME 输入适配、Electron/native IPC 和 macOS Release workflow 仍未完成。Windows worktree 不包含这些 macOS-only 后继提交。
 
 ### 3.5 运行时数据流、线程和模块边界
 
@@ -372,11 +412,12 @@ checkpoint 曾经通过；它不表示当前 dirty worktree 或最新 PR head �
 | 13 | Lexical rich text、HTML video、WebView 资产和消息边界 | web 定向测试已 GREEN；真实 Windows WebView2/视频/IME 仍 pending；`task-13-green.txt` |
 | 14 | Document JSON/MessagePack codec、atomic DocumentStore | 核心定向验证 GREEN；Win32 文件替换仍需 Windows 运行时证据；`task-14-green.txt` |
 | 15 | Electron/native 控制、named pipe、Windows vertical slice | `eb1d948` 在 run 30697532044 完整绿色；硬件/GUI/IME/<50 ms 仍 pending；见第 2、5 节和 `task-15-green.txt` |
-| 16 | Windows portable artifact/tag Release；WebView2 initial-load 早期契约 | Release `v0.1.0-alpha.1` 为旧发布；最新 PR artifact 已由 run 30697532044 生成；`task-16-release-green.txt` |
+| 16 | Windows portable artifact/tag Release；WebView2 initial-load 早期契约 | Release `v0.1.0-alpha.1` 为旧发布；PR #1 artifact 由 run 30697532044/30700281564、PR #2 artifact 由 run 30698953072/30702348950 生成；`task-16-release-green.txt` |
 | 17 | EmbeddedLoadBatch 固定容量异步加载状态机 | 本地-only GREEN，提交 e6148a2，尚未推送/接入 WhiteboardApp；见下文 |
 | 18 | EmbeddedLoadCompletionInbox 固定 ring、合并 wake、generation cancel | 本地-only GREEN，提交 0258173，尚未推送/接入 WhiteboardApp；见下文 |
-| 19 | macOS Base / embedded / Overlay 三层宿主 | rebase 后提交 `d65afe9`，已随 PR #2 推送；Task 20 合并验证 full CTest 157/157；见第 5.2 节 |
-| 20 | macOS WKWebView 生命周期/几何宿主 | `d5d51e8` 已实现并独立 review PASS；main-thread attach/detach、bounds、visibility、interaction、flipped top-left 对齐，full CTest 157/157；不含完整 navigation/Ready/Electron/IME |
+| 19 | macOS Base / embedded / Overlay 三层宿主 | rebase 后提交 `d65afe9`，已随 PR #2 推送；Task 20 基线 full CTest 157/157；见第 5.2 节 |
+| 20 | macOS WKWebView 生命周期/几何宿主 | `d5d51e8` 已实现并独立 review PASS；main-thread attach/detach、bounds、visibility、interaction、flipped top-left 对齐；Task 20 基线 full CTest 157/157 |
+| 21 | macOS WKWebView 首文档导航/Ready | `9adb455` 已推送并独立 reviewer PASS；HTTPS/package-root file/受限 data、action/response policy、latest-wins、reentry、late URI、close/reentry；focused 12/12、full CTest 165/165；真实 macOS CI/GUI/HTTPS redirect 专项仍 pending |
 
 任务台账中的“完成”只描述代码/测试切片，不承诺多人协作、签名发布、跨设备
 输入或 50 ms 体验指标。接手者应打开对应 evidence 文件，确认命令、架构和基线 SHA。
@@ -393,35 +434,42 @@ checkpoint 曾经通过；它不表示当前 dirty worktree 或最新 PR head �
 
 ### macOS
 
-在本机 /Users/qing/Documents/myself/projects/canvas-macos，Task 19/20 的已推送提交使用相同
+在本机 /Users/qing/Documents/myself/projects/canvas-macos，Task 19/20/21 的已推送提交使用相同
 macOS preset。标准命令为：
 
 ~~~bash
 PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays cmake --preset macos-arm64
-PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays cmake --build --preset macos-arm64-release --parallel
-VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg ctest --preset macos-arm64-release
+PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays cmake --build --preset macos-arm64-release --parallel 1
+PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays ctest --preset macos-arm64-release --output-on-failure
 ~~~
 
-历史 `f856aac` 基线结果是 119/119，Task 19 历史 checkpoint 是 123/123。当前 `3601da2`
-rebase 到 Windows `eb1d948` 后的权威本地结果是：
+历史 `f856aac` 基线结果是 119/119，Task 19 历史 checkpoint 是 123/123。Task 20 的
+`3601da2` 基线结果为 157/157；当前 Task 21 `9adb455` 在正确 overlay 下的权威本地结果是：
 
 ~~~text
-full CTest: 157/157
+configure: 通过
+Release build（串行，--parallel 1）: 通过
+focused navigation tests: 12/12
+full CTest: 165/165
 canvas_macos_skia_frame_plan_test: 5/5
 canvas_macos_composition_layer_stack_test: 2/2
 canvas_macos_appkit_frame_scheduling_test: 1/1
 macOS source/contracts: 全部通过
-canvas_macos_wkwebview_surface_test: 3/3
-macOS source/runtime contracts: 5/5
+canvas_macos_wkwebview_surface_test: 7/7
+macOS navigation seam: 4/4
+macOS source/runtime contracts: 6/6
 x86_64 Objective-C++ strict syntax: 通过
 clang static analyzer: 无诊断
 git diff --check: 通过
 ~~~
 
-Task 20 独立 reviewer 最终 PASS，无 P0/P1；review 中发现的 y-up/top-left 坐标 P1 已通过
-flipped embedded container 修复，hit-test 使用确定性 child probe。这里的 157/157 是本地
-arm64 验证，不是 GitHub macOS CI：PR #2 没有 macOS runner。历史截图
-证据仍在 `docs/tdd/task-16-macos-appkit-scheduling-green.txt`；截图文件本身可能已清理，
+Task 20/21 独立 reviewer 最终 PASS，无 P0/P1；review 中发现的 y-up/top-left 坐标 P1 已通过
+flipped embedded container 修复，Task 21 又覆盖了 latest-wins、同步 reentry、late URI、
+close/reentry 和 package-root file。这里的 165/165 是本地 arm64 验证，不是 GitHub macOS CI：
+PR #2 没有 macOS runner。HTTPS redirect 专项 runtime、真实 GUI/硬件、Electron/IME 和 <50 ms
+仍 pending。历史截图
+证据仍在 `docs/tdd/task-16-macos-appkit-scheduling-green.txt`，Task 21 证据在
+`docs/tdd/task-21-macos-wkwebview-navigation-{red,green}.txt`；截图文件本身可能已清理，
 证据中记录的 SHA-256 `84431004a55ad42dfcd7eccb7a25ad9670b771cb34aa34fc768dd21002bdcb5d`
 只是历史首帧证据，不是可下载的 macOS 安装包。
 
@@ -451,6 +499,15 @@ arm64 验证，不是 GitHub macOS CI：PR #2 没有 macOS runner。历史截图
 Task 17/18 的 138/138 和 151/151 都是 macOS portable/core 验证，不是 MSVC、
 WebView2 或 WhiteboardApp 集成结果。把两个提交引入 Windows 分支后，必须重新跑 Windows
 完整 CTest；不能用这些本地测试数字代替 Windows CI。
+
+接入前的独立只读审查（2026-08-01）还记录了几个事务层 P1 风险：现有
+`EmbeddedSurfaceManager::sync()` 会直接销毁/替换 live surface，不能拿来充当 candidate
+document 的原子 staging；必须有独立 candidate surface 集合和 commit/discard。平台回调入口
+必须严格 gate 当前 active generation/token，旧 generation 或重复 completion 不能把 256-slot
+Inbox 填满并饿死当前 batch；Inbox Full 必须转成明确 rollback/failure。Batch/Inbox 当前是
+单线程契约，平台非 UI 回调必须 marshal 到 owner 线程或增加同步/TSAN contract。shutdown
+顺序应是 invalidate generation、停止 callback/timer、释放 pending wake，再 clear Inbox 和
+销毁窗口。上述风险尚未接入实现，不能把 Task 17/18 描述成 WhiteboardApp 原子加载已完成。
 
 ## 5. 当前未完成项和已知风险
 
@@ -551,19 +608,21 @@ x86_64 Objective-C++ strict syntax 通过、clang static analyzer 无诊断、`g
 只读复核仍应保留以下 P2/后续边界，不能把 Task 19 描述成完整 macOS 白板：
 
 - `embeddedInteractionEnabled` 当前把整个区域交给空的 embedded container；接入真实 WKWebView/InputRouter 时，应按实际 child 命中和 PointerKind 路由，避免空白区域吞掉 pen/viewport 输入。
-- Task 20 已有真实 WKWebView child 的最小 host，但没有 focus/IME、视频/网页导航生命周期、pointer adapter 或 Electron IPC；三层宿主仍只是这些能力的容器。
+- Task 20 已有真实 WKWebView child 的最小 host；Task 21 已增加首文档 navigation/Ready，但没有 focus/IME、视频/网页内容同步、pointer adapter 或 Electron IPC；三层宿主仍只是这些能力的容器。
 - runtime test 验证层顺序、opacity、共享资源和 frame commit，但还没有逐像素 readback 证明透明 overlay 不污染中间内容；source contract 也是结构性检查。
 - `MetalRenderResources` 的每个 `shared_ptr` 拷贝都可能成为最后 owner，最终释放必须发生在 AppKit 主线程；当前 header 已说明此约束，未来 surface factory 也必须遵守。
-- Task 19 GREEN evidence 已在 `ff03ed2`，Task 20 GREEN evidence 在 `15d61f1`/`3601da2`；rebase 后 157/157 已记录，历史 evidence 不能替代新基线验证。
-- README 已按 Task 19/20 更新，明确“生命周期/几何宿主”和“完整导航/Ready”之间的边界。
+- Task 19 GREEN evidence 已在 `ff03ed2`，Task 20 GREEN evidence 在 `15d61f1`/`3601da2`，Task 21 GREEN evidence 在 `9adb455`；历史 evidence 不能替代新基线验证。
+- README 已按 Task 19/20/21 更新，明确 navigation/Ready 与内容同步、输入、Electron 之间的边界。
 - 两个 surface 当前在 AppKit 主线程串行使用共享 `SkiaRenderer`；若未来把渲染移到异步线程，必须增加同步或拆分 renderer/context，不能直接复用当前无锁对象。
-- PR #2 现在以 Windows SHA `eb1d948` 为 base、远端头为 `3601da2`；没有 GitHub macOS CI，本地 157/157 不能替代未来真实 macOS CI/硬件证据。
+- PR #2 现在以 Windows SHA `eb1d948` 为 base、远端头为 `9adb455`；没有 GitHub macOS CI，本地 165/165 不能替代未来真实 macOS CI/硬件证据。
 
 Task 20 已增加最小 WKWebView child：主线程生命周期、attach/detach、bounds、visibility、
-interaction gate 和 flipped top-left 对齐；它不包含完整 navigation delegate、Ready、Electron
-或 IME。独立 reviewer 最终 PASS 后代码/evidence 已分离提交，rebase 到 `eb1d948` 并
-`push --force-with-lease` 更新 PR #2；rebase 后 full CTest 157/157。后续不得把
-EmbeddedLoadBatch/Inbox 混入该已收口提交。
+interaction gate 和 flipped top-left 对齐。Task 21 在其上增加首文档 navigation/Ready：
+HTTPS、canonical package-root file、bounded opt-in data URL，action/response 双 policy，
+latest-wins、同步 reentry identity、late completion URI、weak delegate 和 close 状态。独立
+reviewer PASS 后以 `9adb455` 单独提交并推送 PR #2；overlay 下 fresh full CTest 165/165，
+focused navigation 12/12。真实 macOS GitHub CI、HTTPS redirect 专项 runtime、Electron/IME
+和硬件 GUI 仍 pending。后续不得把 EmbeddedLoadBatch/Inbox 混入该已收口提交。
 
 ### 5.3 异步嵌入加载尚未接入 WhiteboardApp
 
@@ -593,7 +652,7 @@ ready gate 和 backpressure，不应为了接事件而直接暴露 `ipcRenderer`
 
 ### 5.5 跨平台和产品项
 
-- macOS：Task 20 最小 WKWebView child 宿主已实现并推送；完整导航/Ready、输入/IME、Electron 控制、视频与富文本生命周期尚未实现。
+- macOS：Task 21 已实现并推送首文档 navigation/Ready 与 fail-closed policy；Pointer/pen/touch/IME、Electron 控制、视频/富文本内容同步和 HTTPS redirect 专项 runtime 仍未实现或验证。
 - Android/iOS：没有 platform layer、输入适配、Metal/Vulkan/Skia host 或发布流程。
 - 多人在线协作：没有网络协议、服务端、CRDT/OT、冲突解决、Presence、权限、离线合并。
 - 性能：没有 50 ms 端到端测量；需要在 i5-1235U 触控大屏上测物理接触到可见墨迹的 p50/p95/p99，而不是只看 API timestamp。
@@ -665,16 +724,21 @@ ctest --preset windows-x64-release -R "(WebView2InitialLoadTracker|WebView2Navig
 → release packaging contract → whitespace → package/artifact；任一步失败，后续步骤会被
 跳过，故 artifact 不存在并不一定是上传权限问题。
 
-### 阶段 C：收敛 macOS Task 20 并更新 PR #2（已完成）
+### 阶段 C：收敛 macOS Task 19/20/21 并更新 PR #2（已完成）
 
 1. Task 19 已由 `ff03ed2`/`d65afe9` 完成 evidence 与实现提交；Task 20 已由 `d5d51e8` 完成。
 2. 独立 reviewer 检查了 ARC/PImpl ownership、AppKit 主线程最后释放、weak parent、
    attach/detach/reattach/close、points 几何、visibility/hit-test gate 和层级；坐标 P1 修复后
    同一 reviewer 最终 PASS。
-3. rebase 后本机重新运行结果为 configure/build、focused 3/3、full CTest 157/157、contracts
-   5/5、diff-check 全部通过。
+3. Task 20 rebase 后本机结果为 configure/build、focused 3/3、full CTest 157/157、contracts
+   5/5、diff-check 全部通过；Task 21 `9adb455` 又以 overlay 重跑 configure、串行 build、
+   focused 12/12、full CTest 165/165。
 4. 已按白名单提交 evidence，rebase 到 `eb1d948`，并使用显式 `--force-with-lease` 更新 PR #2。
-5. 当前只需等待 run 30698953072；若绿色，阶段 C 完成；若失败，按 Windows CI 诊断流程处理。
+   5. run 30698953072 已绿色，Task 20 阶段完成；Task 21 `9adb455` 已推送，本地 overlay
+   configure/build、focused 12/12、full CTest 165/165 均通过。run 30702348950 也已完成并全绿；
+   下一阶段是审查 EmbeddedLoadBatch/CompletionInbox 并实现 WhiteboardApp 原子加载事务。
+
+   复现命令（未来修改 macOS 后仍需执行）：
 
    ~~~bash
    PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays cmake --preset macos-arm64
@@ -831,7 +895,9 @@ docs/evidence/*.pending.md               尚未完成的 Windows/GUI/硬件验�
 - [x] macOS Task 19/20 已提交、rebase、推送，Task 19 RED/GREEN 与 Task 20 GREEN evidence 均在远端；Windows URL/COM 修复已在 `eb1d948` 远端。
 - [ ] Windows URL canonicalization、COM reentrancy、SourceChanged stale identity 有独立测试和复审记录。
 - [x] Windows full CI 的 Build、CTest、Composition、package、whitespace、artifact 已全绿并写入本文件 evidence。
-- [x] macOS 三层宿主/WK surface 在 rebase 后 full CTest 157/157，通过后 PR #2 已 rebase 到 `eb1d948` 并 force-with-lease 推送。
+- [x] macOS 三层宿主/WK surface 在 Task 20 基线 full CTest 157/157，Task 21 `9adb455` 已独立 review、提交并推送；fresh full CTest 165/165、focused 12/12 已记录。
+- [x] PR #2 Task 20 head `3601da2` 的 Windows Build run 30698953072 已全绿，artifact `canvas-windows-x64-pr-2-f3edd04012ef` 已记录。
+- [x] PR #2 Task 21 head `9adb455` 的 Windows Build run 30702348950 已完成并全绿；build job `91375451176`，release job `91375736804`（PR 事件 skipped），artifact `canvas-windows-x64-pr-2-0459b8f1a9e6`，artifact id `8819253543`，约 3,167,064 bytes，未过期。
 - [ ] EmbeddedLoadBatch/CompletionInbox 已重新审查并推送，之后才接入 WhiteboardApp。
 - [ ] embedded-state、Electron GUI E2E、WKWebView、触控/IME/视频和 i5-1235U <50 ms 证据均有真实记录，或仍明确 pending。
 - [ ] 多人协作网络层、Android/iOS 和正式签名发布被单独排期，而不是误认为当前 vertical slice 已包含。
@@ -862,14 +928,15 @@ git -C /Users/qing/Documents/myself/projects/canvas-atomic-open status --short -
 
 预期结果：
 
-- canvas-task16 位于 eb1d948，Windows 源代码 clean（交接文档单独提交）；
-- canvas-macos 位于 3601da2，与远端一致且 clean，Task 19/20 代码与 evidence 已可从 GitHub 获取；
+- canvas-task16 位于 a9912da，Windows 源代码 clean（交接文档单独提交）；
+- canvas-macos 位于 9adb455，与远端一致且 clean，Task 19/20/21 代码与 evidence 已可从 GitHub 获取；
 - embedded-batch 位于 e6148a2 且 clean；
 - completion-inbox 和 atomic-open 都位于 0258173 且 clean；
 - 不应出现来源不明的新改动。如果实际状态不同，先更新本文件中的状态快照或查清改动来源，再开始写代码。
 
-随后只对当前优先任务做定向检查。Windows 代码已经在 `eb1d948`，先读绿色 run 证据；
-macOS worktree 当前 clean，重点核对 PR #2 Windows run：
+随后只对当前优先任务做定向检查。Windows branch 当前 docs head 是 `a9912da`，macOS
+branch 当前 Task 21 head 是 `9adb455`；先读已完成的绿色 run 证据，重点核对 PR #2
+Windows run：
 
 ~~~bash
 cd /Users/qing/Documents/myself/projects/canvas-task16
@@ -880,6 +947,9 @@ sed -n '1,260p' src/platform/windows/webview2_navigation_uri.h
 sed -n '1,320p' tests/unit/webview2_navigation_uri_test.cpp
 
 git -C /Users/qing/Documents/myself/projects/canvas-macos status --short
+gh run list --repo Mostorm-Labs/canvas --branch codex/macos-platform \
+  --workflow 319742650 --limit 5 \
+  --json databaseId,status,conclusion,headSha,url
 ~~~
 
 在理解 macOS WIP 和 Windows runtime failure 前不要运行格式化全仓库、自动修复、rebase、
@@ -887,7 +957,7 @@ stash pop 或任何清理命令。构建目录和依赖恢复可以重建，源�
 
 ### 11.2 如果新账号在另一台机器
 
-先在旧机器按第 6 节阶段 A 生成并复制以下文件；Windows `eb1d948` 与 macOS `3601da2`
+先在旧机器按第 6 节阶段 A 生成并复制以下文件；Windows `a9912da` 与 macOS `9adb455`
 已在 GitHub，仍未推送的只有本地-only e6148a2/0258173 对象：
 
 ~~~text
@@ -924,12 +994,12 @@ git worktree add -b codex/atomic-document-open-local ../canvas-atomic-open refs/
 
 ~~~bash
 git fsck --full
-git show --stat --oneline 3601da2
+git show --stat --oneline 9adb455
 git show --stat --oneline e6148a2
 git show --stat --oneline 0258173
 ~~~
 
-确认 fsck 不报告缺对象或损坏，并且 macOS `3601da2` 与两个本地-only SHA 都可读取；若另有
+确认 fsck 不报告缺对象或损坏，并且 macOS `9adb455` 与两个本地-only SHA 都可读取；若另有
 patch/tgz 备份，再确认它们可恢复后才允许旧账号删除本机 worktree。
 
 ### 11.3 建议复制给新 Codex 账号的首条任务说明
@@ -940,9 +1010,9 @@ patch/tgz 备份，再确认它们可恢复后才允许旧账号删除本机 wor
 再只读检查所有 canvas-* worktree、PR #1、PR #2 和最新 CI。保留所有已有
 tracked/untracked WIP，禁止 reset --hard、checkout --、clean、git add -A。
 
-当前优先监控 PR #2 的 Windows Build run 30698953072；若绿色，开始审查/推送
-EmbeddedLoadBatch + CompletionInbox 并规划 WhiteboardApp 原子文档加载事务。macOS Task 20
-已完成但不包含 navigation/Ready、IME、Electron。硬件、GUI、视频和 <50 ms 触控证据仍保持
+当前优先审查/推送 EmbeddedLoadBatch + CompletionInbox 并规划 WhiteboardApp 原子文档加载事务。
+PR #2 Task 21 的 Windows Build run 30702348950 已全绿。macOS Task 21 已完成 navigation/Ready，
+但不包含 Pointer/IME、Electron。硬件、GUI、视频和 <50 ms 触控证据仍保持
 pending；不要把 e6148a2/0258173 或 atomic-open 改动混入已绿色分支。
 ~~~
 
