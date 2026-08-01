@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <cmath>
 #include <limits>
 
@@ -47,14 +49,74 @@ inline DrawablePixelSize drawablePixelSize(double widthInPoints,
           drawablePixelExtent(heightInPoints, backingScale)};
 }
 
-// This vertical slice composites all native paint into one Metal surface in
-// Windows' back-to-front order. It does not solve final embedded-view layering:
-// the WKWebView increment must use an opaque Base Metal layer, WKWebViews in
-// the middle, and a separate transparent Annotation/Chrome Metal layer above.
-inline constexpr std::array<document::LayerClass, 3> kCanvasPaintLayers{
-    document::LayerClass::Base,
-    document::LayerClass::Annotation,
-    document::LayerClass::Chrome,
+// A CanvasCompositionView always owns two independent Metal surfaces. The
+// opaque surface paints the document background below embedded AppKit views;
+// the transparent surface paints ink and interaction chrome above them.
+enum class MetalSurfaceRole : std::uint8_t {
+  Base,
+  Overlay,
+};
+
+struct SkiaSurfaceFramePlan {
+  bool opaque = false;
+  std::uint32_t clearColorArgb = 0;
+  std::array<document::LayerClass, 2> layers{};
+  std::size_t layerCount = 0;
+
+  constexpr bool paints(document::LayerClass layer) const noexcept {
+    for (std::size_t index = 0; index < layerCount; ++index) {
+      if (layers[index] == layer) return true;
+    }
+    return false;
+  }
+
+  friend constexpr bool operator==(const SkiaSurfaceFramePlan& left,
+                                   const SkiaSurfaceFramePlan& right) noexcept {
+    if (left.opaque != right.opaque ||
+        left.clearColorArgb != right.clearColorArgb ||
+        left.layerCount != right.layerCount) {
+      return false;
+    }
+    for (std::size_t index = 0; index < left.layers.size(); ++index) {
+      if (left.layers[index] != right.layers[index]) return false;
+    }
+    return true;
+  }
+
+  friend constexpr bool operator!=(const SkiaSurfaceFramePlan& left,
+                                   const SkiaSurfaceFramePlan& right) noexcept {
+    return !(left == right);
+  }
+};
+
+inline constexpr SkiaSurfaceFramePlan skiaSurfaceFramePlan(
+    MetalSurfaceRole role) noexcept {
+  switch (role) {
+    case MetalSurfaceRole::Base:
+      return {true,
+              0xFFFFFFFFU,
+              {document::LayerClass::Base, document::LayerClass::Base},
+              1};
+    case MetalSurfaceRole::Overlay:
+      return {false,
+              0x00000000U,
+              {document::LayerClass::Annotation,
+               document::LayerClass::Chrome},
+              2};
+  }
+  return {};
+}
+
+enum class CanvasHostLayerSlot : std::uint8_t {
+  BaseMetal,
+  EmbeddedViews,
+  OverlayMetal,
+};
+
+inline constexpr std::array<CanvasHostLayerSlot, 3> kCanvasHostLayerOrder{
+    CanvasHostLayerSlot::BaseMetal,
+    CanvasHostLayerSlot::EmbeddedViews,
+    CanvasHostLayerSlot::OverlayMetal,
 };
 
 }  // namespace canvas::macos

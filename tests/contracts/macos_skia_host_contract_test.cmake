@@ -32,7 +32,7 @@ foreach(required_token IN ITEMS
         "metalLayer.framebufferOnly = NO"
         "GrBackendRenderTargets::MakeMtl"
         "SkSurfaces::WrapBackendRenderTarget"
-        "kCanvasPaintLayers"
+        "skiaSurfaceFramePlan"
         "canvas->scale"
         "renderer.drawLayer"
         "SkSurfaces::BackendSurfaceAccess::kPresent"

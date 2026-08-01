@@ -3,11 +3,26 @@
 #include <cstdint>
 #include <memory>
 
+#include "platform/macos/skia_frame_plan.h"
+
 namespace canvas::document {
 class Document;
 }
 
 namespace canvas::macos {
+
+// MetalRenderResources is intentionally opaque here. Its Objective-C++
+// implementation owns one MTLDevice, MTLCommandQueue, and Ganesh
+// GrDirectContext. Multiple MetalHost instances can retain the same group so
+// Base and Overlay surfaces share GPU resources while keeping independent
+// CAMetalLayer/frame invalidation state. Every owner of a shared_ptr copy must
+// arrange for that copy's final reset or destruction on AppKit's main thread:
+// any copy can become the last owner and release Metal/Skia state.
+class MetalRenderResources;
+
+// Must be called on the AppKit main thread. A null result means Metal or the
+// shared Ganesh context could not be created on this machine.
+std::shared_ptr<MetalRenderResources> createMetalRenderResources();
 
 // AppKit and Metal remain behind this C++ PImpl boundary. The native view is
 // passed as an opaque pointer so this header remains safe for C++/Skia core
@@ -20,6 +35,9 @@ namespace canvas::macos {
 class MetalHost {
  public:
   MetalHost();
+  explicit MetalHost(
+      MetalSurfaceRole role,
+      std::shared_ptr<MetalRenderResources> sharedResources = {});
   ~MetalHost();
   MetalHost(const MetalHost&) = delete;
   MetalHost& operator=(const MetalHost&) = delete;
@@ -41,6 +59,8 @@ class MetalHost {
   std::uint64_t nativeDisplayRequestCount() const noexcept;
   std::uint64_t committedFrameCount() const noexcept;
   bool isReady() const noexcept;
+  MetalSurfaceRole surfaceRole() const noexcept;
+  bool sharesRenderResourcesWith(const MetalHost& other) const noexcept;
 
  private:
   class Impl;

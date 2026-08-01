@@ -159,6 +159,7 @@ if(APPLE)
     find_library(CANVAS_QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
 
     add_library(canvas_macos_platform STATIC
+                src/platform/macos/composition_view.mm
                 src/platform/macos/metal_host.mm
                 src/platform/macos/metal_view.mm)
     add_library(canvas::macos_platform ALIAS canvas_macos_platform)

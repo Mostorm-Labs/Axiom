@@ -120,6 +120,22 @@ if(APPLE)
         canvas_macos_appkit_frame_scheduling_test
         PROPERTIES TIMEOUT 15 ENVIRONMENT "MTL_DEBUG_LAYER=1")
 
+    add_executable(canvas_macos_composition_layer_stack_test
+                   integration/macos_composition_layer_stack_test.mm)
+    target_include_directories(canvas_macos_composition_layer_stack_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_composition_layer_stack_test
+                          PRIVATE canvas::macos_platform
+                                  canvas::core
+                                  GTest::gtest_main)
+    target_compile_options(canvas_macos_composition_layer_stack_test
+                           PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_composition_layer_stack_test)
+    gtest_discover_tests(
+        canvas_macos_composition_layer_stack_test
+        PROPERTIES TIMEOUT 20 ENVIRONMENT "MTL_DEBUG_LAYER=1")
+
     # This source-level contract runs without a GPU. The runtime ownership
     # violation deliberately terminates, so it is asserted structurally here.
     add_test(NAME canvas_macos_metal_host_thread_contract
@@ -131,6 +147,11 @@ if(APPLE)
              COMMAND ${CMAKE_COMMAND}
                      -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_skia_host_contract_test.cmake)
+
+    add_test(NAME canvas_macos_composition_host_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_composition_host_contract_test.cmake)
 endif()
 
 add_executable(canvas_embedded_transform_test unit/embedded_transform_test.cpp)

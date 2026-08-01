@@ -33,16 +33,42 @@ TEST(MacosSkiaFramePlan, ClampsFinitePixelOverflowToTheIntegerLimit) {
             (DrawablePixelSize{std::numeric_limits<int>::max(), 2}));
 }
 
-TEST(MacosSkiaFramePlan, DrawsOnlyNativePaintLayersInCompositionOrder) {
+TEST(MacosSkiaFramePlan, SplitsBaseAndOverlayWithoutPaintingEmbeddedContent) {
+  constexpr SkiaSurfaceFramePlan base =
+      skiaSurfaceFramePlan(MetalSurfaceRole::Base);
+  constexpr SkiaSurfaceFramePlan overlay =
+      skiaSurfaceFramePlan(MetalSurfaceRole::Overlay);
+
+  static_assert(base.opaque);
+  static_assert(base.clearColorArgb == 0xFFFFFFFFU);
+  static_assert(base.layerCount == 1);
+  static_assert(base.layers[0] == document::LayerClass::Base);
+  static_assert(!base.paints(document::LayerClass::Embedded));
+  static_assert(!base.paints(document::LayerClass::Annotation));
+  static_assert(!base.paints(document::LayerClass::Chrome));
+
+  static_assert(!overlay.opaque);
+  static_assert(overlay.clearColorArgb == 0x00000000U);
+  static_assert(overlay.layerCount == 2);
+  static_assert(overlay.layers[0] == document::LayerClass::Annotation);
+  static_assert(overlay.layers[1] == document::LayerClass::Chrome);
+  static_assert(!overlay.paints(document::LayerClass::Base));
+  static_assert(!overlay.paints(document::LayerClass::Embedded));
+
+  EXPECT_NE(base, overlay);
+}
+
+TEST(MacosSkiaFramePlan, DeclaresTheFixedBackToFrontNativeHostStack) {
   constexpr std::array expected{
-      document::LayerClass::Base,
-      document::LayerClass::Annotation,
-      document::LayerClass::Chrome,
+      CanvasHostLayerSlot::BaseMetal,
+      CanvasHostLayerSlot::EmbeddedViews,
+      CanvasHostLayerSlot::OverlayMetal,
   };
-  static_assert(kCanvasPaintLayers[0] == document::LayerClass::Base);
-  static_assert(kCanvasPaintLayers[1] == document::LayerClass::Annotation);
-  static_assert(kCanvasPaintLayers[2] == document::LayerClass::Chrome);
-  EXPECT_EQ(kCanvasPaintLayers, expected);
+  static_assert(kCanvasHostLayerOrder[0] == CanvasHostLayerSlot::BaseMetal);
+  static_assert(kCanvasHostLayerOrder[1] ==
+                CanvasHostLayerSlot::EmbeddedViews);
+  static_assert(kCanvasHostLayerOrder[2] == CanvasHostLayerSlot::OverlayMetal);
+  EXPECT_EQ(kCanvasHostLayerOrder, expected);
 }
 
 }  // namespace

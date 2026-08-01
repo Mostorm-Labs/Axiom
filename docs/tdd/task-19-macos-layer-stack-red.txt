@@ -1,0 +1,39 @@
+Task 19 macOS fixed layer-stack RED phase (2026-07-26)
+
+Portable frame-plan, real AppKit composition, and no-GPU source-contract tests
+were added before the production layer-stack host. All three failed for the
+new capability, as expected.
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    cmake --build --preset macos-arm64-release \
+      --target canvas_macos_skia_frame_plan_test
+
+Result: the compile exited 1. The new tests reported 14 errors, beginning with
+unknown type name 'SkiaSurfaceFramePlan', undeclared 'MetalSurfaceRole', and
+undeclared 'kCanvasHostLayerOrder'. This proves the existing portable plan
+still described one surface painting Base, Annotation, and Chrome together;
+it had no opaque-base/transparent-overlay split or embedded-view slot.
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    cmake --build --preset macos-arm64-release \
+      --target canvas_macos_composition_layer_stack_test
+
+Result: the compile exited 1 at line 13 because
+platform/macos/composition_view.h did not exist. The behavioral integration
+test already requires three real sibling NSViews in fixed back-to-front order,
+matching frames, opaque/transparent CAMetalLayer flags, one shared Metal/Skia
+resource group, default annotation hit testing with explicit embedded-input
+pass-through, independent first commits, Retina resize, event-driven quiescence,
+and detach/reattach recovery.
+
+  cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_composition_host_contract_test.cmake
+
+Result: the contract exited 1 because composition_view.h did not exist. The
+existing app therefore could not exercise a three-sibling host, and there was
+no source-level guarantee that the two surfaces use distinct frame plans or
+share one device/queue/Ganesh context.

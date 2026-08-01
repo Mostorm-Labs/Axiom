@@ -7,12 +7,28 @@
 
 @implementation CanvasMetalView {
   std::unique_ptr<canvas::macos::MetalHost> metalHost_;
+  canvas::macos::MetalSurfaceRole surfaceRole_;
+  std::shared_ptr<canvas::macos::MetalRenderResources> renderResources_;
+  BOOL hasBeenInWindow_;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
+  return [self initWithFrame:frame
+                 surfaceRole:canvas::macos::MetalSurfaceRole::Base
+             renderResources:{}];
+}
+
+- (instancetype)initWithFrame:(NSRect)frame
+                   surfaceRole:(canvas::macos::MetalSurfaceRole)surfaceRole
+               renderResources:(std::shared_ptr<canvas::macos::MetalRenderResources>)
+                                  renderResources {
   self = [super initWithFrame:frame];
   if (self != nil) {
-    metalHost_ = std::make_unique<canvas::macos::MetalHost>();
+    surfaceRole_ = surfaceRole;
+    hasBeenInWindow_ = NO;
+    renderResources_ = std::move(renderResources);
+    metalHost_ = std::make_unique<canvas::macos::MetalHost>(
+        surfaceRole_, renderResources_);
     if (!metalHost_->attachToView((__bridge void*)self)) return nil;
     [self resizeDrawable];
   }
@@ -20,7 +36,12 @@
 }
 
 - (void)dealloc {
+  // MetalHost enforces its AppKit-main-thread ownership contract. AppKit
+  // normally tears down views on the main thread; explicitly detaching here
+  // also makes the layer removal ordering visible at destruction time.
+  if (metalHost_) metalHost_->detachFromView();
   metalHost_.reset();
+  renderResources_.reset();
 }
 
 - (void)setCanvasDocument:
@@ -40,12 +61,33 @@
 
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
+
+  if (self.window == nil) {
+    // A view can receive an initial nil-window callback while it is being
+    // assembled in a windowless composition. Only detach after it has really
+    // been hosted, so the layer remains inspectable and can queue a pre-window
+    // first frame.
+    if (hasBeenInWindow_) {
+      if (metalHost_) metalHost_->detachFromView();
+      hasBeenInWindow_ = NO;
+    }
+    return;
+  }
+
+  hasBeenInWindow_ = YES;
+  if (metalHost_ && !metalHost_->isReady()) {
+    if (!metalHost_->attachToView((__bridge void*)self)) return;
+  }
   [self resizeDrawable];
   if (metalHost_) metalHost_->reschedulePendingFrame();
 }
 
 - (BOOL)wantsUpdateLayer {
   return YES;
+}
+
+- (BOOL)isOpaque {
+  return surfaceRole_ == canvas::macos::MetalSurfaceRole::Base;
 }
 
 - (void)updateLayer {
@@ -62,6 +104,17 @@
 
 - (std::uint64_t)committedFrameCount {
   return metalHost_ ? metalHost_->committedFrameCount() : 0;
+}
+
+- (BOOL)sharesRenderResourcesWithView:(CanvasMetalView*)other {
+  if (other == nil || metalHost_ == nullptr || other->metalHost_ == nullptr) {
+    return NO;
+  }
+  return metalHost_->sharesRenderResourcesWith(*other->metalHost_) ? YES : NO;
+}
+
+- (canvas::macos::MetalSurfaceRole)surfaceRole {
+  return surfaceRole_;
 }
 
 - (void)resizeDrawable {

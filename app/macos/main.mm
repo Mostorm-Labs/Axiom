@@ -1,7 +1,7 @@
 #import <AppKit/AppKit.h>
 
 #include "canvas/document/document.h"
-#include "platform/macos/metal_view.h"
+#include "platform/macos/composition_view.h"
 
 #include <memory>
 #include <utility>
@@ -38,7 +38,8 @@
     [NSApp terminate:nil];
     return;
   }
-  CanvasMetalView* view = [[CanvasMetalView alloc] initWithFrame:frame];
+  CanvasCompositionView* view =
+      [[CanvasCompositionView alloc] initWithFrame:frame];
   [view setCanvasDocument:document];
   self.window.contentView = view;
   [self.window center];
