@@ -24,3 +24,14 @@ The first hosted run still needs to establish whether `macos-14` can restore
 the vcpkg Skia/Metal dependency and execute the AppKit GUI tests. No release
 artifact, hardware latency, input adapter, IME, or Electron evidence is
 claimed by this workflow.
+
+## First hosted attempt
+
+Run [30703942343](https://github.com/Mostorm-Labs/canvas/actions/runs/30703942343)
+reached the vcpkg install step but failed because the runner's preinstalled
+`/usr/local/share/vcpkg` checkout did not contain the manifest's
+`builtin-baseline` (`a51bb4d1434e6d0927ff79db8033bed8522b85df`). The workflow now
+reads and validates that baseline, fetches the exact commit into a usable
+checkout, falls back to a baseline clone when the preinstalled checkout cannot
+be updated, and fails closed if the object still cannot be materialized. A new
+hosted run is required before claiming any macOS CI result.

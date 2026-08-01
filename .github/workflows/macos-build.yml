@@ -56,6 +56,12 @@ jobs:
         id: vcpkg
         run: |
           set -euo pipefail
+          baseline="$(node -e 'const fs=require("fs"); const value=JSON.parse(fs.readFileSync("vcpkg.json", "utf8"))["builtin-baseline"]; if(typeof value !== "string") process.exit(2); process.stdout.write(value);')"
+          if [[ ! "$baseline" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "vcpkg.json has an invalid builtin-baseline: $baseline" >&2
+            exit 1
+          fi
+
           root=""
           for candidate in \
             "/opt/homebrew/share/vcpkg" \
@@ -73,8 +79,43 @@ jobs:
             "$root/bootstrap-vcpkg.sh" -disableMetrics
           fi
 
+          clone_baseline_vcpkg() {
+            local clone_root="$GITHUB_WORKSPACE/.vcpkg-baseline"
+            rm -rf "$clone_root"
+            git clone --filter=blob:none --no-checkout \
+              https://github.com/microsoft/vcpkg "$clone_root"
+            git -C "$clone_root" fetch --no-tags --depth=1 origin "$baseline"
+            git -C "$clone_root" checkout --detach "$baseline"
+            "$clone_root/bootstrap-vcpkg.sh" -disableMetrics
+            root="$clone_root"
+          }
+
+          baseline_available=false
+          if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+            if git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1; then
+              baseline_available=true
+            else
+              if ! git -C "$root" remote get-url origin >/dev/null 2>&1; then
+                git -C "$root" remote add origin https://github.com/microsoft/vcpkg
+              fi
+              if git -C "$root" fetch --no-tags --depth=1 origin "$baseline" &&
+                 git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1; then
+                baseline_available=true
+              fi
+            fi
+          fi
+
+          if [[ "$baseline_available" != true ]]; then
+            clone_baseline_vcpkg
+            git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1 || {
+              echo "Unable to materialize vcpkg builtin-baseline $baseline" >&2
+              exit 1
+            }
+          fi
+
           echo "VCPKG_ROOT=$root" >> "$GITHUB_ENV"
           echo "root=$root" >> "$GITHUB_OUTPUT"
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
           "$root/vcpkg" version
 
       - name: Restore vcpkg binary cache
