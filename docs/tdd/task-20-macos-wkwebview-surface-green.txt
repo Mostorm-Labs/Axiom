@@ -66,6 +66,25 @@ Results:
 * whitespace/diff-check: passed
 * independent reviewer: PASS, no P0/P1
 
+Post-rebase verification
+------------------------
+
+The branch was then rebased onto Windows `eb1d948d5efc09e21ca8687f3522e9d7f8656e15`.
+The rebased code commit is `d5d51e8`; the evidence update is recorded in the
+current branch tip after this file is committed. The complete rebase validation
+was run again with the same arm64 preset:
+
+* configure: exit 0
+* Release build: exit 0
+* `canvas_macos_wkwebview_surface_test`: 3/3 passed
+* full CTest: 157/157 passed (including the Windows-baseline tests and five
+  macOS source/runtime contracts)
+* `git diff --check`: passed
+
+This 157/157 result is the authoritative post-rebase result; the earlier
+127/127 result above is retained as the pre-rebase Task 20 implementation
+checkpoint.
+
 Reviewer follow-up / known limits
 ----------------------------------
 
