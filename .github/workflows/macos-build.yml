@@ -1,0 +1,140 @@
+name: macOS Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+      GUI_TEST_REGEX: '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosWKWebViewSurface)\.'
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify arm64 runner
+        run: |
+          set -euo pipefail
+          architecture="$(uname -m)"
+          if [[ "$architecture" != "arm64" ]]; then
+            echo "macOS preset requires an arm64 runner; got $architecture" >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Validate macOS workflow contract
+        run: node --test tests/contracts/macos_build_workflow.test.mjs
+
+      - name: Test shared embedded web assets
+        working-directory: web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run build
+
+      - name: Resolve vcpkg
+        id: vcpkg
+        run: |
+          set -euo pipefail
+          root=""
+          for candidate in \
+            "/opt/homebrew/share/vcpkg" \
+            "/usr/local/share/vcpkg" \
+            "$HOME/vcpkg"; do
+            if [[ -x "$candidate/vcpkg" ]]; then
+              root="$candidate"
+              break
+            fi
+          done
+
+          if [[ -z "$root" ]]; then
+            root="$GITHUB_WORKSPACE/.vcpkg"
+            git clone --depth=1 https://github.com/microsoft/vcpkg "$root"
+            "$root/bootstrap-vcpkg.sh" -disableMetrics
+          fi
+
+          echo "VCPKG_ROOT=$root" >> "$GITHUB_ENV"
+          echo "root=$root" >> "$GITHUB_OUTPUT"
+          "$root/vcpkg" version
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: canvas-vcpkg-${{ runner.os }}-${{ runner.arch }}-arm64-osx-${{ hashFiles('vcpkg.json', 'CMakePresets.json') }}
+
+      - name: Prepare vcpkg binary cache
+        run: mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+
+      - name: Install vcpkg dependencies
+        id: vcpkg-install
+        run: |
+          set -euo pipefail
+          "$VCPKG_ROOT/vcpkg" install \
+            --triplet arm64-osx \
+            "--x-manifest-root=$GITHUB_WORKSPACE" \
+            "--x-install-root=$GITHUB_WORKSPACE/out/build/macos-arm64/vcpkg_installed"
+
+      - name: Save vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-install.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Configure
+        run: cmake --preset macos-arm64
+
+      - name: Build
+        run: cmake --build --preset macos-arm64-release --parallel
+
+      - name: Test non-GUI targets and source contracts
+        run: |
+          set -euo pipefail
+          ctest --preset macos-arm64-release \
+            --output-on-failure \
+            -E "$GUI_TEST_REGEX"
+
+      - name: Verify GUI and Metal tests are present
+        run: |
+          set -euo pipefail
+          total="$(ctest --preset macos-arm64-release -N -R "$GUI_TEST_REGEX" \
+            | awk '/Total Tests:/ { print $3 }')"
+          if [[ -z "$total" || "$total" -eq 0 ]]; then
+            echo "No macOS GUI/Metal tests were discovered; refusing a false-green run." >&2
+            exit 1
+          fi
+          echo "Discovered $total macOS GUI/Metal tests."
+
+      - name: Test GUI and Metal targets
+        env:
+          MTL_DEBUG_LAYER: "1"
+        run: |
+          set -euo pipefail
+          ctest --preset macos-arm64-release \
+            --output-on-failure \
+            -R "$GUI_TEST_REGEX"
+
+      - name: Whitespace check
+        run: git diff --check
