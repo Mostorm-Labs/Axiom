@@ -15,7 +15,10 @@ set(required_contracts
     "inputRouter_.setActiveEmbeddedNode(std::nullopt);"
     "activeRoute_ = input::RouteResult{};"
     "if (app->pendingOpen_ != nullptr) return 0;"
-    "document open in progress")
+    "document open in progress"
+    "boundedNativeEventRequestId(\"fatal\", requestId)"
+    "boundedNativeEventRequestId(\"state\", requestId)"
+    "boundedNativeEventRequestId(\"open-document\", requestId)")
 
 foreach(contract IN LISTS required_contracts)
     string(FIND "${source}" "${contract}" position)

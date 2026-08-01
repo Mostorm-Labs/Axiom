@@ -1764,8 +1764,7 @@ void WhiteboardApp::reportFatalFailure(HRESULT result,
   OutputDebugStringA(("Canvas fatal failure: " + detail + "\n").c_str());
   sendIpc(ipc::Message{
       1, "fatal-error",
-      "fatal-" + (requestId.empty() ? std::string("native")
-                                     : std::string(requestId)),
+      ipc::boundedNativeEventRequestId("fatal", requestId),
       nlohmann::json{{"error", detail},
                      {"hresult", static_cast<std::int64_t>(result)}}},
       connectionId);
@@ -2009,7 +2008,8 @@ void WhiteboardApp::commitPendingOpen() {
   pendingOpen_.reset();
   openDocumentResponsePending_ = false;
   openDocumentResponseSent_ = true;
-  sendIpc(ipc::Message{1, "document-state", "state-" + requestId,
+  sendIpc(ipc::Message{1, "document-state",
+                       ipc::boundedNativeEventRequestId("state", requestId),
                        nlohmann::json{{"nodeCount", nodeCount}}},
           connectionId);
 }
@@ -2032,7 +2032,8 @@ void WhiteboardApp::failPendingOpen(HRESULT result, std::string_view reason) {
   if (!closing_) {
     if (admissionSent) {
       sendIpc(ipc::Message{
-                  1, "diagnostics", requestId,
+                  1, "diagnostics",
+                  ipc::boundedNativeEventRequestId("open-document", requestId),
                   nlohmann::json{{"phase", "open-document"},
                                  {"status", "failed"},
                                  {"error", std::string(reason)}}},
@@ -2059,7 +2060,8 @@ void WhiteboardApp::cancelPendingOpen() noexcept {
   openDocumentResponseSent_ = true;
   if (!closing_ && admissionSent && !requestId.empty()) {
     sendIpc(ipc::Message{
-                1, "diagnostics", requestId,
+                1, "diagnostics",
+                ipc::boundedNativeEventRequestId("open-document", requestId),
                 nlohmann::json{{"phase", "open-document"},
                                {"status", "superseded"}}},
             connectionId);
@@ -2426,8 +2428,10 @@ void WhiteboardApp::handleIpcMessage(
             connectionId);
   }
   if (!deferResponse && accepted && emitDocumentState) {
-    sendIpc(ipc::Message{1, "document-state", "state-" + message.requestId,
-                         nlohmann::json{{"nodeCount", document_.nodes().size()}}},
+    sendIpc(ipc::Message{
+                1, "document-state",
+                ipc::boundedNativeEventRequestId("state", message.requestId),
+                nlohmann::json{{"nodeCount", document_.nodes().size()}}},
             connectionId);
   }
 }

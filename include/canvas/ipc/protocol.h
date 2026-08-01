@@ -9,6 +9,8 @@
 
 namespace canvas::ipc {
 
+inline constexpr std::size_t maximumRequestIdBytes = 256U;
+
 // Version 1 is deliberately a small, newline-delimited control protocol. It
 // is not an input transport: high-frequency samples stay in the native app.
 struct Message {
@@ -38,5 +40,11 @@ bool isAuthenticatedHello(const Message& message,
                           const std::string& expectedToken);
 bool isLauncherCommand(std::string_view type);
 bool isNativeEvent(std::string_view type);
+
+// Derive a native event id without exceeding the protocol's UTF-8 byte
+// budget. The prefix is supplied without its separator (for example,
+// "state"). If decoration would overflow, retain the original valid id.
+[[nodiscard]] std::string boundedNativeEventRequestId(
+    std::string_view prefix, std::string_view requestId);
 
 }  // namespace canvas::ipc
