@@ -1,5 +1,10 @@
 macOS Skia/Metal vertical slice GREEN phase (2026-07-26)
 
+Historical scope note: this evidence records the Task 16 single-surface
+vertical slice. Task 19 supersedes that host architecture with fixed Base
+Metal -> embedded native-view container -> transparent Overlay Metal siblings;
+see `task-19-macos-layer-stack-green.txt` for the current verification.
+
 The arm64 macOS preset now builds the real AppKit/CAMetalLayer host against
 locked vcpkg Skia 148 with the Metal and PNG features. MetalHost creates one
 Ganesh Metal context, wraps each drawable texture as a backend render target,
@@ -58,9 +63,9 @@ reachable GitHub mirrors and were hash-verified before the successful build.
 This proves the locked source inputs compile locally, but it is not a claim
 that the official CIPD artifact itself was exercised.
 
-The real initial Metal frame is now visually established on this Mac. Repeated
-Retina resize behavior and touch-to-ink p95 below 50 ms on the i5-1235U target
-display remain hardware/GUI checks. This increment intentionally contains no
-input adapter, WKWebView, or Electron control. Embedded content still requires
-the planned opaque Base Metal layer, WKWebView children, and transparent
-Annotation/Chrome Metal layer split.
+The real initial Metal frame is now visually established on this Mac. Retina
+resize behavior on the macOS target remains pending macOS hardware/GUI
+validation. Separately, touch-to-visible-ink p95 below 50 ms on the Windows
+i5-1235U target display remains pending Windows hardware/GUI validation. Task
+19 has since implemented the fixed Base/container/Overlay split, but actual
+WKWebView content, input adaptation, and Electron control remain pending.

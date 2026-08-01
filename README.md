@@ -18,8 +18,10 @@ and copies them beside `canvas_windows.exe` under `web/`.
 ## macOS prototype build
 
 The current Apple Silicon prototype hosts the shared C++ `Document` and
-`SkiaRenderer` in an AppKit `NSView`, wraps each `CAMetalDrawable` as a Ganesh
-Metal render target, and redraws only when AppKit receives an invalidation.
+`SkiaRenderer` in a fixed AppKit composition: opaque Base Metal, an embedded
+native-view container, then transparent Overlay Metal. Each `CAMetalDrawable`
+is wrapped as a Ganesh Metal render target and redraws only after an AppKit
+invalidation.
 
 1. Install Xcode and Ninja.
 2. Set `VCPKG_ROOT` to a vcpkg checkout.
@@ -27,12 +29,11 @@ Metal render target, and redraws only when AppKit receives an invalidation.
 4. Run `cmake --build --preset macos-arm64-release --parallel`.
 5. Run `ctest --preset macos-arm64-release`.
 
-The app bundle is generated under `out/build/macos-arm64/app/macos/`. This
-increment intentionally has no input adapter, WKWebView, or Electron control.
-Its one CAMetalLayer composites Base, Annotation, and Chrome only to prove the
-shared renderer path. The embedded-content increment must split that into an
-opaque base layer and a transparent ink/chrome layer, with WKWebView children
-between them, so web content remains above the canvas and below annotations.
+The app bundle is generated under `out/build/macos-arm64/app/macos/`. Base
+draws only `Base`; Overlay draws only `Annotation` and `Chrome`; both retain
+one Metal/Skia resource group while presenting independently. The middle
+container is ready for future WKWebView children. This increment still has no
+actual WKWebView implementation, input adapter, or Electron control.
 
 ## Windows downloads
 

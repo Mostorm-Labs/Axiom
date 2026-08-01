@@ -1,0 +1,90 @@
+Task 19 macOS fixed layer-stack GREEN phase (2026-08-01)
+
+The RED capability is now implemented by `CanvasCompositionView`. It creates
+exactly three AppKit sibling views in fixed back-to-front order:
+
+  Base Metal -> embedded native-view container -> Overlay Metal
+
+The portable `SkiaSurfaceFramePlan` gives Base an opaque white clear and only
+`LayerClass::Base`. Overlay has a transparent clear and only
+`LayerClass::Annotation` plus `LayerClass::Chrome`. Neither frame plan paints
+`LayerClass::Embedded`.
+
+The two `CanvasMetalView` instances retain one `MetalRenderResources` group:
+one `MTLDevice`, `MTLCommandQueue`, Ganesh `GrDirectContext`, and
+`SkiaRenderer`. Each host nevertheless has its own `CAMetalLayer`, frame
+invalidation state, drawable acquisition, and present. Base is opaque and
+Overlay is transparent. The default hit-test owner is Overlay; setting
+`embeddedInteractionEnabled` explicitly routes hit testing to the middle
+container. There is no display link, timer, or continuous render loop.
+
+Attach, resize, backing-scale change, and reattach use event-driven AppKit
+display work. A detach clears the native attachment before
+the AppKit layer is removed, and a later reattach requests a fresh frame for
+the retained document. All host use and every potentially final
+`MetalRenderResources` shared-pointer release are main-thread-affine.
+
+Authoritative local configure/build/regression qualification:
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    cmake --preset macos-arm64
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    cmake --build --preset macos-arm64-release --parallel
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    ctest --preset macos-arm64-release --output-on-failure
+
+Result: configure/generation and the Release build exited 0. Full CTest
+passed 123/123 tests with 0 failures. This includes the portable frame-plan
+tests, the existing AppKit scheduling test, both runtime composition tests,
+and all three macOS source contracts.
+
+Real composition/runtime verification:
+
+  MTL_DEBUG_LAYER=1 \
+    ./out/build/macos-arm64/tests/canvas_macos_composition_layer_stack_test \
+      --gtest_color=no
+
+Result: 2/2 passed. The first test verifies all three sibling frames, fixed
+subview ordering, CAMetalLayer opacity, shared resources, and the explicit
+embedded-input pass-through. The second verifies independent first commits,
+Retina resize, event-driven quiescence, and detach/reattach recovery. Metal
+reported "Metal API Validation Enabled" with no validation diagnostic.
+
+Stability repetition:
+
+  MTL_DEBUG_LAYER=1 ctest --test-dir out/build/macos-arm64 \
+    --output-on-failure -R '^MacosCompositionLayerStack\.' \
+    --repeat until-fail:5
+
+Result: both runtime composition cases completed five consecutive times (10
+successful test executions) with no failure. The repeated reattach case took
+approximately 0.43-0.44 seconds per execution and did not expose a continuous
+render loop or Metal validation error.
+
+No-GPU/source contract verification:
+
+  cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_composition_host_contract_test.cmake
+  cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_skia_host_contract_test.cmake
+  cmake -DSOURCE_DIR="$PWD" -P \
+    tests/contracts/macos_metal_host_thread_contract_test.cmake
+
+Result: all three exited 0. The composition contract checks the sibling order,
+Base/Overlay role bindings to the same resource group, and that the host uses
+that group for the Metal device, command queue, Ganesh context, and renderer.
+
+Still pending: real WKWebView creation/navigation/content lifecycle; macOS
+pointer, touch, pen, keyboard/IME, and overlay gesture routing; Electron
+control; macOS CI; and target-hardware validation of Retina behavior and
+i5-1235U touch-to-visible-ink p95 below 50 ms. This evidence proves the
+native three-layer host on this Apple Silicon workstation, not those pending
+product or hardware deliverables.
