@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <utility>
+#include <vector>
+
 namespace {
 using canvas::app::EmbeddedLoadBatch;
 
@@ -38,5 +41,27 @@ TEST(EmbeddedLoadBatchTest, RejectsInvalidGenerationAndTokens) {
   EXPECT_FALSE(EmbeddedLoadBatch::create(0U, {}));
   EXPECT_FALSE(EmbeddedLoadBatch::create(1U, {{0U, "node"}}));
   EXPECT_FALSE(EmbeddedLoadBatch::create(1U, {{2U, "a"}, {2U, "b"}}));
+}
+
+TEST(EmbeddedLoadBatchTest, EnforcesTheStagingLoadLimitBeforeCommit) {
+  std::vector<EmbeddedLoadBatch::Load> accepted;
+  accepted.reserve(EmbeddedLoadBatch::maximumLoadCount);
+  for (std::size_t index = 0; index < EmbeddedLoadBatch::maximumLoadCount;
+       ++index) {
+    accepted.push_back({static_cast<EmbeddedLoadBatch::Token>(index + 1U),
+                        "node"});
+  }
+  EXPECT_TRUE(EmbeddedLoadBatch::isLoadCountWithinLimit(accepted.size()));
+  EXPECT_TRUE(EmbeddedLoadBatch::create(1U, std::move(accepted)));
+
+  std::vector<EmbeddedLoadBatch::Load> rejected;
+  rejected.reserve(EmbeddedLoadBatch::maximumLoadCount + 1U);
+  for (std::size_t index = 0;
+       index < EmbeddedLoadBatch::maximumLoadCount + 1U; ++index) {
+    rejected.push_back({static_cast<EmbeddedLoadBatch::Token>(index + 1U),
+                        "node"});
+  }
+  EXPECT_FALSE(EmbeddedLoadBatch::isLoadCountWithinLimit(rejected.size()));
+  EXPECT_FALSE(EmbeddedLoadBatch::create(2U, std::move(rejected)));
 }
 }  // namespace

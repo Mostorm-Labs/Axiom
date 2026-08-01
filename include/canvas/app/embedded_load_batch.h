@@ -14,6 +14,10 @@ class EmbeddedLoadBatch {
  public:
   using Token = std::uint64_t;
   static constexpr std::size_t maximumLoadCount = 256U;
+  [[nodiscard]] static constexpr bool isLoadCountWithinLimit(
+      std::size_t count) noexcept {
+    return count <= maximumLoadCount;
+  }
   struct Load { Token token = 0; document::NodeId nodeId; };
   enum class Completion { Ready, Failed };
   enum class State { Pending, Ready, Failed, Cancelled, Timeout };

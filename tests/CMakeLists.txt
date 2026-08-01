@@ -16,6 +16,11 @@ add_test(NAME canvas_webview2_navigation_source_contract
                  -DSURFACE_SOURCE=${CMAKE_SOURCE_DIR}/src/platform/windows/webview2_surface.cpp
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/webview2_navigation_source_contract_test.cmake)
 
+add_test(NAME canvas_windows_atomic_open_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DAPP_SOURCE=${CMAKE_SOURCE_DIR}/app/windows/whiteboard_app.cpp
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/windows_atomic_open_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)

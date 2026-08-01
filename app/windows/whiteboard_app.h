@@ -119,6 +119,8 @@ class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
       std::uint64_t generation, canvas::app::EmbeddedLoadBatch::Token token,
       WebView2Surface::InitialLoadCompletion completion);
   void commitPendingOpen();
+  void sendOpenDocumentAdmission();
+  HRESULT cancelActiveInputForDocumentTransition();
   void failPendingOpen(HRESULT result, std::string_view reason);
   void cancelPendingOpen() noexcept;
   void handleIpcMessage(const ipc::Message& message,
@@ -146,6 +148,7 @@ class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
   canvas::app::EmbeddedLoadTracker embeddedLoadTracker_;
   canvas::app::EmbeddedLoadCompletionInbox embeddedLoadCompletions_;
   std::uint64_t nextDocumentGeneration_ = 1U;
+  UINT_PTR embeddedCompletionTimeoutTimerId_ = 0xCA22U;
   bool embeddedCompletionMessagePosted_ = false;
   // A completion callback can run synchronously from WebView2::Navigate().
   // During candidate staging, notification failures are recorded and

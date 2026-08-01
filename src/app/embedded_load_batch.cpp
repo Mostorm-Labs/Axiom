@@ -6,7 +6,8 @@ namespace canvas::app {
 
 std::optional<EmbeddedLoadBatch> EmbeddedLoadBatch::create(
     std::uint64_t generation, std::vector<Load> loads) {
-  if (generation == 0U || loads.size() > maximumLoadCount) return std::nullopt;
+  if (generation == 0U || !isLoadCountWithinLimit(loads.size()))
+    return std::nullopt;
   for (std::size_t index = 0; index < loads.size(); ++index) {
     if (loads[index].token == 0U) return std::nullopt;
     for (std::size_t previous = 0; previous < index; ++previous)
