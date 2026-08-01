@@ -17,6 +17,7 @@ using canvas::windows::detail::NavigationStartAfterGetterAction;
 using canvas::windows::detail::NativeNavigationStartExpectation;
 using canvas::windows::detail::NativeNavigationSourceChangedAction;
 using canvas::windows::detail::isProvableSameDocumentNavigation;
+using canvas::windows::detail::isProvableOpaqueSameDocumentNavigation;
 using canvas::windows::detail::nativeNavigationSourceChangedAction;
 using canvas::windows::detail::nativeNavigationStartExpectationWhenSourceIsUnavailable;
 using canvas::windows::detail::navigationStartAfterGetterAction;
@@ -98,6 +99,28 @@ TEST(WebView2InitialLoadTracker,
   EXPECT_TRUE(nativeNavigationExpectsStarting(
       false, false, {L"https://example.test/page", true},
       {L"https://example.test/page", true}));
+}
+
+TEST(WebView2InitialLoadTracker,
+     OpaqueCompletedDocumentCanResolveFragmentWithoutSourceEvidence) {
+  EXPECT_TRUE(isProvableOpaqueSameDocumentNavigation(
+      true, true, true, true, 17U, L"data:text/html,payload",
+      L"data:text/html,payload"));
+  EXPECT_FALSE(isProvableOpaqueSameDocumentNavigation(
+      true, true, false, true, 17U, L"data:text/html,payload",
+      L"data:text/html,payload"));
+  EXPECT_FALSE(isProvableOpaqueSameDocumentNavigation(
+      true, false, true, true, 17U, L"data:text/html,payload",
+      L"data:text/html,payload"));
+  EXPECT_FALSE(isProvableOpaqueSameDocumentNavigation(
+      true, true, true, true, 17U, L"data:text/html,other",
+      L"data:text/html,payload"));
+  EXPECT_FALSE(isProvableOpaqueSameDocumentNavigation(
+      true, true, true, true, 0U, L"data:text/html,payload",
+      L"data:text/html,payload"));
+  EXPECT_FALSE(isProvableOpaqueSameDocumentNavigation(
+      true, true, true, false, 17U, L"data:text/html,payload",
+      L"data:text/html,payload"));
 }
 
 TEST(WebView2InitialLoadTracker,

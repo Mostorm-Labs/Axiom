@@ -282,6 +282,10 @@ struct WebView2Surface::Impl final
     NavigationGeneration generation = 0U;
     bool hasFragment = false;
     bool documentKeyReady = false;
+    // Startup promotion has already established the host-message generation
+    // before entering the native driver. Keep those messages through the
+    // driver's full-document admission step exactly once.
+    bool preservePendingHostMessages = false;
   };
 
   enum class NativeNavigationPhase {
@@ -467,7 +471,8 @@ struct WebView2Surface::Impl final
     navigationDriveRequested = false;
   }
 
-  HRESULT deferNavigation(PendingNavigationRequest request) {
+  HRESULT deferNavigation(PendingNavigationRequest request,
+                          bool clearPendingHostMessages = true) {
     try {
       deferredNavigation.emplace(std::move(request));
     } catch (...) {
@@ -479,7 +484,11 @@ struct WebView2Surface::Impl final
     // stale even when the completed initial load leaves its active id intact.
     advanceNavigationMutationEpoch();
     (void)initialLoad.request();
-    pendingHostMessages.clear();
+    // A public navigation starts a new host-message generation. During
+    // controller startup, however, the pending request has already cleared
+    // the previous generation and messages posted after that request belong
+    // to this request; promoting it must not discard them a second time.
+    if (clearPendingHostMessages) pendingHostMessages.clear();
     // Once the one-shot initial load is still pending, any valid replacement
     // supersedes the active document immediately. Retiring its id before the
     // next URLMon/WebView2 call prevents a re-entrant completion for the old
@@ -556,6 +565,22 @@ struct WebView2Surface::Impl final
       return S_OK;
     }
 
+    // The opt-in data: test scheme has an opaque, host-owned document key.
+    // Once that key was committed successfully, a fragment request with the
+    // same key is provably same-document even when WebView2 does not expose a
+    // usable Source (or emits no SourceChanged notification for the fragment).
+    // Keep this trust scoped to data:; redirectable web origins must continue
+    // through WebView2 source evidence and NavigationStarting policy checks.
+    if (detail::isProvableOpaqueSameDocumentNavigation(
+            request.hasFragment,
+            detail::navigationUriHasScheme(request.uri, L"data"),
+            navigationComplete, activeNavigationSourceCommitted,
+            activeNavigationId,
+            activeNavigationDocumentKey, requestedDocumentKey)) {
+      startExpectation = detail::NativeNavigationStartExpectation::NotExpected;
+      return S_OK;
+    }
+
     LPWSTR rawSource = nullptr;
     const HRESULT sourceResult = capturedWebView->get_Source(&rawSource);
     if (!issuedNavigationOperationIsCurrent(capturedWebView, generation,
@@ -602,8 +627,11 @@ struct WebView2Surface::Impl final
     return S_OK;
   }
 
-  HRESULT navigatePrepared(PendingNavigationRequest request) {
-    const HRESULT deferResult = deferNavigation(std::move(request));
+  HRESULT navigatePrepared(PendingNavigationRequest request,
+                           bool clearPendingHostMessages = true) {
+    request.preservePendingHostMessages = !clearPendingHostMessages;
+    const HRESULT deferResult =
+        deferNavigation(std::move(request), clearPendingHostMessages);
     if (FAILED(deferResult)) return deferResult;
     return driveNavigation();
   }
@@ -726,7 +754,9 @@ struct WebView2Surface::Impl final
       (void)initialLoad.request();
       if (startExpectation ==
           detail::NativeNavigationStartExpectation::Required) {
-        pendingHostMessages.clear();
+        if (!issuedNavigation->request.preservePendingHostMessages) {
+          pendingHostMessages.clear();
+        }
         navigationComplete = false;
         activeNavigationSourceCommitted = false;
         activeNavigationDocumentKey.clear();
@@ -1245,7 +1275,10 @@ struct WebView2Surface::Impl final
     if (pendingNavigation) {
       PendingNavigationRequest request = std::move(*pendingNavigation);
       pendingNavigation.reset();
-      hr = navigatePrepared(std::move(request));
+      // navigate() already established this pending request's message
+      // generation while the controller was starting. Preserve messages
+      // posted after that request while promoting it into the native driver.
+      hr = navigatePrepared(std::move(request), false);
       if (FAILED(hr)) {
         // Startup has already admitted the controller, so a preflight or
         // synchronous Navigate failure must not strand InitialLoadTracker in
@@ -1912,6 +1945,21 @@ struct WebView2Surface::Impl final
             return S_OK;
           }
           if (self->issuedNavigation || self->deferredNavigation) return S_OK;
+          if (isNewDocument != FALSE && capturedNavigationId != 0U &&
+              self->navigationComplete &&
+              self->sourceChangeIsCurrent(capturedWebView.Get(),
+                                           capturedNavigationId,
+                                           capturedNavigationRevision)) {
+            // A new-document SourceChanged after completion is external
+            // re-entry (or an otherwise untracked document replacement). The
+            // retained opaque document key is no longer sufficient evidence
+            // for a later fragment request until a matching completion
+            // commits the new source.
+            self->navigationComplete = false;
+            self->activeNavigationSourceCommitted = false;
+            self->advanceNavigationMutationEpoch();
+            return S_OK;
+          }
           if (isNewDocument != FALSE && capturedNavigationId != 0U) {
             const UINT64 navigationId = capturedNavigationId;
             const std::uint64_t navigationRevision =

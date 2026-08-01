@@ -80,6 +80,22 @@ inline bool isProvableSameDocumentNavigation(
          committedSource.canonicalDocument == requestedUri.canonicalDocument;
 }
 
+// A completed host-owned opaque (data:) document has no redirectable origin
+// whose source spelling needs to be revalidated. Its retained canonical key
+// is sufficient to prove a later fragment request is same-document even when
+// WebView2 omits SourceChanged or cannot return Source.
+inline bool isProvableOpaqueSameDocumentNavigation(
+    bool requestedHasFragment, bool requestedIsOpaqueData,
+    bool navigationComplete, bool activeSourceCommitted,
+    std::uint64_t activeNavigationId,
+    std::wstring_view activeDocument, std::wstring_view requestedDocument)
+    noexcept {
+  return requestedHasFragment && requestedIsOpaqueData && navigationComplete &&
+         activeSourceCommitted && activeNavigationId != 0U &&
+         !activeDocument.empty() &&
+         activeDocument == requestedDocument;
+}
+
 inline bool nativeNavigationExpectsStarting(
     bool committedSourceIsCurrent,
     bool fullDocumentRequestAwaitingStart,
