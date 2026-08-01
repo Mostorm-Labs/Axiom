@@ -30,7 +30,12 @@ test("macOS workflow validates Node and vcpkg inputs before configure", () => {
   assert.match(workflow, /--triplet arm64-osx/);
   assert.match(workflow, /builtin-baseline/);
   assert.match(workflow, /git -C \"\$root\" cat-file -e/);
-  assert.match(workflow, /git -C \"\$root\" fetch --no-tags/);
+  assert.match(workflow, /git -C \"\$clone_root\" fetch --no-tags/);
+  assert.match(workflow, /git -C \"\$clone_root\" checkout --detach/);
+  assert.match(workflow, /git -C \"\$root\" rev-parse HEAD/);
+  assert.match(workflow, /git -C \"\$root\" status --porcelain/);
+  assert.match(workflow, /exact_checkout=false/);
+  assert.match(workflow, /vcpkg checkout is not the clean builtin-baseline/);
   assert.match(workflow, /Unable to materialize vcpkg builtin-baseline/);
   assert.match(workflow, /cmake --preset macos-arm64/);
   assert.match(workflow, /cmake --build --preset macos-arm64-release/);

@@ -35,3 +35,13 @@ reads and validates that baseline, fetches the exact commit into a usable
 checkout, falls back to a baseline clone when the preinstalled checkout cannot
 be updated, and fails closed if the object still cannot be materialized. A new
 hosted run is required before claiming any macOS CI result.
+
+## Second hosted attempt
+
+Run [30704136648](https://github.com/Mostorm-Labs/canvas/actions/runs/30704136648)
+showed that fetching the missing object alone was insufficient: the
+preinstalled vcpkg executable still used an older `HEAD` and therefore an older
+port database. The workflow now reuses a preinstalled checkout only when its
+clean `HEAD` is exactly the locked baseline and the vcpkg executable exists;
+otherwise it always uses an independent detached clone at that exact commit.
+A third hosted run is required to validate this stricter checkout selection.

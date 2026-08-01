@@ -90,27 +90,34 @@ jobs:
             root="$clone_root"
           }
 
-          baseline_available=false
-          if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
-            if git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1; then
-              baseline_available=true
-            else
-              if ! git -C "$root" remote get-url origin >/dev/null 2>&1; then
-                git -C "$root" remote add origin https://github.com/microsoft/vcpkg
-              fi
-              if git -C "$root" fetch --no-tags --depth=1 origin "$baseline" &&
-                 git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1; then
-                baseline_available=true
-              fi
+          baseline_lower="$(printf '%s' "$baseline" | tr '[:upper:]' '[:lower:]')"
+          exact_checkout=false
+          if git -C "$root" rev-parse --git-dir >/dev/null 2>&1 &&
+             [[ -x "$root/vcpkg" ]]; then
+            head="$(git -C "$root" rev-parse HEAD 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+            dirty="$(git -C "$root" status --porcelain --untracked-files=all 2>/dev/null || true)"
+            if [[ "$head" == "$baseline_lower" && -z "$dirty" ]]; then
+              exact_checkout=true
             fi
           fi
 
-          if [[ "$baseline_available" != true ]]; then
+          if [[ "$exact_checkout" != true ]]; then
             clone_baseline_vcpkg
-            git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1 || {
-              echo "Unable to materialize vcpkg builtin-baseline $baseline" >&2
-              exit 1
-            }
+          fi
+
+          final_head="$(git -C "$root" rev-parse HEAD 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+          final_dirty="$(git -C "$root" status --porcelain --untracked-files=all 2>/dev/null || true)"
+          if [[ "$final_head" != "$baseline_lower" || -n "$final_dirty" || ! -x "$root/vcpkg" ]]; then
+            echo "vcpkg checkout is not the clean builtin-baseline $baseline" >&2
+            echo "resolved root: $root" >&2
+            echo "resolved HEAD: ${final_head:-<missing>}" >&2
+            [[ -z "$final_dirty" ]] || echo "resolved checkout is dirty" >&2
+            [[ -x "$root/vcpkg" ]] || echo "resolved vcpkg executable is missing" >&2
+            exit 1
+          fi
+          if ! git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1; then
+            echo "Unable to materialize vcpkg builtin-baseline $baseline" >&2
+            exit 1
           fi
 
           echo "VCPKG_ROOT=$root" >> "$GITHUB_ENV"
