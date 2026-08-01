@@ -2032,8 +2032,7 @@ void WhiteboardApp::failPendingOpen(HRESULT result, std::string_view reason) {
   if (!closing_) {
     if (admissionSent) {
       sendIpc(ipc::Message{
-                  1, "diagnostics",
-                  ipc::boundedNativeEventRequestId("open-document", requestId),
+                  1, "diagnostics", requestId,
                   nlohmann::json{{"phase", "open-document"},
                                  {"status", "failed"},
                                  {"error", std::string(reason)}}},
@@ -2060,8 +2059,7 @@ void WhiteboardApp::cancelPendingOpen() noexcept {
   openDocumentResponseSent_ = true;
   if (!closing_ && admissionSent && !requestId.empty()) {
     sendIpc(ipc::Message{
-                1, "diagnostics",
-                ipc::boundedNativeEventRequestId("open-document", requestId),
+                1, "diagnostics", requestId,
                 nlohmann::json{{"phase", "open-document"},
                                {"status", "superseded"}}},
             connectionId);

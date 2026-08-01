@@ -18,7 +18,7 @@ set(required_contracts
     "document open in progress"
     "boundedNativeEventRequestId(\"fatal\", requestId)"
     "boundedNativeEventRequestId(\"state\", requestId)"
-    "boundedNativeEventRequestId(\"open-document\", requestId)")
+    "1, \"diagnostics\", requestId,")
 
 foreach(contract IN LISTS required_contracts)
     string(FIND "${source}" "${contract}" position)
