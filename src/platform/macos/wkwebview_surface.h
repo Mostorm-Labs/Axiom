@@ -1,8 +1,13 @@
 #pragma once
 
 #include "canvas/embed/embedded_surface.h"
+#include "platform/macos/wkwebview_navigation_seam.h"
 
+#include <functional>
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 namespace canvas::macos {
 
@@ -16,8 +21,31 @@ namespace canvas::macos {
 // for a later attach(), while close() releases it permanently.
 class WKWebViewSurface final : public embed::EmbeddedSurface {
  public:
+  enum class State { Ready, Failed, Closed };
+  enum class InitialLoadState { NotRequested, Pending, Ready, Failed };
+  enum class NavigationFailure {
+    None,
+    InvalidUri,
+    PolicyDenied,
+    ProvisionalLoad,
+    CommittedLoad,
+    ProcessTerminated,
+    Closed,
+  };
+  struct InitialLoadCompletion {
+    InitialLoadState state = InitialLoadState::NotRequested;
+    NavigationFailure failure = NavigationFailure::None;
+    std::string uri;
+  };
+  using InitialLoadCompletionHandler =
+      std::function<void(InitialLoadCompletion)>;
+  struct Options {
+    std::optional<std::string> packagedContentRoot;
+    bool allowTestDataUrls = false;
+  };
   // A null container creates a detached surface that can later be attached.
   explicit WKWebViewSurface(void* nativeContainer = nullptr);
+  WKWebViewSurface(void* nativeContainer, Options options);
   ~WKWebViewSurface() override;
 
   WKWebViewSurface(const WKWebViewSurface&) = delete;
@@ -31,6 +59,12 @@ class WKWebViewSurface final : public embed::EmbeddedSurface {
   void detach();
   void close();
 
+  // Loads the first document and subsequent replacements. Production accepts
+  // only HTTPS and a configured package-root file URL. data:text/html is for
+  // bounded deterministic tests and is disabled by default.
+  bool navigate(std::string_view uri);
+  bool setInitialLoadCompletionHandler(InitialLoadCompletionHandler handler);
+
   // Bounds map directly to AppKit points in the embedded container's local
   // coordinate space. Non-finite or negative-size bounds suppress the view
   // until a valid, visible geometry is supplied.
@@ -43,10 +77,17 @@ class WKWebViewSurface final : public embed::EmbeddedSurface {
   bool isAttached() const noexcept;
   bool isClosed() const noexcept;
   bool isInteractive() const noexcept;
+  State state() const noexcept;
+  InitialLoadState initialLoadState() const noexcept;
+  NavigationFailure lastNavigationFailure() const noexcept;
+  static detail::NavigationClass classifyNavigation(
+      std::string_view uri, const Options& options);
+
+ public:
+  struct Impl;
 
  private:
-  struct Impl;
-  std::unique_ptr<Impl> impl_;
+  std::shared_ptr<Impl> impl_;
 };
 
 }  // namespace canvas::macos

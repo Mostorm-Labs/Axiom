@@ -32,11 +32,13 @@ invalidation.
 The app bundle is generated under `out/build/macos-arm64/app/macos/`. Base
 draws only `Base`; Overlay draws only `Annotation` and `Chrome`; both retain
 one Metal/Skia resource group while presenting independently. The middle
-container can host the minimal `WKWebViewSurface` lifecycle adapter, whose
-WebKit implementation is private and whose bounds are expressed in AppKit
-points. It supports attach/detach/reattach, visibility, and a native hit-test
-gate; it deliberately does not yet implement navigation readiness, input
-adaptation, IME, or Electron control.
+container hosts `WKWebViewSurface`, whose WebKit implementation is private and
+whose bounds are expressed in AppKit points. It supports
+attach/detach/reattach, visibility, a native hit-test gate, and a fail-closed
+latest-wins navigation lifecycle. Production navigation accepts absolute HTTPS
+and a canonical packaged `file:` root; bounded `data:text/html` is opt-in for
+deterministic tests. Input adaptation, IME, Electron control, and content
+synchronization remain later increments.
 
 ## Windows downloads
 

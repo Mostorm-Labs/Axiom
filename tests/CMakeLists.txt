@@ -94,6 +94,15 @@ canvas_enable_warnings(canvas_frame_invalidation_test)
 gtest_discover_tests(canvas_frame_invalidation_test)
 
 if(APPLE)
+    add_executable(canvas_macos_wkwebview_navigation_seam_test
+                   unit/macos_wkwebview_navigation_seam_test.cpp)
+    target_include_directories(canvas_macos_wkwebview_navigation_seam_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_wkwebview_navigation_seam_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_wkwebview_navigation_seam_test)
+    gtest_discover_tests(canvas_macos_wkwebview_navigation_seam_test)
+
     add_executable(canvas_macos_skia_frame_plan_test
                    unit/macos_skia_frame_plan_test.cpp)
     target_include_directories(canvas_macos_skia_frame_plan_test
@@ -147,10 +156,14 @@ if(APPLE)
                                   GTest::gtest_main)
     target_compile_options(canvas_macos_wkwebview_surface_test
                            PRIVATE -fobjc-arc)
+    target_compile_definitions(canvas_macos_wkwebview_surface_test
+                               PRIVATE
+                               CANVAS_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     canvas_enable_warnings(canvas_macos_wkwebview_surface_test)
     gtest_discover_tests(
         canvas_macos_wkwebview_surface_test
-        PROPERTIES TIMEOUT 20 ENVIRONMENT "MTL_DEBUG_LAYER=1")
+        PROPERTIES TIMEOUT 20 RUN_SERIAL TRUE
+                   ENVIRONMENT "MTL_DEBUG_LAYER=1")
 
     # This source-level contract runs without a GPU. The runtime ownership
     # violation deliberately terminates, so it is asserted structurally here.
@@ -173,6 +186,7 @@ if(APPLE)
              COMMAND ${CMAKE_COMMAND}
                      -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_wkwebview_surface_contract_test.cmake)
+
 endif()
 
 add_executable(canvas_embedded_transform_test unit/embedded_transform_test.cpp)
