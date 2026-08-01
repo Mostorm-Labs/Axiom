@@ -27,6 +27,48 @@ struct NavigationDocumentIdentity {
   bool hasFragment = false;
 };
 
+enum class NativeNavigationStartExpectation {
+  Required,
+  NotExpected,
+  RequiredOrSameDocumentSource,
+};
+
+enum class NativeNavigationSourceChangedAction {
+  Ignore,
+  ObserveSameDocument,
+  ResolveSameDocument,
+};
+
+// If the committed source cannot be inspected, a fragment request cannot be
+// safely classified as full-document or same-document. Keep its native-start
+// admission until either NavigationStarting or SourceChanged(IsNewDocument=
+// FALSE) resolves the ambiguity; a non-fragment request remains a normal
+// full-document navigation.
+inline NativeNavigationStartExpectation
+nativeNavigationStartExpectationWhenSourceIsUnavailable(
+    bool requestedHasFragment) noexcept {
+  return requestedHasFragment
+             ? NativeNavigationStartExpectation::RequiredOrSameDocumentSource
+             : NativeNavigationStartExpectation::Required;
+}
+
+// IsNewDocument == FALSE is WebView2's documented same-document evidence.
+// It may arrive synchronously from Navigate(), in which case the adapter only
+// records it until Navigate returns, or asynchronously after the native call
+// has returned, in which case it can release the temporary start admission.
+inline NativeNavigationSourceChangedAction nativeNavigationSourceChangedAction(
+    NativeNavigationStartExpectation expectation, bool isNewDocument,
+    bool navigateCallInFlight) noexcept {
+  if (expectation !=
+          NativeNavigationStartExpectation::RequiredOrSameDocumentSource ||
+      isNewDocument) {
+    return NativeNavigationSourceChangedAction::Ignore;
+  }
+  return navigateCallInFlight
+             ? NativeNavigationSourceChangedAction::ObserveSameDocument
+             : NativeNavigationSourceChangedAction::ResolveSameDocument;
+}
+
 // WebView2's documented same-document navigation exception is intentionally
 // narrow here: a fragment must be present on either side and both inputs must
 // already have the same canonical, fragment-free document identity. URI
@@ -169,6 +211,13 @@ class InitialLoadTracker final {
     if (pendingNativeNavigationGeneration_ != requestGeneration) return false;
     pendingNativeNavigationGeneration_ = 0U;
     return true;
+  }
+
+  // A source event proving same-document navigation resolves the temporary
+  // native-start admission without creating a new active navigation id.
+  bool resolveSameDocumentNavigationForRequest(
+      std::uint64_t requestGeneration) noexcept {
+    return cancelPendingNativeNavigation(requestGeneration);
   }
 
   // The surface owns the sole issued request, so the event is matched by that

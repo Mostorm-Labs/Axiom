@@ -14,9 +14,40 @@ using canvas::windows::detail::InitialLoadTracker;
 using canvas::windows::detail::NavigationDocumentIdentity;
 using canvas::windows::detail::NavigationRequestGenerationTracker;
 using canvas::windows::detail::NavigationStartAfterGetterAction;
+using canvas::windows::detail::NativeNavigationStartExpectation;
+using canvas::windows::detail::NativeNavigationSourceChangedAction;
 using canvas::windows::detail::isProvableSameDocumentNavigation;
+using canvas::windows::detail::nativeNavigationSourceChangedAction;
+using canvas::windows::detail::nativeNavigationStartExpectationWhenSourceIsUnavailable;
 using canvas::windows::detail::navigationStartAfterGetterAction;
 using canvas::windows::detail::nativeNavigationExpectsStarting;
+
+TEST(WebView2InitialLoadTracker,
+     UnavailableSourceUsesARecoverableExpectationForFragmentNavigation) {
+  EXPECT_EQ(nativeNavigationStartExpectationWhenSourceIsUnavailable(false),
+            NativeNavigationStartExpectation::Required);
+  EXPECT_EQ(nativeNavigationStartExpectationWhenSourceIsUnavailable(true),
+            NativeNavigationStartExpectation::RequiredOrSameDocumentSource);
+}
+
+TEST(WebView2InitialLoadTracker,
+     OnlySameDocumentSourceEvidenceReleasesTheUncertainStartAdmission) {
+  EXPECT_EQ(nativeNavigationSourceChangedAction(
+                NativeNavigationStartExpectation::Required, false, false),
+            NativeNavigationSourceChangedAction::Ignore);
+  EXPECT_EQ(nativeNavigationSourceChangedAction(
+                NativeNavigationStartExpectation::RequiredOrSameDocumentSource,
+                true, false),
+            NativeNavigationSourceChangedAction::Ignore);
+  EXPECT_EQ(nativeNavigationSourceChangedAction(
+                NativeNavigationStartExpectation::RequiredOrSameDocumentSource,
+                false, true),
+            NativeNavigationSourceChangedAction::ObserveSameDocument);
+  EXPECT_EQ(nativeNavigationSourceChangedAction(
+                NativeNavigationStartExpectation::RequiredOrSameDocumentSource,
+                false, false),
+            NativeNavigationSourceChangedAction::ResolveSameDocument);
+}
 
 TEST(WebView2InitialLoadTracker,
      ReentrantNavigationStartGettersNeverSilentlyAcceptAStaleEvent) {
@@ -216,6 +247,25 @@ TEST(WebView2InitialLoadTracker,
   ASSERT_TRUE(tracker.acceptNavigationForRequest(91U, 51U));
   ASSERT_TRUE(tracker.tryBeginNativeNavigationForRequest(52U));
   EXPECT_TRUE(tracker.acceptNavigationForRequest(92U, 52U));
+}
+
+TEST(WebView2InitialLoadTracker,
+     SameDocumentSourceResolutionDoesNotStarveTheNextFullNavigation) {
+  InitialLoadTracker tracker;
+  ASSERT_TRUE(tracker.request());
+  ASSERT_TRUE(tracker.tryBeginNativeNavigationForRequest(61U));
+  ASSERT_TRUE(tracker.acceptNavigationForRequest(101U, 61U));
+  ASSERT_TRUE(tracker.completeSuccessForNavigation(101U));
+
+  // An uncertain fragment request temporarily owns the native-start slot.
+  ASSERT_TRUE(tracker.tryBeginNativeNavigationForRequest(62U));
+  ASSERT_TRUE(tracker.resolveSameDocumentNavigationForRequest(62U));
+  EXPECT_EQ(tracker.pendingNativeNavigationStarts(), 0U);
+
+  // The next full-document request must be able to consume a fresh slot.
+  ASSERT_TRUE(tracker.tryBeginNativeNavigationForRequest(63U));
+  ASSERT_TRUE(tracker.acceptNavigationForRequest(103U, 63U));
+  EXPECT_EQ(tracker.pendingNativeNavigationStarts(), 0U);
 }
 
 TEST(WebView2InitialLoadTracker, FailureMovesOutHandlerAndSwallowsExceptions) {

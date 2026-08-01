@@ -284,12 +284,20 @@ struct WebView2Surface::Impl final
     bool documentKeyReady = false;
   };
 
-  enum class NativeNavigationPhase { Preparing, Calling, AwaitingStart };
+  enum class NativeNavigationPhase {
+    Preparing,
+    Calling,
+    AwaitingStart,
+    AwaitingStartOrSameDocumentSource,
+  };
 
   struct IssuedNavigation {
     PendingNavigationRequest request;
     NativeNavigationPhase phase = NativeNavigationPhase::Preparing;
     bool expectsNavigationStarting = true;
+    detail::NativeNavigationStartExpectation startExpectation =
+        detail::NativeNavigationStartExpectation::Required;
+    bool sameDocumentSourceObserved = false;
     std::uint64_t lifetimeEpoch = 0U;
   };
 
@@ -523,8 +531,10 @@ struct WebView2Surface::Impl final
       ICoreWebView2* capturedWebView,
       const PendingNavigationRequest& request,
       std::uint64_t lifetimeEpoch,
-      bool& expectsNavigationStarting) {
-    expectsNavigationStarting = true;
+      detail::NativeNavigationStartExpectation& startExpectation) {
+    startExpectation =
+        detail::nativeNavigationStartExpectationWhenSourceIsUnavailable(
+            request.hasFragment);
     const NavigationGeneration generation = request.generation;
     const bool requestedHasFragment = request.hasFragment;
     std::wstring requestedDocumentKey;
@@ -538,9 +548,13 @@ struct WebView2Surface::Impl final
     // that stale source to classify a later request as same-document.
     if (initialLoad.pendingNativeNavigationStarts() != 0U ||
         initialLoad.state() == detail::InitialLoadState::Pending) {
+      startExpectation = detail::NativeNavigationStartExpectation::Required;
       return S_OK;
     }
-    if (!navigationComplete && !activeNavigationSourceCommitted) return S_OK;
+    if (!navigationComplete) {
+      startExpectation = detail::NativeNavigationStartExpectation::Required;
+      return S_OK;
+    }
 
     LPWSTR rawSource = nullptr;
     const HRESULT sourceResult = capturedWebView->get_Source(&rawSource);
@@ -552,13 +566,17 @@ struct WebView2Surface::Impl final
     }
     if (FAILED(sourceResult) || rawSource == nullptr) {
       CoTaskMemFree(rawSource);
-      return FAILED(sourceResult) ? sourceResult : E_POINTER;
+      // Source is advisory and WebView2 can expose a transient/opaque value
+      // while committing data: content. A fragment keeps a temporary start
+      // admission until either NavigationStarting or a same-document source
+      // event resolves it; NavigationStarting remains the policy boundary.
+      return S_OK;
     }
     const auto sourceView = boundedWideView(
         rawSource, detail::kWebView2MaxNavigationCodeUnits);
     if (!sourceView) {
       CoTaskMemFree(rawSource);
-      return E_INVALIDARG;
+      return S_OK;
     }
 
     std::wstring sourceDocumentKey;
@@ -566,16 +584,21 @@ struct WebView2Surface::Impl final
     const HRESULT canonicalResult = detail::canonicalDocumentUri(
         *sourceView, sourceDocumentKey);
     CoTaskMemFree(rawSource);
-    if (FAILED(canonicalResult)) return canonicalResult;
+    if (FAILED(canonicalResult)) return S_OK;
 
     if (!issuedNavigationOperationIsCurrent(capturedWebView, generation,
                                             lifetimeEpoch) ||
         hasNewerDeferredNavigation(generation)) {
       return S_FALSE;
     }
-    expectsNavigationStarting = detail::nativeNavigationExpectsStarting(
-        true, false, {sourceDocumentKey, sourceHasFragment},
-        {requestedDocumentKey, requestedHasFragment});
+    const bool expectsNavigationStarting =
+        detail::nativeNavigationExpectsStarting(
+            true, false,
+            {sourceDocumentKey, sourceHasFragment},
+            {requestedDocumentKey, requestedHasFragment});
+    startExpectation = expectsNavigationStarting
+                           ? detail::NativeNavigationStartExpectation::Required
+                           : detail::NativeNavigationStartExpectation::NotExpected;
     return S_OK;
   }
 
@@ -612,7 +635,9 @@ struct WebView2Surface::Impl final
       }
       if (state != State::Ready || !webView) break;
       if (issuedNavigation &&
-          issuedNavigation->phase == NativeNavigationPhase::AwaitingStart) {
+          (issuedNavigation->phase == NativeNavigationPhase::AwaitingStart ||
+           issuedNavigation->phase ==
+               NativeNavigationPhase::AwaitingStartOrSameDocumentSource)) {
         break;
       }
 
@@ -654,10 +679,11 @@ struct WebView2Surface::Impl final
         issuedNavigation->request.documentKeyReady = true;
       }
 
-      bool expectsNavigationStarting = true;
+      detail::NativeNavigationStartExpectation startExpectation =
+          detail::NativeNavigationStartExpectation::Required;
       const HRESULT preflightResult = nativeNavigationExpectsStarting(
           capturedWebView.Get(), issuedNavigation->request, lifetimeEpoch,
-          expectsNavigationStarting);
+          startExpectation);
       if (!issuedNavigationOperationIsCurrent(
               capturedWebView.Get(), generation, lifetimeEpoch)) {
         (void)restartIssuedNavigationAfterMutation(
@@ -685,8 +711,12 @@ struct WebView2Surface::Impl final
         break;
       }
 
+      const bool expectsNavigationStarting =
+          startExpectation != detail::NativeNavigationStartExpectation::NotExpected;
       issuedNavigation->expectsNavigationStarting =
           expectsNavigationStarting;
+      issuedNavigation->startExpectation = startExpectation;
+      issuedNavigation->sameDocumentSourceObserved = false;
       if (!initialLoad.tryBeginNativeNavigationForRequest(
               generation, expectsNavigationStarting)) {
         issuedNavigation.reset();
@@ -694,7 +724,8 @@ struct WebView2Surface::Impl final
         break;
       }
       (void)initialLoad.request();
-      if (expectsNavigationStarting) {
+      if (startExpectation ==
+          detail::NativeNavigationStartExpectation::Required) {
         pendingHostMessages.clear();
         navigationComplete = false;
         activeNavigationSourceCommitted = false;
@@ -732,7 +763,26 @@ struct WebView2Surface::Impl final
       }
       if (sameIssuedNavigation) {
         if (expectsNavigationStarting) {
-          issuedNavigation->phase = NativeNavigationPhase::AwaitingStart;
+          if (startExpectation ==
+              detail::NativeNavigationStartExpectation::
+                  RequiredOrSameDocumentSource) {
+            if (issuedNavigation->sameDocumentSourceObserved) {
+              const bool resolved =
+                  initialLoad.resolveSameDocumentNavigationForRequest(
+                      generation);
+              issuedNavigation.reset();
+              // A nested callback may already have retired the admission.
+              // The source evidence still proves this issued navigation is
+              // same-document, so let the latest deferred request proceed.
+              (void)resolved;
+              navigationDriveRequested = deferredNavigation.has_value();
+              continue;
+            }
+            issuedNavigation->phase =
+                NativeNavigationPhase::AwaitingStartOrSameDocumentSource;
+          } else {
+            issuedNavigation->phase = NativeNavigationPhase::AwaitingStart;
+          }
           break;
         }
         issuedNavigation.reset();
@@ -1317,7 +1367,9 @@ struct WebView2Surface::Impl final
     bool entryHostExpectedStarting = true;
     if (issuedNavigation &&
         (issuedNavigation->phase == NativeNavigationPhase::Calling ||
-         issuedNavigation->phase == NativeNavigationPhase::AwaitingStart)) {
+         issuedNavigation->phase == NativeNavigationPhase::AwaitingStart ||
+         issuedNavigation->phase ==
+             NativeNavigationPhase::AwaitingStartOrSameDocumentSource)) {
       entryHostGeneration = issuedNavigation->request.generation;
       entryHostExpectedStarting = issuedNavigation->expectsNavigationStarting;
     }
@@ -1749,8 +1801,22 @@ struct WebView2Surface::Impl final
           if (!self || args == nullptr || sender == nullptr) return S_OK;
           const ComPtr<ICoreWebView2> capturedWebView(sender);
           if (self->closeInProgress || self->state != State::Ready ||
-              self->webView.Get() != capturedWebView.Get() ||
-              self->issuedNavigation || self->deferredNavigation) {
+              self->webView.Get() != capturedWebView.Get()) {
+            return S_OK;
+          }
+          std::optional<NavigationGeneration> uncertainGeneration;
+          if (self->issuedNavigation &&
+              self->issuedNavigation->startExpectation ==
+                  detail::NativeNavigationStartExpectation::
+                      RequiredOrSameDocumentSource &&
+              (self->issuedNavigation->phase ==
+                   NativeNavigationPhase::Calling ||
+               self->issuedNavigation->phase ==
+                   NativeNavigationPhase::AwaitingStartOrSameDocumentSource)) {
+            uncertainGeneration = self->issuedNavigation->request.generation;
+          }
+          if (!uncertainGeneration &&
+              (self->issuedNavigation || self->deferredNavigation)) {
             return S_OK;
           }
           const UINT64 capturedNavigationId = self->activeNavigationId;
@@ -1758,23 +1824,42 @@ struct WebView2Surface::Impl final
               self->activeNavigationRevision;
           const std::uint64_t callbackMutationEpoch =
               self->navigationMutationEpoch;
-          const auto failSourceOrDefer = [&](HRESULT failure) -> HRESULT {
+          const auto ignoreUnusableSource = [&]() -> HRESULT {
+            if (capturedNavigationId != 0U &&
+                self->sourceChangeIsCurrent(
+                    capturedWebView.Get(), capturedNavigationId,
+                    capturedNavigationRevision) &&
+                self->activeNavigationSourceCommitted) {
+              // An unusable source observation must not leave a previously
+              // committed identity eligible for same-document optimization.
+              self->activeNavigationSourceCommitted = false;
+              self->advanceNavigationMutationEpoch();
+            }
             if (self->deferredNavigation) {
               self->navigationDriveRequested = true;
               if (!self->navigationDriveActive &&
                   !self->navigationStartDispatchBlocked) {
                 (void)self->driveNavigation();
               }
-              return S_OK;
             }
-            (void)self->failInitialNavigation(failure);
-            return failure;
+            return S_OK;
           };
           BOOL isNewDocument = FALSE;
           const HRESULT sourceResult =
               args->get_IsNewDocument(&isNewDocument);
-          if (!self->navigationMutationIsCurrent(
-                  capturedWebView.Get(), callbackMutationEpoch) ||
+          const bool uncertainSlotStillCurrent =
+              uncertainGeneration &&
+              self->issuedNavigationMatches(capturedWebView.Get(),
+                                             *uncertainGeneration) &&
+              self->issuedNavigation->startExpectation ==
+                  detail::NativeNavigationStartExpectation::
+                      RequiredOrSameDocumentSource &&
+              (self->issuedNavigation->phase == NativeNavigationPhase::Calling ||
+               self->issuedNavigation->phase ==
+                   NativeNavigationPhase::AwaitingStartOrSameDocumentSource);
+          if ((!self->navigationMutationIsCurrent(
+                   capturedWebView.Get(), callbackMutationEpoch) &&
+               !uncertainSlotStillCurrent) ||
               (capturedNavigationId != 0U &&
                !self->sourceChangeIsCurrent(
                    capturedWebView.Get(), capturedNavigationId,
@@ -1782,8 +1867,51 @@ struct WebView2Surface::Impl final
             return S_OK;
           }
           if (FAILED(sourceResult)) {
-            return failSourceOrDefer(sourceResult);
+            return ignoreUnusableSource();
           }
+          if (uncertainGeneration) {
+            if (!uncertainSlotStillCurrent) {
+              return S_OK;
+            }
+            const bool navigateCallInFlight =
+                self->issuedNavigation->phase == NativeNavigationPhase::Calling;
+            const auto action = detail::nativeNavigationSourceChangedAction(
+                self->issuedNavigation->startExpectation,
+                isNewDocument != FALSE,
+                navigateCallInFlight);
+            if (action ==
+                detail::NativeNavigationSourceChangedAction::ObserveSameDocument) {
+              self->issuedNavigation->sameDocumentSourceObserved = true;
+              return S_OK;
+            }
+            if (action ==
+                detail::NativeNavigationSourceChangedAction::ResolveSameDocument) {
+              const bool resolved =
+                  self->initialLoad.resolveSameDocumentNavigationForRequest(
+                      *uncertainGeneration);
+              // A re-entrant callback can already have retired this slot for
+              // a newer request. Do not turn that stale source event into a
+              // terminal failure for the replacement, and do not leave the
+              // obsolete issued slot blocking its successor.
+              (void)resolved;
+              self->issuedNavigation.reset();
+              self->navigationDriveRequested =
+                  self->deferredNavigation.has_value();
+              // This event proves that the prior Navigate was same-document,
+              // so no full-document navigation remains in flight. It is now
+              // safe to drain a queued replacement without a timeout.
+              if (self->navigationDriveRequested &&
+                  !self->navigationDriveActive &&
+                  !self->navigationStartDispatchBlocked) {
+                (void)self->driveNavigation();
+              }
+              return S_OK;
+            }
+            // A new-document source event cannot prove that this uncertain
+            // request omitted NavigationStarting. Keep its start admission.
+            return S_OK;
+          }
+          if (self->issuedNavigation || self->deferredNavigation) return S_OK;
           if (isNewDocument != FALSE && capturedNavigationId != 0U) {
             const UINT64 navigationId = capturedNavigationId;
             const std::uint64_t navigationRevision =
@@ -1801,17 +1929,14 @@ struct WebView2Surface::Impl final
             }
             if (FAILED(currentSourceResult) || rawSource == nullptr) {
               CoTaskMemFree(rawSource);
-              const HRESULT failure = FAILED(currentSourceResult)
-                                          ? currentSourceResult
-                                          : E_POINTER;
-              return failSourceOrDefer(failure);
+              return ignoreUnusableSource();
             }
 
             const auto sourceView = boundedWideView(
                 rawSource, detail::kWebView2MaxNavigationCodeUnits);
             if (!sourceView) {
               CoTaskMemFree(rawSource);
-              return failSourceOrDefer(E_INVALIDARG);
+              return ignoreUnusableSource();
             }
 
             std::wstring sourceDocumentKey;
@@ -1826,7 +1951,7 @@ struct WebView2Surface::Impl final
               return S_OK;
             }
             if (FAILED(canonicalResult)) {
-              return failSourceOrDefer(canonicalResult);
+              return ignoreUnusableSource();
             }
             self->activeNavigationSourceCommitted =
                 sourceDocumentKey == self->activeNavigationDocumentKey;

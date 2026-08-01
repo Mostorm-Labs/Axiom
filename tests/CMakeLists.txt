@@ -11,6 +11,11 @@ add_test(NAME canvas_webview2_initial_load_fail_source_contract
                  -DSURFACE_SOURCE=${CMAKE_SOURCE_DIR}/src/platform/windows/webview2_surface.cpp
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/webview2_initial_load_fail_contract_test.cmake)
 
+add_test(NAME canvas_webview2_navigation_source_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DSURFACE_SOURCE=${CMAKE_SOURCE_DIR}/src/platform/windows/webview2_surface.cpp
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/webview2_navigation_source_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)
