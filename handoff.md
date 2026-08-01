@@ -24,8 +24,8 @@ Canvas 当前不是一个已经完成的商业化多人协作产品，而是一�
 
 接手时最重要的顺序是：
 
-1. 将 PR #2 head `9adb455` 对应的 Windows Build run 30702348950 及 artifact 写入证据，并保持 hardware/GUI 检查 pending。
-2. 复核并推送两个异步加载基础提交，将其接入 WhiteboardApp 的原子文档加载事务。
+1. 复核已记录的 PR #2 head `9adb455` Windows Build run 30702348950 及 artifact，然后进入 Task 17/18 审查。
+2. 推送两个异步加载基础提交，并将其接入 WhiteboardApp 的原子文档加载事务。
 3. 继续实现 macOS PointerKind/pen/touch/IME、Electron/native IPC，以及 embedded-state；随后规划 Android/iOS 平台层。
 4. 最后做真实 Windows 设备、Electron GUI、触控延迟和 Release 验收；i5-1235U 触控屏 p95 <50 ms 仍必须由实机测量。
 
@@ -99,7 +99,8 @@ pending host message；`data:` fragment 只有在 navigation complete、active i
 
 > **跨机器交接警告：**另一个账号从 GitHub clone 已能看到 Windows `a9912da` 和 macOS
 > `9adb455` 的已提交代码/evidence；仍看不到没有远端分支的 e6148a2/0258173。离开当前机器前
-> 若要继续这些本地-only 对象，仍应执行第 6 节“阶段 A”的 bundle 备份。
+> 若要继续这些本地-only 对象，仍应执行第 6 节“阶段 A”的 bundle 备份。历史失败 CI 运行和诊断结论
+> 只用于回归背景，不能代替当前绿色 run 的实时核对。
 
 三个本地-only 提交对应的证据文件也只存在于各自分支：
 `f856aac1c4b7ad767f5c2785a706730495b7d52b` 的 macOS 证据在
@@ -200,7 +201,7 @@ late completion URI、weak delegate 和 close 状态均已实现。overlay 配�
 测试、Electron/Pointer/IME、真实 GUI 和 i5-1235U <50 ms 仍 pending。Task 21 证据文件为：
 `docs/tdd/task-21-macos-wkwebview-navigation-{red,green}.txt`（仅 macOS worktree 可见）。
 
-Task 21 head 的 Windows Build 已完成并全绿。恢复后仍应先查询实时状态：
+Task 21 head 的 Windows Build run 30702348950 已完成并全绿；接手者仍应查询该 run 和 artifact 的实时状态：
 
 ~~~bash
 gh run list --repo Mostorm-Labs/canvas --branch codex/macos-platform \
@@ -935,7 +936,7 @@ git -C /Users/qing/Documents/myself/projects/canvas-atomic-open status --short -
 - 不应出现来源不明的新改动。如果实际状态不同，先更新本文件中的状态快照或查清改动来源，再开始写代码。
 
 随后只对当前优先任务做定向检查。Windows branch 当前 docs head 是 `a9912da`，macOS
-branch 当前 Task 21 head 是 `9adb455`；先读已完成的绿色 run 证据，重点核对 PR #2
+branch 当前 Task 21 head 是 `9adb455`；先读最新绿色 run 30702348950 证据，重点核对 PR #2
 Windows run：
 
 ~~~bash
