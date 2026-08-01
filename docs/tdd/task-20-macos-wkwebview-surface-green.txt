@@ -1,0 +1,79 @@
+Task 20 macOS WKWebView surface host — GREEN evidence
+====================================================
+
+Date: 2026-08-01 (Asia/Shanghai)
+Branch: codex/macos-platform
+Commit under test: b693f57 feat: add macOS WKWebView surface host
+Windows base to consume later: eb1d948
+
+Scope
+-----
+
+This increment adds the smallest native WebKit host needed by the fixed
+composition stack:
+
+* `WKWebViewSurface` keeps WebKit types behind a PImpl and requires AppKit main
+  thread construction, mutation, inspection, close, and destruction.
+* A retained WKWebView can attach, detach, reattach, and close idempotently.
+* Bounds are AppKit points in the top-left document coordinate convention;
+  `CanvasEmbeddedContainerView` is flipped so WebKit frames align with Metal
+  ink/chrome coordinates.
+* Visibility, invalid geometry suppression, and the native hit-test gate are
+  covered. The middle composition container remains the owner of the broader
+  embedded interaction policy.
+* Navigation delegate/Ready semantics, input adapters, IME, Electron control,
+  and real content synchronization are intentionally out of scope and remain
+  pending.
+
+Files in the scoped commit
+--------------------------
+
+`CMakeLists.txt`
+`README.md`
+`src/platform/macos/composition_view.mm`
+`src/platform/macos/wkwebview_surface.h`
+`src/platform/macos/wkwebview_surface.mm`
+`tests/CMakeLists.txt`
+`tests/contracts/macos_composition_host_contract_test.cmake`
+`tests/contracts/macos_wkwebview_surface_contract_test.cmake`
+`tests/integration/macos_composition_layer_stack_test.mm`
+`tests/integration/macos_wkwebview_surface_test.mm`
+
+Verification
+------------
+
+Executed from `/Users/qing/Documents/myself/projects/canvas-macos`:
+
+    PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+      VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+      cmake --preset macos-arm64
+    PATH=/opt/homebrew/bin:$PATH VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+      VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+      cmake --build --preset macos-arm64-release --parallel
+    MTL_DEBUG_LAYER=1 \
+      ./out/build/macos-arm64/tests/canvas_macos_wkwebview_surface_test --gtest_color=no
+    VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+      ctest --preset macos-arm64-release --output-on-failure
+    git diff --check
+
+Results:
+
+* configure: exit 0
+* Release build: exit 0
+* focused WKWebView tests: 3/3 passed
+* full CTest: 127/127 passed
+* macOS source contracts: passed (including flipped middle host and WebKit/PImpl contract)
+* whitespace/diff-check: passed
+* independent reviewer: PASS, no P0/P1
+
+Reviewer follow-up / known limits
+----------------------------------
+
+The review caught and the implementation fixed a top-left-versus-AppKit-y-up
+coordinate mismatch before this evidence was recorded. The reviewer also
+required a deterministic child hit probe instead of assuming an unloaded
+WKWebView's `super hitTest:` is non-null. Remaining P2 follow-ups are to
+document the flipped-container precondition for public native-container users,
+cover parent deallocation and WKWebView initialization failure, and later add
+navigation/Ready and real content lifecycle tests. No macOS GitHub CI or real
+hardware/GUI/IME latency evidence exists yet.
