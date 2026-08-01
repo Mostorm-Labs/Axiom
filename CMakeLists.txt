@@ -27,6 +27,9 @@ include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
 add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp
+            src/app/embedded_load_batch.cpp
+            src/app/embedded_load_completion_inbox.cpp
+            src/app/embedded_document_open_coordinator.cpp
             src/app/embedded_load_tracker.cpp
             src/storage/document_codec.cpp
             src/stroke/stroke_builder.cpp src/input/input_router.cpp

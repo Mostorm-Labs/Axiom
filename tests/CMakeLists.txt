@@ -76,6 +76,27 @@ target_link_libraries(canvas_embedded_load_tracker_test
 canvas_enable_warnings(canvas_embedded_load_tracker_test)
 gtest_discover_tests(canvas_embedded_load_tracker_test)
 
+add_executable(canvas_embedded_load_batch_test
+               unit/embedded_load_batch_test.cpp)
+target_link_libraries(canvas_embedded_load_batch_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_load_batch_test)
+gtest_discover_tests(canvas_embedded_load_batch_test)
+
+add_executable(canvas_embedded_load_completion_inbox_test
+               unit/embedded_load_completion_inbox_test.cpp)
+target_link_libraries(canvas_embedded_load_completion_inbox_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_load_completion_inbox_test)
+gtest_discover_tests(canvas_embedded_load_completion_inbox_test)
+
+add_executable(canvas_embedded_document_open_coordinator_test
+               unit/embedded_document_open_coordinator_test.cpp)
+target_link_libraries(canvas_embedded_document_open_coordinator_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_document_open_coordinator_test)
+gtest_discover_tests(canvas_embedded_document_open_coordinator_test)
+
 add_executable(canvas_webview2_initial_load_seam_test
                unit/webview2_initial_load_seam_test.cpp)
 target_include_directories(canvas_webview2_initial_load_seam_test
