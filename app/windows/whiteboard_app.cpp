@@ -1450,8 +1450,6 @@ HRESULT WhiteboardApp::openDocument(const std::wstring& path,
   // candidate's hidden WebViews report their initial-load terminal states.
   cancelPendingOpen();
   pendingOpenNotificationFailure_.reset();
-  const HRESULT inputCancelResult = cancelActiveInputForDocumentTransition();
-  if (FAILED(inputCancelResult)) return inputCancelResult;
   if (nextDocumentGeneration_ == 0U ||
       nextDocumentGeneration_ == (std::numeric_limits<std::uint64_t>::max)())
     return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
