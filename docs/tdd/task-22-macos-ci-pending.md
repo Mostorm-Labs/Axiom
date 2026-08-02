@@ -1,4 +1,4 @@
-# Task 22 macOS CI — pending first hosted run
+# Task 22 macOS CI — hosted arm64 run green; runtime evidence pending
 
 This increment adds `.github/workflows/macos-build.yml` for the arm64 macOS
 runner (`macos-14`). It validates the shared web assets, restores/builds the
@@ -45,3 +45,24 @@ port database. The workflow now reuses a preinstalled checkout only when its
 clean `HEAD` is exactly the locked baseline and the vcpkg executable exists;
 otherwise it always uses an independent detached clone at that exact commit.
 A third hosted run is required to validate this stricter checkout selection.
+
+## Third hosted run — green
+
+Run [30704424435](https://github.com/Mostorm-Labs/canvas/actions/runs/30704424435)
+completed successfully for macOS commit `ac2dfce6b8c9b765d7348d62817c4c913fea127a`.
+The build job is [91380965114](https://github.com/Mostorm-Labs/canvas/actions/runs/30704424435/job/91380965114)
+on `macos-14` arm64. It passed, in order:
+
+- arm64 runner verification, Node setup, workflow contract, and shared web-asset tests;
+- exact locked-baseline vcpkg resolution, dependency install, and binary-cache steps;
+- Configure and Release Build;
+- non-GUI CTest/source-contract gate;
+- required GUI/Metal/WKWebView discovery gate and AppKit/Metal/WKWebView tests;
+- whitespace validation.
+
+The paired Windows check for PR #2 was also green in run
+[30704424433](https://github.com/Mostorm-Labs/canvas/actions/runs/30704424433)
+(build job [91380964934](https://github.com/Mostorm-Labs/canvas/actions/runs/30704424433/job/91380964934));
+the PR-event Release job was skipped by design. This CI result does not provide a
+macOS release artifact and does not establish real-device touch/pen/IME behavior,
+Electron GUI integration, or a latency target. Those remain pending.
