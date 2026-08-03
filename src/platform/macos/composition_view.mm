@@ -1,6 +1,7 @@
 #include "platform/macos/composition_view.h"
 
 #include "platform/macos/macos_mouse_session.h"
+#include "platform/macos/macos_tablet_input.h"
 #include "platform/macos/macos_whiteboard_input.h"
 #include "platform/macos/metal_host.h"
 #include "platform/macos/metal_view.h"
@@ -17,16 +18,20 @@ void requireAppKitMainThread() {
   if (![NSThread isMainThread]) std::terminate();
 }
 
-canvas::macos::RawMacMouseEvent rawMouseEvent(
-    NSView* view, NSEvent* event, canvas::macos::MacMousePhase phase) {
-  const NSPoint local = [view convertPoint:event.locationInWindow fromView:nil];
-  const NSRect bounds = view.bounds;
+double backingScaleForView(NSView* view) {
   double backingScale = view.window.backingScaleFactor;
   if (!(backingScale > 0.0)) {
     NSScreen* screen = view.window.screen;
     if (screen == nil) screen = NSScreen.mainScreen;
     backingScale = screen != nil ? screen.backingScaleFactor : 1.0;
   }
+  return backingScale;
+}
+
+canvas::macos::RawMacMouseEvent rawMouseEvent(
+    NSView* view, NSEvent* event, canvas::macos::MacMousePhase phase) {
+  const NSPoint local = [view convertPoint:event.locationInWindow fromView:nil];
+  const NSRect bounds = view.bounds;
 
   canvas::macos::RawMacMouseEvent raw;
   raw.localPosition = {static_cast<float>(local.x),
@@ -36,13 +41,82 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
   raw.boundsSize = {static_cast<float>(bounds.size.width),
                     static_cast<float>(bounds.size.height)};
   raw.viewFlipped = view.isFlipped;
-  raw.backingScale = backingScale;
+  raw.backingScale = backingScaleForView(view);
   raw.timestampSeconds = event.timestamp;
   raw.pressure = static_cast<double>(event.pressure);
   raw.buttonNumber = static_cast<std::int64_t>(event.buttonNumber);
   raw.eventNumber = static_cast<std::int64_t>(event.eventNumber);
   raw.deviceId = 0;
   raw.phase = phase;
+  return raw;
+}
+
+canvas::macos::MacTabletTool tabletTool(
+    NSPointingDeviceType pointingDeviceType) {
+  switch (pointingDeviceType) {
+    case NSPointingDeviceTypePen:
+      return canvas::macos::MacTabletTool::Pen;
+    case NSPointingDeviceTypeCursor:
+      return canvas::macos::MacTabletTool::Cursor;
+    case NSPointingDeviceTypeEraser:
+      return canvas::macos::MacTabletTool::Eraser;
+    case NSPointingDeviceTypeUnknown:
+      return canvas::macos::MacTabletTool::Unknown;
+  }
+  return canvas::macos::MacTabletTool::Unknown;
+}
+
+canvas::macos::RawMacTabletPointEvent rawTabletPointEvent(
+    NSView* view, NSEvent* event,
+    canvas::macos::MacTabletPointSource source,
+    canvas::macos::MacTabletPointPhase phase) {
+  const NSPoint local = [view convertPoint:event.locationInWindow fromView:nil];
+  const NSRect bounds = view.bounds;
+  const NSPoint tilt = event.tilt;
+
+  canvas::macos::RawMacTabletPointEvent raw;
+  raw.localPosition = {static_cast<float>(local.x),
+                       static_cast<float>(local.y)};
+  raw.boundsOrigin = {static_cast<float>(bounds.origin.x),
+                      static_cast<float>(bounds.origin.y)};
+  raw.boundsSize = {static_cast<float>(bounds.size.width),
+                    static_cast<float>(bounds.size.height)};
+  raw.viewFlipped = view.isFlipped;
+  raw.backingScale = backingScaleForView(view);
+  raw.timestampSeconds = event.timestamp;
+  raw.pressure = static_cast<double>(event.pressure);
+  // NSEvent.tilt is already a scaled [-1, 1] vector, not degrees.
+  raw.tiltScaled = {static_cast<float>(tilt.x),
+                    static_cast<float>(tilt.y)};
+  raw.tangentialPressure =
+      static_cast<double>(event.tangentialPressure);
+  raw.rotationDegrees = static_cast<double>(event.rotation);
+  raw.buttonMask = static_cast<std::uint64_t>(event.buttonMask);
+  raw.deviceId = static_cast<std::uint64_t>(event.deviceID);
+  if (source == canvas::macos::MacTabletPointSource::AssociatedMouse) {
+    raw.eventNumber = static_cast<std::int64_t>(event.eventNumber);
+  }
+  raw.source = source;
+  raw.phase = phase;
+  return raw;
+}
+
+canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
+    NSEvent* event) {
+  canvas::macos::RawMacTabletProximityEvent raw;
+  raw.profile.identity.deviceId =
+      static_cast<std::uint64_t>(event.deviceID);
+  raw.profile.identity.pointingDeviceId =
+      static_cast<std::uint64_t>(event.pointingDeviceID);
+  raw.profile.identity.systemTabletId =
+      static_cast<std::uint64_t>(event.systemTabletID);
+  raw.profile.identity.uniqueId =
+      static_cast<std::uint64_t>(event.uniqueID);
+  raw.profile.capabilityMask =
+      static_cast<std::uint64_t>(event.capabilityMask);
+  raw.profile.tool = tabletTool(event.pointingDeviceType);
+  raw.timestampSeconds = event.timestamp;
+  raw.entering = event.enteringProximity;
   return raw;
 }
 
@@ -60,10 +134,12 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
     pointerInputDelegate;
 - (canvas::macos::MacosMouseSessionOutput)takeMouseCancellationOutput;
 - (void)cancelActiveMouseSession;
+- (void)resetTabletSession;
 @end
 
 @implementation CanvasPointerMetalView {
   canvas::macos::MacosMouseSession mouseSession_;
+  canvas::macos::MacosTabletSession tabletSession_;
   __weak id<CanvasPointerMetalViewDelegate> pointerInputDelegate_;
   __strong id applicationResignObserver_;
   __strong id windowResignObserver_;
@@ -149,17 +225,84 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
   [self dispatchOutput:output];
 }
 
+- (BOOL)consumeTabletMouseEvent:(NSEvent*)event
+                           phase:(canvas::macos::MacTabletPointPhase)phase {
+  requireAppKitMainThread();
+  if (event == nil) return NO;
+  const NSEventType type = event.type;
+  if (type != NSEventTypeLeftMouseDown &&
+      type != NSEventTypeLeftMouseDragged &&
+      type != NSEventTypeLeftMouseUp) {
+    return NO;
+  }
+
+  switch (event.subtype) {
+    case NSEventSubtypeTabletPoint: {
+      // A modality switch must retire any ordinary-mouse preview before the
+      // tablet event is consumed and before this method returns early.
+      const auto mouseCancellation = [self takeMouseCancellationOutput];
+      [self dispatchOutput:mouseCancellation];
+      // Tablet output remains fail-closed until it can be represented without
+      // losing tool identity or scaled tilt in PointerSample.
+      (void)tabletSession_.consumePoint(rawTabletPointEvent(
+          self, event, canvas::macos::MacTabletPointSource::AssociatedMouse,
+          phase));
+      return YES;
+    }
+    case NSEventSubtypeTabletProximity:
+      (void)tabletSession_.consumeProximity(rawTabletProximityEvent(event));
+      return YES;
+    default:
+      return NO;
+  }
+}
+
 - (void)mouseDown:(NSEvent*)event {
   if (self.window != nil) [self.window makeFirstResponder:self];
+  if ([self consumeTabletMouseEvent:event
+                              phase:canvas::macos::MacTabletPointPhase::Down])
+    return;
+  // An ordinary mouse Down begins a new modality epoch. Tablet contacts and
+  // their profiles are discarded so later native updates cannot rejoin a
+  // pre-mouse contact.
+  [self resetTabletSession];
   [self consumeEvent:event phase:canvas::macos::MacMousePhase::Down];
 }
 
 - (void)mouseDragged:(NSEvent*)event {
+  if ([self consumeTabletMouseEvent:event
+                              phase:canvas::macos::MacTabletPointPhase::Move])
+    return;
   [self consumeEvent:event phase:canvas::macos::MacMousePhase::Move];
 }
 
 - (void)mouseUp:(NSEvent*)event {
+  if ([self consumeTabletMouseEvent:event
+                              phase:canvas::macos::MacTabletPointPhase::Up])
+    return;
   [self consumeEvent:event phase:canvas::macos::MacMousePhase::Up];
+}
+
+- (void)tabletPoint:(NSEvent*)event {
+  requireAppKitMainThread();
+  if (event == nil) return;
+  if (event.type != NSEventTypeTabletPoint) {
+    [super tabletPoint:event];
+    return;
+  }
+  (void)tabletSession_.consumePoint(rawTabletPointEvent(
+      self, event, canvas::macos::MacTabletPointSource::NativeTabletPoint,
+      canvas::macos::MacTabletPointPhase::NativeUpdate));
+}
+
+- (void)tabletProximity:(NSEvent*)event {
+  requireAppKitMainThread();
+  if (event == nil) return;
+  if (event.type != NSEventTypeTabletProximity) {
+    [super tabletProximity:event];
+    return;
+  }
+  (void)tabletSession_.consumeProximity(rawTabletProximityEvent(event));
 }
 
 - (void)cancelOperation:(id)sender {
@@ -168,8 +311,14 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
 }
 
 - (void)cancelActiveMouseSession {
+  [self resetTabletSession];
   const auto output = [self takeMouseCancellationOutput];
   [self dispatchOutput:output];
+}
+
+- (void)resetTabletSession {
+  requireAppKitMainThread();
+  (void)tabletSession_.reset();
 }
 
 - (canvas::macos::MacosMouseSessionOutput)takeMouseCancellationOutput {
@@ -272,6 +421,7 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
   canvas::macos::MacosMouseSessionOutput cancellation;
   if (pointerView != nil) {
     pointerView.pointerInputDelegate = nil;
+    [pointerView resetTabletSession];
     cancellation = [pointerView takeMouseCancellationOutput];
   }
   if (whiteboardInput_) {

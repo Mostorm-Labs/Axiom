@@ -145,6 +145,16 @@ if(APPLE)
     canvas_enable_warnings(canvas_macos_mouse_session_test)
     gtest_discover_tests(canvas_macos_mouse_session_test)
 
+    add_executable(canvas_macos_tablet_input_test
+                   unit/macos_tablet_input_test.cpp)
+    target_include_directories(canvas_macos_tablet_input_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_tablet_input_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_tablet_input_test)
+    gtest_discover_tests(canvas_macos_tablet_input_test)
+
     add_executable(canvas_macos_whiteboard_input_test
                    unit/macos_whiteboard_input_test.cpp)
     target_include_directories(canvas_macos_whiteboard_input_test
@@ -258,6 +268,11 @@ if(APPLE)
              COMMAND ${CMAKE_COMMAND}
                      -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_composition_host_contract_test.cmake)
+
+    add_test(NAME canvas_macos_tablet_input_source_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_tablet_input_source_contract_test.cmake)
 
     add_test(NAME canvas_macos_wkwebview_surface_contract
              COMMAND ${CMAKE_COMMAND}

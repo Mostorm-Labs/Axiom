@@ -1,0 +1,107 @@
+Task 23D macOS tablet/pen safety seam GREEN evidence
+Date: 2026-08-03 (Asia/Shanghai)
+Baseline commit: c5e7fb28a2ce3ebd5367f4d2132b376ad7a99c5e
+
+Implemented scope:
+  - The platform-neutral seam represents tablet point source, phase, pressure,
+    scaled two-axis tilt, tangential pressure, rotation in degrees, button
+    mask, device identity, raw capabilities, and Pen/Cursor/Eraser/Unknown
+    tool identity without importing AppKit into the pure C++ files.
+  - Tool intent is explicit: Pen is eligible for a future ink conversion,
+    Eraser is EraserPending, and Cursor/Unknown are Unsupported. Eraser,
+    Cursor, and Unknown can therefore never silently become ordinary ink.
+  - MacosTabletSession uses fixed arrays for at most eight proximate profiles,
+    four active contacts, and four output samples. Associated mouse Down owns
+    contact creation. Native tabletPoint input may update only an existing
+    same-device contact and cannot create a second Down. Exact native/
+    associated measurements are deduplicated.
+  - Orphan, mismatched, unproximate, invalid source/phase, and capacity-
+    overflow input fails closed. Duplicate Down cancels before replacement;
+    proximity leave and lifecycle reset cancel contacts exactly once and clear
+    device profiles. A contact retains the device/tool profile captured at
+    Down.
+  - CanvasPointerMetalView extracts tablet fields synchronously on the AppKit
+    main thread through tabletPoint:, tabletProximity:, and associated mouse
+    subtypes. Tablet-only getters are reached only after checking the native
+    NSEvent type or a valid left-mouse type followed by its tablet subtype.
+    An associated tablet subtype returns before the existing MacosMouseSession.
+  - No event monitor, Electron call, IPC message, JSON object, or dynamic
+    container was added to the input hot path. App/window resign, window close,
+    detach, mode/document replacement, cancellation, and teardown reset the
+    tablet session idempotently alongside the existing mouse lifecycle.
+  - A modality switch cannot strand state in the other session. An associated
+    tablet point first cancels and dispatches any ordinary-mouse preview before
+    consuming the tablet sample. Conversely, an ordinary non-tablet Mouse Down
+    resets tablet contacts and profiles before starting its mouse session, so
+    a later native tablet update cannot rejoin a stale pre-mouse contact.
+
+Deliberate fail-closed integration boundary:
+  MacosTabletSample is not converted to the current PointerSample because that
+  type cannot preserve tablet tool identity and scaled tilt semantics. Every
+  tablet-session output is intentionally discarded inside CanvasPointerMetalView;
+  no Pen, Eraser, Cursor, or Unknown sample is sent to the pointer delegate or
+  mutates Document. Ordinary non-tablet mouse events retain the existing
+  visible drawing path.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --parallel
+    PASS: the application and all registered test targets linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^MacosTabletInputTest\.' --output-on-failure
+    PASS: 10/10 pure normalization and session tests.
+
+  ctest --preset macos-arm64-release \
+    -R '^canvas_macos_(tablet_input_source_contract|pointer_seam_source_contract)$' \
+    --output-on-failure
+    PASS: 2/2 AppKit extraction/routing and pure ownership contracts.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^MacosMouseInput\.' --output-on-failure
+    PASS: 11/11 existing ordinary-mouse AppKit/Metal tests.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    --repeat until-fail:3 -R '^MacosMouseInput\.' --output-on-failure
+    PASS: all 11 ordinary-mouse tests passed three consecutive runs.
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 218/218 non-GUI tests and source contracts.
+
+  Local execution of the hosted workflow's fail-closed discovery found:
+    MacosAppKitFrameScheduling=1
+    MacosCompositionLayerStack=2
+    MacosMouseInput=11
+    MacosWKWebViewSurface=7
+    Aggregate GUI/Metal total=21
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    --output-on-failure \
+    -R '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 21/21 GUI and Metal tests.
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 4/4 workflow contract tests.
+
+  git diff --check
+    PASS.
+
+Independent review:
+  The first review found a cross-modality P1 in which an associated tablet
+  point could leave an older ordinary-mouse preview active. The implementation
+  was corrected to dispatch Mouse Cancel before tablet consumption and to
+  reset the tablet epoch before an ordinary Mouse Down. The same reviewer then
+  reran the focused and complete gates above and returned PASS with no
+  remaining P0, P1, or P2 findings.
+
+Evidence boundary and pending work:
+  The tablet behavior tests use constructed raw C++ records and the AppKit
+  integration gate is source-level. This is not physical tablet, pressure
+  accuracy, eraser execution, visible pen drawing, touch input, GUI automation,
+  hosted macOS CI, or latency evidence. Interact mode still hit-tests embedded
+  native content instead of the overlay. Coalesced/predicted pen input and a
+  semantics-preserving tablet-to-whiteboard model remain future increments.
+  The i5-1235U touch-to-visible-ink p95 target below 50 ms still requires the
+  target Windows touch display and is not established by this macOS seam.
+
+Status: GREEN confirmed locally for the software seam on Apple Silicon macOS.

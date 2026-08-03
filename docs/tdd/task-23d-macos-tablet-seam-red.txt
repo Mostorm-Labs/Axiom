@@ -1,0 +1,51 @@
+Task 23D macOS tablet/pen safety seam RED evidence
+Date: 2026-08-03 (Asia/Shanghai)
+Baseline commit: c5e7fb28a2ce3ebd5367f4d2132b376ad7a99c5e
+
+Official API inspection:
+  Xcode 26.2 (17C52), macOS 26.2 SDK NSEvent.h at:
+    /Applications/Xcode-26.2.0.app/Contents/Developer/Platforms/
+    MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk/System/Library/
+    Frameworks/AppKit.framework/Headers/NSEvent.h
+
+  The header declares tablet pressure in [0,1], tilt as two scaled axes in
+  [-1,1], tangential pressure in [-1,1], and only rotation as degrees. It also
+  declares tablet deviceID, proximity unique/system/pointing IDs, raw
+  capabilityMask, and Pen/Cursor/Eraser/Unknown pointing-device types.
+
+  Apple's Cocoa Event Handling Guide says drivers usually package tablet point
+  input as mouse-event subtypes, while native tabletPoint events can occur
+  between stylus-down and the first drag (among other exceptions). Therefore
+  both responder paths must converge on one session; native points must never
+  create an independent second Down.
+
+RED setup:
+  Pure C++ tablet model declarations and deliberately inert adapter/session
+  stubs were registered with ten behavioral tests. A source contract was also
+  registered for AppKit extraction and subtype-before-mouse-session routing.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_macos_tablet_input_test -j 4
+    PASS: the inert seam and RED tests compiled and linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^MacosTabletInputTest\.' --output-on-failure
+    FAIL: 1/10 passed and 9/10 failed. Normalization, identity/capabilities,
+    explicit tool intent, native/associated deduplication, duplicate Down,
+    proximity leave, reset, fixed capacity, and contact metadata behavior were
+    absent. Only the orphan/device-mismatch fail-closed control passed.
+
+  ctest --preset macos-arm64-release \
+    -R '^canvas_macos_(tablet_input_source_contract|pointer_seam_source_contract)$' \
+    --output-on-failure
+    FAIL: pointer purity contract passed; tablet AppKit source contract failed
+    because tabletPoint:, tabletProximity:, safe property extraction, session
+    routing, and lifecycle reset were not present.
+
+Evidence boundary:
+  These tests use pure raw records and source inspection. They are not tablet
+  hardware, pressure accuracy, eraser execution, visible pen drawing, Interact
+  mode, or latency evidence.
+
+Status: RED confirmed before behavioral production implementation.

@@ -7,6 +7,8 @@ set(pointer_sources
     "${SOURCE_DIR}/src/platform/macos/macos_pointer_adapter.cpp"
     "${SOURCE_DIR}/src/platform/macos/macos_mouse_session.h"
     "${SOURCE_DIR}/src/platform/macos/macos_mouse_session.cpp"
+    "${SOURCE_DIR}/src/platform/macos/macos_tablet_input.h"
+    "${SOURCE_DIR}/src/platform/macos/macos_tablet_input.cpp"
     "${SOURCE_DIR}/src/platform/macos/macos_whiteboard_input.h"
     "${SOURCE_DIR}/src/platform/macos/macos_whiteboard_input.cpp")
 
@@ -34,7 +36,9 @@ string(REGEX MATCH
        "add_library[(]canvas_macos_platform STATIC[^)]*[)]"
        macos_platform_target "${root_cmake}")
 if(NOT macos_platform_target MATCHES
-   "macos_whiteboard_input[.]cpp")
+   "macos_whiteboard_input[.]cpp" OR
+   NOT macos_platform_target MATCHES
+   "macos_tablet_input[.]cpp")
     message(FATAL_ERROR
             "The macOS platform target must compile the whiteboard input controller")
 endif()
@@ -43,7 +47,7 @@ string(REGEX MATCH
        "add_library[(]canvas_windows_platform STATIC[^)]*[)]"
        windows_platform_target "${root_cmake}")
 if(windows_platform_target MATCHES
-   "macos_(pointer_adapter|mouse_session|whiteboard_input)")
+   "macos_(pointer_adapter|mouse_session|tablet_input|whiteboard_input)")
     message(FATAL_ERROR
             "The Windows platform target must not compile macOS pointer sources")
 endif()
@@ -57,7 +61,7 @@ foreach(windows_source IN LISTS windows_sources)
     endif()
     file(READ "${windows_source}" windows_text)
     if(windows_text MATCHES
-       "macos_(pointer_adapter|mouse_session|whiteboard_input)")
+       "macos_(pointer_adapter|mouse_session|tablet_input|whiteboard_input)")
         message(FATAL_ERROR
                 "Windows source must not reference the macOS pointer seam: ${windows_source}")
     endif()
