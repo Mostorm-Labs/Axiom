@@ -67,18 +67,22 @@ class MacosWhiteboardInput {
     std::optional<document::NodeId> parentId;
     stroke::StrokeBuilder builder;
     core::Rect bounds;
+    std::optional<std::uint64_t> cacheIdentity;
+    std::uint64_t expectedRevision = 0;
+    std::uint64_t expectedNonAppendRevision = 0;
   };
 
   static bool isAcceptedSample(const input::PointerSample& sample) noexcept;
   std::optional<document::NodeId> topmostEmbeddedHit(
       core::Vec2 position) const;
   std::optional<document::NodeId> allocateStrokeId();
+  bool ownsActivePreviewIdentity() const noexcept;
   bool activePreviewIsValid() const noexcept;
   MacosWhiteboardInputResult begin(const input::PointerSample& sample);
   MacosWhiteboardInputResult move(const input::PointerSample& sample);
   MacosWhiteboardInputResult finish(const input::PointerSample& sample);
   MacosWhiteboardInputResult rollback(bool fullRedraw);
-  MacosWhiteboardInputResult failActive();
+  MacosWhiteboardInputResult failActive(bool fullRedraw = false);
 
   static constexpr float kStrokeWidth = 4.0F;
   static constexpr std::size_t kPreviewPointCapacity = 512;

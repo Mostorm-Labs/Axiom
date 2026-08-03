@@ -9,9 +9,9 @@ Implemented scope:
     future-AppKit-main-thread ownership contract and no internal locking or UI
     framework dependency.
   * It owns the mutable Document reference, InputRouter, and one active
-    StrokeBuilder. Only finite, real Mouse samples are accepted; orphan,
-    duplicate, mismatched, predicted, non-Mouse, and non-finite samples do not
-    mutate the document.
+    StrokeBuilder. Only non-zero-id, finite, real Mouse samples with pressure
+    in [0, 1] are accepted; orphan, duplicate, mismatched, predicted,
+    non-Mouse, and invalid samples do not mutate the document.
   * Down reverse-scans document order for the topmost Embedded hit. It creates
     a collision-free Base or Annotation preview with both builder and preview
     point storage reserved for 512 points.
@@ -24,6 +24,13 @@ Implemented scope:
   * Cancel, mode changes, and document replacement erase an active preview
     exactly once before clearing state. Logical append, parent-transform, or
     externally missing-preview failures also clear state and leave no preview.
+    A null replacement fails without cancelling or replacing current state.
+  * Preview ownership is guarded by the cache identity captured after add plus
+    controller-owned revision and non-append revision counters. Each accepted
+    append advances the expected revision, and Up revalidates immediately
+    before final mutation. Cleanup erases only the matching cache identity;
+    an erase-plus-recreate node with the same id is preserved and returns a
+    Failed result with a safe full redraw request.
   * Result values are fixed: kind, optional layer, optional dirty bounds, and
     fullRedraw. A real document replacement requests full redraw.
   * The direct-source/CMake contract includes the controller, rejects native
@@ -38,14 +45,14 @@ Commands and observed results:
   ctest --preset macos-arm64-release \
     -R 'InputRouterTest|MacosWhiteboardInputTest|^canvas_macos_pointer_seam_source_contract$' \
     --output-on-failure
-    PASS: 22/22
+    PASS: 27/27
 
   cmake --build --preset macos-arm64-release --parallel
     PASS
 
   ctest --preset macos-arm64-release --output-on-failure \
     -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosWKWebViewSurface)\.'
-    PASS: 198/198 non-GUI tests and source contracts
+    PASS: 203/203 non-GUI tests and source contracts
 
   node --test tests/contracts/macos_build_workflow.test.mjs
     PASS: 3/3
@@ -58,3 +65,10 @@ Intentionally not covered by this increment:
   or predicted input, IME, Electron/native IPC, macOS release packaging,
   GUI/hardware input validation, and end-to-end latency measurement remain
   pending.
+
+Known performance debt:
+  StrokeBuilder and the live Document preview intentionally keep parallel
+  point vectors. Both reserve the first 512 points, but longer strokes can
+  grow both vectors and Up still copies committed points into the final
+  StrokeNode. Measure long-stroke behavior before redesigning that ownership;
+  this review fix does not claim to remove the >512-point allocation cost.

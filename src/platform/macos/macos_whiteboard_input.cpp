@@ -39,10 +39,12 @@ MacosWhiteboardInput::MacosWhiteboardInput(
 
 bool MacosWhiteboardInput::isAcceptedSample(
     const input::PointerSample& sample) noexcept {
-  return sample.kind == input::PointerKind::Mouse && !sample.predicted &&
+  return sample.pointerId != 0 &&
+         sample.kind == input::PointerKind::Mouse && !sample.predicted &&
          std::isfinite(sample.screenPosition.x) &&
          std::isfinite(sample.screenPosition.y) &&
-         std::isfinite(sample.pressure) &&
+         std::isfinite(sample.pressure) && sample.pressure >= 0.0F &&
+         sample.pressure <= 1.0F &&
          std::isfinite(sample.tiltXDegrees) &&
          std::isfinite(sample.tiltYDegrees);
 }
@@ -74,10 +76,21 @@ std::optional<document::NodeId> MacosWhiteboardInput::allocateStrokeId() {
   return std::nullopt;
 }
 
-bool MacosWhiteboardInput::activePreviewIsValid() const noexcept {
-  if (!document_ || !active_) return false;
+bool MacosWhiteboardInput::ownsActivePreviewIdentity() const noexcept {
+  if (!document_ || !active_ || !active_->cacheIdentity) return false;
   const document::Node* node = document_->find(active_->nodeId);
-  return node != nullptr && node->layer == active_->layer &&
+  return node != nullptr &&
+         node->cacheIdentity == *active_->cacheIdentity;
+}
+
+bool MacosWhiteboardInput::activePreviewIsValid() const noexcept {
+  if (!document_ || !active_ || !active_->cacheIdentity) return false;
+  const document::Node* node = document_->find(active_->nodeId);
+  return node != nullptr &&
+         node->cacheIdentity == *active_->cacheIdentity &&
+         node->revision == active_->expectedRevision &&
+         node->nonAppendRevision == active_->expectedNonAppendRevision &&
+         node->layer == active_->layer &&
          node->parentId == active_->parentId &&
          std::holds_alternative<document::StrokeNode>(node->payload);
 }
@@ -147,7 +160,13 @@ MacosWhiteboardInputResult MacosWhiteboardInput::begin(
   node.bounds = active_->bounds;
   node.parentId = active_->parentId;
   node.payload = std::move(preview);
-  if (!document_->add(std::move(node))) return failActive();
+  if (!document_->add(std::move(node))) return failActive(true);
+  const document::Node* added = document_->find(active_->nodeId);
+  if (added == nullptr) return failActive(true);
+  active_->cacheIdentity = added->cacheIdentity;
+  active_->expectedRevision = added->revision;
+  active_->expectedNonAppendRevision = added->nonAppendRevision;
+  if (!activePreviewIsValid()) return failActive(true);
 
   MacosWhiteboardInputResult result;
   result.kind = MacosWhiteboardInputResultKind::Began;
@@ -158,13 +177,17 @@ MacosWhiteboardInputResult MacosWhiteboardInput::begin(
 
 MacosWhiteboardInputResult MacosWhiteboardInput::move(
     const input::PointerSample& sample) {
-  if (!activePreviewIsValid()) return failActive();
+  if (!activePreviewIsValid()) return failActive(true);
 
   const stroke::StrokeUpdate update = active_->builder.append(sample);
   if (update.accepted &&
       !document_->appendStrokePoint(active_->nodeId, strokePoint(sample),
                                     update.dirtyBounds)) {
-    return failActive();
+    return failActive(true);
+  }
+  if (update.accepted) {
+    ++active_->expectedRevision;
+    if (!activePreviewIsValid()) return failActive(true);
   }
   if (!update.accepted && !hasArea(update.dirtyBounds)) return {};
 
@@ -180,20 +203,23 @@ MacosWhiteboardInputResult MacosWhiteboardInput::move(
 
 MacosWhiteboardInputResult MacosWhiteboardInput::finish(
     const input::PointerSample& sample) {
-  if (!activePreviewIsValid()) return failActive();
+  if (!activePreviewIsValid()) return failActive(true);
 
   const stroke::StrokeUpdate update = active_->builder.append(sample);
   if (update.accepted &&
       !document_->appendStrokePoint(active_->nodeId, strokePoint(sample),
                                     update.dirtyBounds)) {
-    return failActive();
+    return failActive(true);
+  }
+  if (update.accepted) {
+    ++active_->expectedRevision;
+    if (!activePreviewIsValid()) return failActive(true);
   }
   if (hasArea(update.dirtyBounds)) {
     active_->bounds = active_->bounds.united(update.dirtyBounds);
   }
 
   document::StrokeNode completed = active_->builder.finish();
-  completed.points.reserve(kPreviewPointCapacity);
   if (active_->layer == document::LayerClass::Annotation) {
     if (!active_->parentId) return failActive();
     const document::Node* parent = document_->find(*active_->parentId);
@@ -208,6 +234,8 @@ MacosWhiteboardInputResult MacosWhiteboardInput::finish(
       return failActive();
     }
   }
+
+  if (!activePreviewIsValid()) return failActive(true);
 
   const document::LayerClass layer = active_->layer;
   const core::Rect bounds = active_->bounds;
@@ -233,34 +261,38 @@ MacosWhiteboardInputResult MacosWhiteboardInput::rollback(bool fullRedraw) {
   if (!active_) return ignoredResult(fullRedraw);
   const document::LayerClass layer = active_->layer;
   const core::Rect dirtyBounds = active_->bounds;
-  const document::NodeId nodeId = active_->nodeId;
-  const bool erased = document_ && document_->erase(nodeId);
+  const bool owned = ownsActivePreviewIdentity();
+  const bool erased = owned && document_->erase(active_->nodeId);
   active_.reset();
 
   MacosWhiteboardInputResult result;
-  result.kind = erased ? MacosWhiteboardInputResultKind::Cancelled
-                       : MacosWhiteboardInputResultKind::Failed;
+  result.kind = owned && erased
+                    ? MacosWhiteboardInputResultKind::Cancelled
+                    : MacosWhiteboardInputResultKind::Failed;
   result.layer = layer;
   result.dirtyBounds = dirtyBounds;
-  result.fullRedraw = fullRedraw;
+  result.fullRedraw = fullRedraw || !owned || !erased;
   return result;
 }
 
-MacosWhiteboardInputResult MacosWhiteboardInput::failActive() {
+MacosWhiteboardInputResult MacosWhiteboardInput::failActive(bool fullRedraw) {
   if (!active_) {
     MacosWhiteboardInputResult result;
     result.kind = MacosWhiteboardInputResultKind::Failed;
+    result.fullRedraw = true;
     return result;
   }
   const document::LayerClass layer = active_->layer;
   const core::Rect dirtyBounds = active_->bounds;
-  if (document_) document_->erase(active_->nodeId);
+  const bool owned = ownsActivePreviewIdentity();
+  const bool erased = owned && document_->erase(active_->nodeId);
   active_.reset();
 
   MacosWhiteboardInputResult result;
   result.kind = MacosWhiteboardInputResultKind::Failed;
   result.layer = layer;
   result.dirtyBounds = dirtyBounds;
+  result.fullRedraw = fullRedraw || !owned || !erased;
   return result;
 }
 
@@ -276,6 +308,11 @@ MacosWhiteboardInputResult MacosWhiteboardInput::setMode(
 
 MacosWhiteboardInputResult MacosWhiteboardInput::replaceDocument(
     std::shared_ptr<document::Document> document) {
+  if (!document) {
+    MacosWhiteboardInputResult result;
+    result.kind = MacosWhiteboardInputResultKind::Failed;
+    return result;
+  }
   if (document == document_) return {};
   MacosWhiteboardInputResult result =
       active_ ? rollback(true) : ignoredResult(true);

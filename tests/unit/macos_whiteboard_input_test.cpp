@@ -180,12 +180,23 @@ TEST(MacosWhiteboardInputTest, RejectsNonMouseAndNonFiniteSamples) {
       std::numeric_limits<float>::quiet_NaN();
   auto nonFinitePressure = mouse(3, input::PointerPhase::Down, 1, 2);
   nonFinitePressure.pressure = std::numeric_limits<float>::infinity();
+  auto zeroPointer = mouse(0, input::PointerPhase::Down, 1, 2);
+  auto negativePressure = mouse(5, input::PointerPhase::Down, 1, 2);
+  negativePressure.pressure = -0.01F;
+  auto excessivePressure = mouse(6, input::PointerPhase::Down, 1, 2);
+  excessivePressure.pressure = 1.01F;
 
   EXPECT_EQ(controller.consume(pen).kind,
             MacosWhiteboardInputResultKind::Ignored);
   EXPECT_EQ(controller.consume(nonFinitePosition).kind,
             MacosWhiteboardInputResultKind::Ignored);
   EXPECT_EQ(controller.consume(nonFinitePressure).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(zeroPointer).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(negativePressure).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(excessivePressure).kind,
             MacosWhiteboardInputResultKind::Ignored);
   EXPECT_TRUE(document->nodes().empty());
 
@@ -293,6 +304,110 @@ TEST(MacosWhiteboardInputTest, ReplacedPreviewPayloadFailsInsteadOfClobbering) {
   EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
   EXPECT_FALSE(controller.active());
   EXPECT_TRUE(document->nodes().empty());
+}
+
+TEST(MacosWhiteboardInputTest, ExternalStrokeMutationCannotBeSilentlyFinished) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  ASSERT_TRUE(document->mutate(previewId, [](document::Node& node) {
+    std::get<document::StrokeNode>(node.payload).width = 42.0F;
+  }));
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Up, 10, 20));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  EXPECT_TRUE(document->nodes().empty());
+}
+
+TEST(MacosWhiteboardInputTest, ExternalAppendInvalidatesOwnedPreviewRevision) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  ASSERT_TRUE(document->appendStrokePoint(
+      previewId, document::StrokePoint{{90, 90}, 0.5F, 99},
+      core::Rect{85, 85, 10, 10}));
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Move, 30, 40));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  EXPECT_TRUE(document->nodes().empty());
+}
+
+TEST(MacosWhiteboardInputTest, RecreatedSameIdNodeIsNeverErasedByStaleOwner) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  const auto oldIdentity = document->nodes().front().cacheIdentity;
+  ASSERT_TRUE(document->erase(previewId));
+  document::Node replacement;
+  replacement.id = previewId;
+  replacement.layer = document::LayerClass::Chrome;
+  replacement.payload = document::UnknownNode{"replacement", "{}"};
+  ASSERT_TRUE(document->add(std::move(replacement)));
+  ASSERT_NE(document->nodes().front().cacheIdentity, oldIdentity);
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Move, 30, 40));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  ASSERT_EQ(document->nodes().size(), 1U);
+  EXPECT_EQ(document->nodes().front().id, previewId);
+  EXPECT_EQ(document->nodes().front().layer, document::LayerClass::Chrome);
+  EXPECT_TRUE(std::holds_alternative<document::UnknownNode>(
+      document->nodes().front().payload));
+}
+
+TEST(MacosWhiteboardInputTest, RecreatedSameIdNodeAlsoSurvivesRollback) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  ASSERT_TRUE(document->erase(previewId));
+  document::Node replacement;
+  replacement.id = previewId;
+  replacement.layer = document::LayerClass::Chrome;
+  replacement.payload = document::UnknownNode{"replacement", "{}"};
+  ASSERT_TRUE(document->add(std::move(replacement)));
+  const auto replacementIdentity = document->nodes().front().cacheIdentity;
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Cancel, 10, 20));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  ASSERT_EQ(document->nodes().size(), 1U);
+  EXPECT_EQ(document->nodes().front().cacheIdentity, replacementIdentity);
+  EXPECT_EQ(document->nodes().front().id, previewId);
+}
+
+TEST(MacosWhiteboardInputTest,
+     NullDocumentReplacementPreservesDocumentAndActivePreview) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewIdentity = document->nodes().front().cacheIdentity;
+
+  const auto failed = controller.replaceDocument(nullptr);
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_FALSE(failed.fullRedraw);
+  EXPECT_EQ(controller.document(), document);
+  EXPECT_TRUE(controller.active());
+  ASSERT_EQ(document->nodes().size(), 1U);
+  EXPECT_EQ(document->nodes().front().cacheIdentity, previewIdentity);
 }
 
 }  // namespace

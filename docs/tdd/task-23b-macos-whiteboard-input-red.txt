@@ -23,3 +23,11 @@ Observed result:
   behavior naturally produced by the inert stub.
 
 Status: RED confirmed.
+
+Independent-review follow-up RED:
+  Five of 17 controller tests failed before the ownership fix. A same-type
+  external mutation was silently overwritten by Up, an external append was
+  accepted as controller-owned state, and erase-plus-recreate with the same id
+  was deleted by stale cleanup. Zero pointer ids/out-of-range pressure and a
+  null document replacement were also incorrectly accepted. These failures
+  established the review fixes before their implementation.
