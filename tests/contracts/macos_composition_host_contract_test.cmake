@@ -30,6 +30,7 @@ foreach(required_pointer_input_token IN ITEMS
         "canvas::macos::MacosMouseSession mouseSession_"
         "mouseSession_.consume"
         "mouseSession_.cancel"
+        "takeMouseCancellationOutput"
         "didProduceSample"
         "NSApplicationWillResignActiveNotification"
         "NSWindowDidResignKeyNotification"
@@ -38,6 +39,7 @@ foreach(required_pointer_input_token IN ITEMS
         "viewWillMoveToWindow:"
         "canvas::macos::MacosWhiteboardInput"
         "whiteboardInput_->consume(sample)"
+        "whiteboardInput_->active()"
         "[baseMetalView_ invalidateCanvas]"
         "[overlayMetalView_ invalidateCanvas]")
     string(FIND "${composition_source}" "${required_pointer_input_token}" token_position)

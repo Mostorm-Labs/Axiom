@@ -1,0 +1,36 @@
+Task 23C macOS mouse lifecycle hardening RED evidence
+Date: 2026-08-03 (Asia/Shanghai)
+Baseline commit: 5228d0293dc1778209ae9ff440cf1a2aeee71578
+
+Tests added before production changes:
+  - Base and embedded-annotation drawing must commit only their target Metal
+    layer after input, in addition to requesting only that layer.
+  - A Base preview invalidated by an external Document mutation must cause the
+    full-redraw failure to request and commit both Base and Overlay.
+  - Composition ARC teardown with active windowless input must roll back the
+    externally owned Document preview without relying on the child's weak
+    delegate.
+  - Application-resign and window-close notifications cancel active previews.
+  - Hosted macOS CI must discover every required GUI suite independently.
+
+RED commands and observed results:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_macos_mouse_input_test -j 4
+    PASS: regression test target compiled and linked.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^MacosMouseInput\.' --output-on-failure
+    FAIL: 9/11 passed and 2/11 failed.
+      * FullRedrawFailureCommitsBothMetalLayers timed out because Overlay did
+        not commit after a Failed result carried both layer=Base and
+        fullRedraw=true.
+      * ActiveCompositionDeallocRollsBackPreviewDirectly found one preview
+        still in the external Document after actual ARC composition teardown.
+    The new Base/Annotation committed-frame checks and the application/window
+    notification checks passed as useful controls.
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    FAIL: 3/4 passed. The new per-suite discovery contract could not find a
+    GUI_TEST_SUITES declaration or fail-closed loop.
+
+Status: RED confirmed before production changes.

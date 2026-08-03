@@ -58,6 +58,7 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
 @interface CanvasPointerMetalView : CanvasMetalView
 @property(nonatomic, weak) id<CanvasPointerMetalViewDelegate>
     pointerInputDelegate;
+- (canvas::macos::MacosMouseSessionOutput)takeMouseCancellationOutput;
 - (void)cancelActiveMouseSession;
 @end
 
@@ -167,13 +168,18 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
 }
 
 - (void)cancelActiveMouseSession {
+  const auto output = [self takeMouseCancellationOutput];
+  [self dispatchOutput:output];
+}
+
+- (canvas::macos::MacosMouseSessionOutput)takeMouseCancellationOutput {
   requireAppKitMainThread();
-  const auto sample = mouseSession_.cancel();
-  if (!sample) return;
   canvas::macos::MacosMouseSessionOutput output;
+  const auto sample = mouseSession_.cancel();
+  if (!sample) return output;
   output.samples[0] = *sample;
   output.count = 1;
-  [self dispatchOutput:output];
+  return output;
 }
 
 - (void)viewWillMoveToWindow:(NSWindow*)newWindow {
@@ -263,8 +269,19 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
   requireAppKitMainThread();
   CanvasPointerMetalView* pointerView =
       (CanvasPointerMetalView*)overlayMetalView_;
-  [pointerView cancelActiveMouseSession];
-  pointerView.pointerInputDelegate = nil;
+  canvas::macos::MacosMouseSessionOutput cancellation;
+  if (pointerView != nil) {
+    pointerView.pointerInputDelegate = nil;
+    cancellation = [pointerView takeMouseCancellationOutput];
+  }
+  if (whiteboardInput_) {
+    for (std::size_t index = 0; index < cancellation.size(); ++index) {
+      (void)whiteboardInput_->consume(cancellation[index]);
+    }
+    if (whiteboardInput_->active()) {
+      (void)whiteboardInput_->setMode(canvas::input::InputMode::Interact);
+    }
+  }
   whiteboardInput_.reset();
 }
 
@@ -351,9 +368,13 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
 
 - (void)applyInputResult:
     (const canvas::macos::MacosWhiteboardInputResult&)result {
+  if (result.fullRedraw) {
+    [baseMetalView_ invalidateCanvas];
+    [overlayMetalView_ invalidateCanvas];
+    return;
+  }
   if (result.kind ==
-          canvas::macos::MacosWhiteboardInputResultKind::Ignored &&
-      !result.fullRedraw) {
+      canvas::macos::MacosWhiteboardInputResultKind::Ignored) {
     return;
   }
   if (result.layer) {
@@ -368,10 +389,6 @@ canvas::macos::RawMacMouseEvent rawMouseEvent(
       case canvas::document::LayerClass::Embedded:
         break;
     }
-  }
-  if (result.fullRedraw) {
-    [baseMetalView_ invalidateCanvas];
-    [overlayMetalView_ invalidateCanvas];
   }
 }
 

@@ -50,3 +50,20 @@ test("GUI and Metal tests are explicit required gates", () => {
   assert.match(workflow, /MTL_DEBUG_LAYER: \"1\"/);
   assert.match(workflow, /git diff --check/);
 });
+
+test("every required GUI suite is discovered fail-closed", () => {
+  const suites = workflow.match(/^\s*GUI_TEST_SUITES:\s*'([^']+)'\s*$/m);
+  assert.ok(suites, "workflow must declare each required GUI suite");
+  assert.deepEqual(suites[1].trim().split(/\s+/), [
+    "MacosAppKitFrameScheduling",
+    "MacosCompositionLayerStack",
+    "MacosMouseInput",
+    "MacosWKWebViewSurface",
+  ]);
+  assert.match(workflow, /for suite in \$GUI_TEST_SUITES/);
+  assert.match(workflow, /-N -R "\^\$\{suite\}\\\."/);
+  assert.match(
+    workflow,
+    /No required macOS GUI\/Metal tests were discovered for \$suite/,
+  );
+});

@@ -17,6 +17,7 @@ jobs:
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
       GUI_TEST_REGEX: '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+      GUI_TEST_SUITES: 'MacosAppKitFrameScheduling MacosCompositionLayerStack MacosMouseInput MacosWKWebViewSurface'
     defaults:
       run:
         shell: bash
@@ -174,6 +175,16 @@ jobs:
             exit 1
           fi
           echo "Discovered $total macOS GUI/Metal tests."
+
+          for suite in $GUI_TEST_SUITES; do
+            suite_total="$(ctest --preset macos-arm64-release -N -R "^${suite}\." \
+              | awk '/Total Tests:/ { print $3 }')"
+            if [[ -z "$suite_total" || "$suite_total" -eq 0 ]]; then
+              echo "No required macOS GUI/Metal tests were discovered for $suite" >&2
+              exit 1
+            fi
+            echo "Discovered $suite_total tests for required suite $suite."
+          done
 
       - name: Test GUI and Metal targets
         env:
