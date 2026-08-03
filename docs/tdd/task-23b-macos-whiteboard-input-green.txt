@@ -26,11 +26,16 @@ Implemented scope:
     externally missing-preview failures also clear state and leave no preview.
     A null replacement fails without cancelling or replacing current state.
   * Preview ownership is guarded by the cache identity captured after add plus
-    controller-owned revision and non-append revision counters. Each accepted
-    append advances the expected revision, and Up revalidates immediately
-    before final mutation. Cleanup erases only the matching cache identity;
-    an erase-plus-recreate node with the same id is preserved and returns a
-    Failed result with a safe full redraw request.
+    the creating Document instance id and controller-owned revision and
+    non-append revision counters. Layer, parent, payload type, and expected
+    bounds are also checked. Each accepted append advances the expected
+    revision and bounds, and Up revalidates immediately before final mutation.
+    Cleanup erases only a matching Document instance and cache identity; an
+    in-place Document assignment or erase-plus-recreate node with the same id
+    is preserved and returns Failed with a safe full redraw request. Rollback
+    reports Cancelled only when the full preview state is still valid; an
+    externally changed but identity-owned preview is erased as Failed with a
+    full redraw.
   * Result values are fixed: kind, optional layer, optional dirty bounds, and
     fullRedraw. A real document replacement requests full redraw.
   * The direct-source/CMake contract includes the controller, rejects native
@@ -45,14 +50,14 @@ Commands and observed results:
   ctest --preset macos-arm64-release \
     -R 'InputRouterTest|MacosWhiteboardInputTest|^canvas_macos_pointer_seam_source_contract$' \
     --output-on-failure
-    PASS: 27/27
+    PASS: 31/31
 
   cmake --build --preset macos-arm64-release --parallel
     PASS
 
   ctest --preset macos-arm64-release --output-on-failure \
     -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosWKWebViewSurface)\.'
-    PASS: 203/203 non-GUI tests and source contracts
+    PASS: 207/207 non-GUI tests and source contracts
 
   node --test tests/contracts/macos_build_workflow.test.mjs
     PASS: 3/3

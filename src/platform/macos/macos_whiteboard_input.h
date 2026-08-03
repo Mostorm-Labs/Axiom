@@ -67,6 +67,7 @@ class MacosWhiteboardInput {
     std::optional<document::NodeId> parentId;
     stroke::StrokeBuilder builder;
     core::Rect bounds;
+    std::uint64_t documentInstanceId = 0;
     std::optional<std::uint64_t> cacheIdentity;
     std::uint64_t expectedRevision = 0;
     std::uint64_t expectedNonAppendRevision = 0;

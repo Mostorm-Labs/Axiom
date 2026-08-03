@@ -31,3 +31,12 @@ Independent-review follow-up RED:
   was deleted by stale cleanup. Zero pointer ids/out-of-range pressure and a
   null document replacement were also incorrectly accepted. These failures
   established the review fixes before their implementation.
+
+Second independent-review follow-up RED:
+  Four new controller tests failed before binding preview ownership to the
+  Document instance. Copy-assigning a clone back into the same Document kept
+  node id/cache identity/revisions but changed Document::instanceId; Move and
+  Up mutated that replacement, while Cancel erased it. Separately, setBounds
+  moved an identity-owned preview far from the recorded dirty area, but Cancel
+  still reported a normal partial invalidation. The four failures established
+  the instance and rollback-validity fixes before implementation.

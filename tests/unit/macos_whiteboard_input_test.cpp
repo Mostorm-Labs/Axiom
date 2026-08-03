@@ -410,5 +410,85 @@ TEST(MacosWhiteboardInputTest,
   EXPECT_EQ(document->nodes().front().cacheIdentity, previewIdentity);
 }
 
+TEST(MacosWhiteboardInputTest,
+     InPlaceDocumentAssignmentMakesMoveFailWithoutErasingClone) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  const auto previewIdentity = document->nodes().front().cacheIdentity;
+  const auto oldDocumentInstance = document->instanceId();
+  document::Document clone = *document;
+  *document = clone;
+  ASSERT_NE(document->instanceId(), oldDocumentInstance);
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Move, 30, 40));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  ASSERT_EQ(document->nodes().size(), 1U);
+  EXPECT_EQ(document->nodes().front().id, previewId);
+  EXPECT_EQ(document->nodes().front().cacheIdentity, previewIdentity);
+  EXPECT_EQ(stroke(document->nodes().front()).points.size(), 1U);
+}
+
+TEST(MacosWhiteboardInputTest,
+     InPlaceDocumentAssignmentMakesUpFailWithoutErasingClone) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  document::Document clone = *document;
+  *document = clone;
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Up, 30, 40));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  ASSERT_EQ(document->nodes().size(), 1U);
+  EXPECT_EQ(document->nodes().front().id, previewId);
+  EXPECT_EQ(stroke(document->nodes().front()).points.size(), 1U);
+}
+
+TEST(MacosWhiteboardInputTest,
+     InPlaceDocumentAssignmentMakesCancelFailWithoutErasingClone) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  document::Document clone = *document;
+  *document = clone;
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Cancel, 10, 20));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  ASSERT_EQ(document->nodes().size(), 1U);
+  EXPECT_EQ(document->nodes().front().id, previewId);
+}
+
+TEST(MacosWhiteboardInputTest,
+     ExternallyMovedOwnedPreviewFailsRollbackAndRequestsFullRedraw) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+  ASSERT_EQ(controller.consume(mouse(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  const auto previewId = document->nodes().front().id;
+  ASSERT_TRUE(document->setBounds(previewId, {1000, 1000, 20, 20}));
+
+  const auto failed =
+      controller.consume(mouse(1, input::PointerPhase::Cancel, 10, 20));
+  EXPECT_EQ(failed.kind, MacosWhiteboardInputResultKind::Failed);
+  EXPECT_TRUE(failed.fullRedraw);
+  EXPECT_FALSE(controller.active());
+  EXPECT_TRUE(document->nodes().empty());
+}
+
 }  // namespace
 }  // namespace canvas::macos
