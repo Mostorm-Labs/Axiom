@@ -14,21 +14,23 @@ Canvas 当前是一个“共享 C++ 文档核心 + 各平台原生输入/窗口 
 
 当前最重要的事实：
 
-- Windows 主开发分支是 `codex/windows-vertical-slice`，远端 HEAD 为 docs commit `3519aca46f7167aee18ecd236c5b6e709b5fffad`，最新生产代码仍为 `ad3a49954aac071928f18b4fe1499af541802d6b`，PR #1 为 Draft/Open。
+- 截至本快照，Windows 主开发分支 `codex/windows-vertical-slice` 的远端 ref 是 docs commit `3519aca46f7167aee18ecd236c5b6e709b5fffad`，最后生产代码 commit 是 `ad3a49954aac071928f18b4fe1499af541802d6b`，PR #1 为 Draft/Open。
 - Windows 已具备 Win32 pen/touch 输入、Skia/D3D12/DirectComposition、WebView2 嵌入内容、文档存储、命名管道 IPC、Electron 控制样例和 portable ZIP 工作流。
 - Windows 的 IPC `open-document` 已实现隐藏候选 WebView 的原子加载事务；失败、超时或被新请求替代时保留旧 Document 和旧 surface。
-- Windows docs HEAD 的最新 CI 是 run `30793067680`；原子打开生产代码 `ad3a499` 的权威代码 run 仍为 `30745845408`。两次运行的 Build、CTest、Composition、打包契约、whitespace、metadata、portable ZIP 和 artifact 上传均通过。
-- macOS 开发分支是 `codex/macos-platform`，远端 HEAD 为 `7177a073906ff08b26cbc92b84974fc2d6742028`，PR #2 为 Draft/Open。
+- Windows docs commit `3519aca` 的已保存 CI 是 run `30793067680`；原子打开生产代码 `ad3a499` 的已保存代码 run 是 `30745845408`。两次运行的 Build、CTest、Composition、打包契约、whitespace、metadata、portable ZIP 和 artifact 上传均通过。
+- 截至本快照，`7177a073906ff08b26cbc92b84974fc2d6742028` 是 macOS 最后经过本 handoff 所记录的内部独立复审、且 Hosted macOS/Windows CI 全绿的生产代码 branch commit；PR #2 为 Draft/Open。
 - macOS 已具备 AppKit + CAMetalLayer + Skia Ganesh、固定合成层级、WKWebView navigation/Ready，以及 AppKit left-mouse → 原生 session/controller → Document → 分层 Metal commit 的可运行垂直切片。
-- Task 23A/B/C 已提交并通过独立审查与修复复审：pointer/session seam、白板输入 controller/preview ownership、AppKit mouse 集成和析构/全量重绘/CI gate 强化均在远端。
-- macOS arm64 Hosted CI 已在当前 HEAD 全绿；权威 run 是 `30804620591`。配套 Windows run `30804620593` 也全绿并产生 artifact `8852305181`。
-- PR #2 当前 merge ref `c0656a06bdf466ec38b8dc58a1e54e4570cba078` 由 Windows `3519aca` 与 macOS `7177a07` 合成，两套 Hosted run 实际测试的就是该树。
-- Windows 基线已由 merge commit `c7553af2c3083119950481adf3cdff9cdb2d5170` 普通合入 macOS 分支；当前 merge-base 是 `3519aca`，不再需要执行旧文档里的“先同步 Windows base”步骤。
+- Task 23A/B/C 已提交，并完成本 handoff 所记录的内部独立审查与修复复审：pointer/session seam、白板输入 controller/preview ownership、AppKit mouse 集成和析构/全量重绘/CI gate 强化均在 `7177a07` 生产代码树中。这里的“审查”不是 GitHub PR Review，证据边界见第 4.3 节。
+- `c5e7fb28a2ce3ebd5367f4d2132b376ad7a99c5e` 是 `7177a07` 之后的第一笔 docs-only handoff successor；本次审查修订也只改文档。它们没有生产代码或 Hosted 绿色含义。
+- 最后针对 `7177a07` 生产代码树验证通过的 macOS arm64 Hosted run 是 `30804620591`；配套 Windows run `30804620593` 也全绿并产生 artifact `8852305181`。
+- 最后与上述内部独立复审生产代码对应、且被两套 Hosted run 验证为绿色的 PR #2 merge tree 是 `c0656a06bdf466ec38b8dc58a1e54e4570cba078`，由 Windows `3519aca` 与 macOS `7177a07` 合成。
+- docs-only 提交一旦推送，PR #2 的 head SHA、merge-ref SHA 和新触发的 run 都会变化；不得继续把 `7177a07`、`c0656a` 或 `308046...` 称为“最新”，必须用第 2.4、11、12 节命令动态核对。
+- Windows 基线已由 merge commit `c7553af2c3083119950481adf3cdff9cdb2d5170` 普通合入 macOS 分支；快照时 merge-base 是 `3519aca`，不再需要执行旧文档里的“先同步 Windows base”步骤。
 - 当前没有可宣称的真实 i5-1235U 触控屏 p95 `<50 ms` 证据，也没有 Windows Electron GUI E2E、macOS 真实硬件 input/IME、Android/iOS 或多人协作服务端；Task 23C 的 synthetic mouse tests 不能替代这些验收。
 
 接手后的推荐顺序：
 
-1. 核对并下载 Windows HEAD artifact，确认两个 PR 和最新 Actions 状态。
+1. 核对两个 PR 和实时 Actions 状态，再下载与希望验证的 Windows headSha 精确对应的 artifact。
 2. 以 Task 23C 的 synthetic left-mouse 垂直切片为基线，补真实 AppKit event-dispatch/hardware mouse 验证，再实现 pen/touch、coalesced/predicted samples 和 IME。
 3. 补 macOS Electron/native IPC；不要把逐点输入放进 Electron IPC。
 4. 统一 `--open`、`create-embedded` 与 IPC `open-document` 的异步 Ready/Failed 事务，并设计 `embedded-state` 事件。
@@ -75,11 +77,11 @@ Electron Launcher
 
 ### 2.1 远端引用
 
-| 引用 | 当前 SHA | 用途 |
+| 引用 | 快照 SHA | 用途 |
 |---|---|---|
 | `origin/main` | `cd445fc4d24b849944958a6b108187727023d520` | 初始基线；尚未合并两个 Draft PR |
 | `origin/codex/windows-vertical-slice` | `3519aca46f7167aee18ecd236c5b6e709b5fffad` | Windows PR #1；`ad3a499` 生产代码后的 handoff docs head |
-| `origin/codex/macos-platform` | `7177a073906ff08b26cbc92b84974fc2d6742028` | macOS PR #2；Task 23C review fixes 和当前 Hosted CI head |
+| `origin/codex/macos-platform` | `7177a073906ff08b26cbc92b84974fc2d6742028` | docs-only 提交推送前的远端值；最后独立复审且 Hosted 绿色的生产代码 branch commit。推送后以实时 ref 为准 |
 
 ### 2.2 PR
 
@@ -88,12 +90,12 @@ Electron Launcher
 | [#1](https://github.com/Mostorm-Labs/canvas/pull/1) | `codex/windows-vertical-slice` → `main` | Draft/Open，mergeable | Windows 垂直切片和共享核心 |
 | [#2](https://github.com/Mostorm-Labs/canvas/pull/2) | `codex/macos-platform` → `codex/windows-vertical-slice` | Draft/Open，mergeable | macOS 平台层；PR CI 测试 merge ref |
 
-### 2.3 当前主要本机 worktree
+### 2.3 快照时的主要本机 worktree
 
 | 路径 | 分支 / 快照 HEAD | 用途 |
 |---|---|---|
 | `/Users/qing/Documents/myself/projects/canvas-task16` | `codex/windows-vertical-slice` / `3519aca` | Windows 主线；包含上一版 handoff 快照 |
-| `/Users/qing/Documents/myself/projects/canvas-macos` | `codex/macos-platform` / `7177a07` | 当前 active 平台分支；Task 23A/B/C、review fixes 和本次 handoff 更新位置 |
+| `/Users/qing/Documents/myself/projects/canvas-macos` | `codex/macos-platform` / docs-only HEAD（本轮基线 `c5e7fb2`；本 fix SHA 用 `git rev-parse HEAD` 获取） | Task 23A/B/C 的最后绿色生产代码是 `7177a07`；本地另有 Task 23D 未提交生产 WIP（CMake、`src/platform/macos`、tests/evidence），不得清理、覆盖或写成已完成 |
 | `/Users/qing/Documents/myself/projects/canvas-atomic-open-v2` | `codex/atomic-document-open-v2` / `844c27b` 起的原始实现链 | 历史实施 worktree；内容已经以 scoped commits 合入 Windows 分支，不能再当作待合并来源 |
 
 其他旧 worktree 和 local-only 分支只保留历史研究价值。不要从旧 handoff 快照继续 cherry-pick `EmbeddedLoadBatch`/Inbox；它们已经在 Windows 分支中。
@@ -112,8 +114,14 @@ gh pr view 1 --repo Mostorm-Labs/canvas \
   --json state,isDraft,headRefOid,baseRefOid,mergeable,mergeStateStatus,url
 gh pr view 2 --repo Mostorm-Labs/canvas \
   --json state,isDraft,headRefOid,baseRefOid,mergeable,mergeStateStatus,url
+PR2_MERGE_SHA="$(gh api repos/Mostorm-Labs/canvas/git/ref/pull/2/merge --jq '.object.sha')"
+test -n "$PR2_MERGE_SHA"
+gh api "repos/Mostorm-Labs/canvas/commits/${PR2_MERGE_SHA}" \
+  --jq '{sha: .sha, parents: [.parents[].sha]}'
 gh run list --repo Mostorm-Labs/canvas --limit 20
 ```
+
+`PR2_MERGE_SHA` 必须现场获取。docs-only 或生产代码 push 都会重建 `refs/pull/2/merge`；不要把第 5.2 节保存的 `c0656a...` 当成永久 ref。
 
 不要用 `git reset --hard`、`git checkout --` 或 `git clean` 清理不认识的工作树内容。先用 `git status`、`git diff` 和 `git ls-files --others --exclude-standard` 判断归属。
 
@@ -195,14 +203,16 @@ Windows HEAD 中相关 scoped commits：
 
 ### 4.3 Task 23A/B/C：macOS 输入提交链
 
+本节的“内部独立审查”“reviewer”和“复审 PASS”指本次实施过程中由不同子代理完成、并由本 handoff 持久化记录的内部审查，不是 GitHub PR Review，也没有独立的 GitHub review URL。Git commit 与测试可直接复核；若接手方需要更强的审计链，应重新独立审查并把报告作为仓库 evidence 提交。
+
 | Task / Commit | 内容 | 审查与证据 |
 |---|---|---|
 | Task 23A `aeb53ef` | `RawMacMouseEvent`、逻辑点坐标归一化、`MacosMouseSession`、稳定 pointer ID 与 exactly-once Cancel seam | 平台无关 pointer/session tests；不声称真实硬件输入 |
 | Task 23B `c0ca19b` | `MacosWhiteboardInput`：InputRouter → preview stroke → Document，Base/embedded Annotation 路由 | 纯 C++ controller tests |
-| Task 23B fix `47f752a` | 用 cache identity 保护 preview ownership，旧 owner 不擦除同 ID replacement | 独立 review finding 修复 |
-| Task 23B fix `c4fcd69` | 绑定 Document instance/revision/non-append revision，外部赋值或 mutation 时 fail-closed | 独立 reviewer 最终 PASS |
+| Task 23B fix `47f752a` | 用 cache identity 保护 preview ownership，旧 owner 不擦除同 ID replacement | 本 handoff 记录的内部 review finding 修复 |
+| Task 23B fix `c4fcd69` | 绑定 Document instance/revision/non-append revision，外部赋值或 mutation 时 fail-closed | 本 handoff 记录的内部 reviewer 最终 PASS |
 | Task 23C `5228d02` | AppKit overlay mouseDown/Dragged/Up → session/controller → Document；editable setter；按 Base/Overlay 分层 invalidate；GUI tests 与 CI regex | 初审发现 4 个 P1，未直接判定完成 |
-| Task 23C fix `7177a07` | `fullRedraw` 优先双层、active-dealloc 直接回滚且不依赖 weak delegate、目标层真实 Metal commit、四套 GUI suite 分别 discovery | 原 reviewer 复审 PASS，无剩余 P0/P1 |
+| Task 23C fix `7177a07` | `fullRedraw` 优先双层、active-dealloc 直接回滚且不依赖 weak delegate、目标层真实 Metal commit、四套 GUI suite 分别 discovery | 本 handoff 记录的原内部 reviewer 复审 PASS，无剩余 P0/P1 |
 
 Task 23C 的关键自动化语义：
 
@@ -212,9 +222,9 @@ Task 23C 的关键自动化语义：
 - read-only setter 不接受 mouse mutation；editable Document replacement 先取消旧 preview。
 - App/window resign、window close、detach、Interact mode、重复/孤立/右键事件均有自动化边界。
 
-本地复审结果：pointer/session/controller 37/37，`MacosMouseInput.*` 11/11，重复 3 轮稳定通过，workflow contract 4/4，non-GUI 207/207，GUI/Metal 21/21。最终 Hosted 证据见第 5.2 节。
+本 handoff 记录的本地复审结果：pointer/session/controller 37/37，`MacosMouseInput.*` 11/11，重复 3 轮稳定通过，workflow contract 4/4，non-GUI 207/207，GUI/Metal 21/21。最后针对这棵生产代码树的 Hosted 证据见第 5.2 节。
 
-Task 23D 已启动，但截至本快照没有可引用 commit、测试或 Hosted run；只能视为下一步/in progress，不能写成已实现。接手者应先查看实时分支和任务 evidence，再确定它的实际范围。
+Task 23D 已启动；快照时 macOS worktree 中已有 CMake、`src/platform/macos`、tests/evidence 等未提交生产 WIP，但没有可引用的 Task 23D commit、审查结论或 Hosted run。必须保留这些文件并视为 in progress，不能因看到源文件或本地测试就写成已实现。接手者应先查看实时 worktree、分支和任务 evidence，再确定它的实际范围。
 
 ### 4.4 macOS CI 提交链
 
@@ -231,20 +241,20 @@ Task 23D 已启动，但截至本快照没有可引用 commit、测试或 Hosted
 - run `30704136648`：只 fetch 对象但仍在较新 HEAD，port database 与 baseline 不一致。
 - run `30704424435`：使用 detached exact-baseline checkout 后首次全绿。
 
-这些历史失败不是当前外部 blocker；当前 Task 23C head 的权威 run 已更新为第 5.2 节的 `30804620591`。
+这些历史失败在快照时不是外部 blocker；Task 23C 最后独立复审且 Hosted 绿色的生产代码 run 见第 5.2 节的 `30804620591`。
 
 ## 5. CI 和可下载产物
 
-### 5.1 Windows PR #1 权威运行
+### 5.1 Windows PR #1 已保存运行证据
 
-当前 Windows 分支 HEAD `3519aca46f7167aee18ecd236c5b6e709b5fffad` 是 handoff docs commit；其最新全绿 run 为：
+快照时 Windows 分支 ref `3519aca46f7167aee18ecd236c5b6e709b5fffad` 是 handoff docs commit；对应的全绿 run 为：
 
 - Run：<https://github.com/Mostorm-Labs/canvas/actions/runs/30793067680>
 - Build job：<https://github.com/Mostorm-Labs/canvas/actions/runs/30793067680/job/91620535022>
 - Release job：`91621233144`，PR 事件下 skipped，符合设计。
 - Artifact：`canvas-windows-x64-pr-1-9721e47f4b03`，ID `8847852615`，3,181,054 bytes，digest `sha256:72b83241ec76b8583b470e73f8898ca8dfc8de63143d2f8175221bc7765e3e60`，2026-09-02 07:20:27 UTC 过期。
 
-下面的 `30745845408` 是最新生产代码 `ad3a499` 本身的权威代码 run，保留用于原子打开实现追溯：
+下面的 `30745845408` 是生产代码 `ad3a499` 本身最后保存并验证的代码 run，保留用于原子打开实现追溯：
 
 - Run：<https://github.com/Mostorm-Labs/canvas/actions/runs/30745845408>
 - Head：`ad3a49954aac071928f18b4fe1499af541802d6b`
@@ -264,14 +274,19 @@ Artifact：
 下载：
 
 ```bash
+DOWNLOAD_DIR="$HOME/Downloads/canvas-windows-ad3a499"
+mkdir -p "$DOWNLOAD_DIR"
 gh run download 30745845408 \
   --repo Mostorm-Labs/canvas \
-  --name canvas-windows-x64-pr-1-648e5711446a
+  --name canvas-windows-x64-pr-1-648e5711446a \
+  --dir "$DOWNLOAD_DIR"
 ```
 
 解压完整 ZIP 后运行 `canvas_windows.exe`。相邻 `web/` 目录不能删除；当前包未签名，需要 Microsoft Edge WebView2 Runtime，也不包含 Electron launcher。
 
-### 5.2 macOS PR #2 权威运行
+### 5.2 最后独立复审且 Hosted 绿色的 macOS 生产代码树
+
+本节固定记录 `7177a07` 生产代码 branch commit 的最后已验证证据，不声称它们在文档提交推送后仍是 PR 的最新 ref 或 run。`c5e7fb2` 及本次 fix 是 docs-only successors；推送任一 successor 后，先按第 2.4 节重新获取 PR head、merge ref 和 Actions run。
 
 macOS Hosted run：
 
@@ -296,33 +311,36 @@ macOS Hosted run：
 - 过期：2026-09-02 10:15:45 UTC；快照时 `expired=false`
 - API：<https://api.github.com/repos/Mostorm-Labs/canvas/actions/artifacts/8852305181/zip>
 
-下载当前 PR #2 merge tree 的 Windows portable 包：
+下载最后验证的 PR #2 merge tree Windows portable 包：
 
 ```bash
+DOWNLOAD_DIR="$HOME/Downloads/canvas-windows-pr2-7177a07"
+mkdir -p "$DOWNLOAD_DIR"
 gh run download 30804620593 \
   --repo Mostorm-Labs/canvas \
-  --name canvas-windows-x64-pr-2-c0656a06bdf4
+  --name canvas-windows-x64-pr-2-c0656a06bdf4 \
+  --dir "$DOWNLOAD_DIR"
 ```
 
-PR #2 merge-ref 证据：
+最后验证的 PR #2 merge-ref 证据：
 
 - merge commit：`c0656a06bdf466ec38b8dc58a1e54e4570cba078`
 - first parent：Windows `3519aca46f7167aee18ecd236c5b6e709b5fffad`
 - second parent：macOS `7177a073906ff08b26cbc92b84974fc2d6742028`
-- macOS 分支自己的 merge commit `c7553af` 已把 Windows `3519aca` 纳入，当前 merge-base 同样是 `3519aca`。
+- macOS 分支自己的 merge commit `c7553af` 已把 Windows `3519aca` 纳入；该生产代码树的 merge-base 是 `3519aca`。
 
-历史 run `30764881845` / `30764881840` 与 artifact `8838947539` 保留作 Task 22 基线证据，但不再是当前 HEAD。核对 CI 时应查看最新 `refs/pull/2/merge`、run `headSha` 和 checkout 日志，而不是复用旧 merge-ref SHA。
+历史 run `30764881845` / `30764881840` 与 artifact `8838947539` 保留作 Task 22 基线证据，但不属于最后复审的 Task 23C 生产代码树。核对 CI 时应现场查询 `refs/pull/2/merge`、run `headSha` 和 checkout 日志，而不是复用任何保存的 merge-ref SHA。
 
 ### 5.3 GitHub Release
 
-当前唯一 Release 是 [v0.1.0-alpha.1](https://github.com/Mostorm-Labs/canvas/releases/tag/v0.1.0-alpha.1)：
+快照时唯一 Release 是 [v0.1.0-alpha.1](https://github.com/Mostorm-Labs/canvas/releases/tag/v0.1.0-alpha.1)：
 
-- 这是较早的 Windows prerelease，不包含当前 `ad3a499` 的原子文档打开增量。
+- 这是较早的 Windows prerelease，不包含 `ad3a499` 的原子文档打开增量。
 - ZIP：<https://github.com/Mostorm-Labs/canvas/releases/download/v0.1.0-alpha.1/canvas-windows-x64-v0.1.0-alpha.1.zip>
 - ZIP SHA-256：`d0cffd8114273c86ca6c987835cdb74b067099020010d59a0af53104572aeb86`
 - checksum 文件与 ZIP 一同发布。
 
-不要把这个旧 Release 当作当前 HEAD 构建。当前功能应下载 PR artifact；需要新的稳定下载时，在明确版本号、更新 release notes 并完成运行时验收后创建新 `v*` tag。带连字符的 tag（例如 `v0.2.0-alpha.1`）会生成 prerelease。
+不要把这个旧 Release 当作 `3519aca`、`7177a07` 或后继提交的构建。需要某次 PR 构建时应下载与其 run/headSha 对应的 artifact；需要新的稳定下载时，在明确版本号、更新 release notes 并完成运行时验收后创建新 `v*` tag。带连字符的 tag（例如 `v0.2.0-alpha.1`）会生成 prerelease。
 
 ## 6. 本地构建与测试
 
@@ -371,6 +389,7 @@ out/build/windows-x64/app/windows/Release/canvas_windows.exe
 要求：Apple Silicon、Xcode/Command Line Tools、Ninja、Node.js 22、vcpkg。`VCPKG_ROOT` 必须指向 `vcpkg.json` 中 `builtin-baseline` 对应的干净 checkout；Hosted workflow 是该逻辑的权威参考。
 
 ```bash
+set -euo pipefail
 cd /Users/qing/Documents/myself/projects/canvas-macos
 
 npm --prefix web ci
@@ -382,7 +401,12 @@ cmake --preset macos-arm64
 cmake --build --preset macos-arm64-release --parallel
 
 GUI_TEST_REGEX='^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
-GUI_TEST_SUITES='MacosAppKitFrameScheduling MacosCompositionLayerStack MacosMouseInput MacosWKWebViewSurface'
+GUI_TEST_SUITES=(
+  MacosAppKitFrameScheduling
+  MacosCompositionLayerStack
+  MacosMouseInput
+  MacosWKWebViewSurface
+)
 
 ctest --preset macos-arm64-release \
   --output-on-failure \
@@ -390,10 +414,21 @@ ctest --preset macos-arm64-release \
 
 ctest --preset macos-arm64-release -N -R "$GUI_TEST_REGEX"
 
-for suite in $GUI_TEST_SUITES; do
+for suite in "${GUI_TEST_SUITES[@]}"; do
   count="$(ctest --preset macos-arm64-release -N -R "^${suite}\." \
     | awk '/Total Tests:/ { print $3 }')"
-  test -n "$count" && test "$count" -gt 0
+  if [[ -z "$count" ]]; then
+    echo "Missing CTest discovery count for ${suite}" >&2
+    exit 1
+  fi
+  if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+    echo "Invalid CTest discovery count for ${suite}: ${count}" >&2
+    exit 1
+  fi
+  if (( count == 0 )); then
+    echo "CTest discovered zero tests for ${suite}" >&2
+    exit 1
+  fi
 done
 
 MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
@@ -451,12 +486,12 @@ Pop-Location
 | Task 19：macOS 合成层 | 已实现 | 固定 AppKit/Metal/WebView 层栈 |
 | Task 20：macOS WKWebView surface | 已实现 | 宿主、策略和 surface lifecycle |
 | Task 21：macOS navigation/Ready | 已实现 | latest-wins、reentry、close/late callback 防护 |
-| Task 22：macOS Hosted CI | 已实现并绿色 | 首个稳定基线 `e0cd6fe`；当前 head run `30804620591`；无 macOS release artifact |
+| Task 22：macOS Hosted CI | 已实现并绿色 | 首个稳定基线 `e0cd6fe`；Task 23C 最后复审生产树的 run `30804620591`；无 macOS release artifact |
 | Windows 原子文档打开增量 | 已实现并 Hosted CI 绿色 | `195ce29`–`ad3a499`，run `30745845408`；真实 GUI runtime pending |
-| Task 23A：macOS pointer/session seam | 已实现、reviewed、Hosted CI 绿色 | `aeb53ef`；mouse 逻辑点归一化、session ID、Cancel；无硬件证据 |
-| Task 23B：macOS whiteboard input | 已实现、reviewed、Hosted CI 绿色 | `c0ca19b` + fixes `47f752a`/`c4fcd69`；Document preview ownership fail-closed |
-| Task 23C：AppKit mouse → Metal | 已实现、review fixes 复审 PASS、Hosted CI 绿色 | `5228d02` + `7177a07`；synthetic MouseInput 11/11，run `30804620591` |
-| Task 23D | in progress，无完成证据 | 截至快照无 commit/test/run；先查实时状态，不得猜测或宣称完成 |
+| Task 23A：macOS pointer/session seam | 已实现、本 handoff 记录内部审查 PASS、Hosted CI 绿色 | `aeb53ef`；mouse 逻辑点归一化、session ID、Cancel；无硬件证据 |
+| Task 23B：macOS whiteboard input | 已实现、本 handoff 记录内部审查 PASS、Hosted CI 绿色 | `c0ca19b` + fixes `47f752a`/`c4fcd69`；Document preview ownership fail-closed |
+| Task 23C：AppKit mouse → Metal | 已实现、本 handoff 记录内部修复复审 PASS、Hosted CI 绿色 | `5228d02` + `7177a07`；synthetic MouseInput 11/11，最后验证 run `30804620591` |
+| Task 23D | in progress，只有未提交 WIP | 截至快照无可引用的完成 commit、内部审查结论或 Hosted run；tests/evidence WIP 不等于完成证据 |
 | macOS pen/touch/IME/Electron | 未实现或未接入 | 下一主要平台任务；mouse synthetic slice 不等于这些能力 |
 | Android/iOS | 未开始 | 需在共享核心/API 稳定后规划 |
 | 多人协作服务 | 未开始 | 无房间、Presence、CRDT/OT、账号权限或后端 |
@@ -465,7 +500,7 @@ Pop-Location
 
 ### 8.1 先核对 Task 23D 的真实状态
 
-Task 23D 已启动但本快照没有 commit 或测试证据。新账号先执行只读核对：
+Task 23D 已启动，且快照时存在未提交生产 WIP，但本快照没有 Task 23D commit、审查或 Hosted 证据。新账号先执行只读核对：
 
 ```bash
 cd /Users/qing/Documents/myself/projects/canvas-macos
@@ -479,7 +514,7 @@ gh run list --repo Mostorm-Labs/canvas \
   --branch codex/macos-platform --limit 10
 ```
 
-若出现 `7177a07` 之后的新 Task 23D commit，必须先读其 RED/GREEN evidence、实现 diff、独立 reviewer 结论和对应 Hosted run；若没有这些证据，继续把 Task 23D 标为 in progress。当前 Windows 基线已经通过 `c7553af` 合入，禁止按旧文档重复 merge 或 force-push。
+`7177a07` 之后已知的 `c5e7fb2` 和本次 fix 都是 docs-only，不是 Task 23D 完成证据。若另有新的非文档 Task 23D commit，必须先读其 RED/GREEN evidence、实现 diff、本 handoff 流程要求的独立 reviewer 结论和对应 Hosted run；缺任一项都继续标为 in progress。Windows 基线已经通过 `c7553af` 合入，禁止按旧文档重复 merge 或 force-push。
 
 ### 8.2 macOS mouse/pen/touch/IME
 
@@ -575,10 +610,15 @@ gh run list --repo Mostorm-Labs/canvas \
 gh run list --repo Mostorm-Labs/canvas \
   --branch codex/macos-platform --limit 10
 
-gh run view <RUN_ID> --repo Mostorm-Labs/canvas \
+RUN_ID="$(gh run list --repo Mostorm-Labs/canvas \
+  --branch codex/macos-platform --limit 1 \
+  --json databaseId --jq '.[0].databaseId')"
+test -n "$RUN_ID"
+
+gh run view "$RUN_ID" --repo Mostorm-Labs/canvas \
   --json status,conclusion,headSha,url,jobs
-gh run watch <RUN_ID> --repo Mostorm-Labs/canvas --exit-status
-gh api repos/Mostorm-Labs/canvas/actions/runs/<RUN_ID>/artifacts
+gh run watch "$RUN_ID" --repo Mostorm-Labs/canvas --exit-status
+gh api "repos/Mostorm-Labs/canvas/actions/runs/${RUN_ID}/artifacts"
 ```
 
 若 GitHub 拒绝分配 runner 并明确显示 Actions billing/spending limit：
@@ -592,18 +632,18 @@ gh api repos/Mostorm-Labs/canvas/actions/runs/<RUN_ID>/artifacts
 
 新账号接手时逐项执行并更新结果：
 
-- [ ] `git fetch --all --prune` 后核对三个远端引用。
+- [ ] `git fetch --all --prune` 后动态核对三个远端引用；记录实测 SHA，不假设仍等于第 2.1 节快照值。
 - [ ] Windows worktree clean，HEAD 与远端相符。
-- [ ] macOS worktree clean，HEAD 与远端相符。
-- [ ] PR #1/#2 仍 Open，base/head 未被意外改动。
-- [ ] Windows docs HEAD run `30793067680` 和生产代码 run `30745845408` 均可查询；artifact 过期后重新跑当前 HEAD。
-- [ ] macOS run `30804620591`、配套 Windows run `30804620593` 和 artifact `8852305181` 可查询。
-- [ ] 确认 PR #2 merge ref `c0656a06...` 的 parents 是 Windows `3519aca` 与 macOS `7177a07`。
+- [ ] macOS worktree 的 docs-only HEAD 用 `git rev-parse HEAD` 记录；已知 Task 23D 未提交生产 WIP 保留并逐文件归属，不以“清理到 clean”为目标。
+- [ ] 用 `gh pr view` 确认 PR #1/#2 的实时 Open/base/head 状态；docs-only push 后 PR #2 head 不应再被假设为 `7177a07`。
+- [ ] Windows 已保存的 docs run `30793067680` 和生产代码 run `30745845408` 均可查询；artifact 过期后针对希望验证的实测 head 重新运行。
+- [ ] 将 `7177a07` / `30804620591`、`30804620593` / artifact `8852305181` 只作为最后独立复审且 Hosted 绿色的生产代码树证据；另查 docs push 或 Task 23D 后触发的最新 runs。
+- [ ] 现场读取 `refs/pull/2/merge` 和 parents；只有 SHA 仍为 `c0656a06...` 时才复用第 5.2 节 parents，否则记录新的 merge ref/head 并检查对应 runs。
 - [ ] 确认 `c7553af` 已合并 Windows base，不重复 merge/rebase；先核对 Task 23D 是否已有新证据。
-- [ ] Task 23A/B/C commit 链、Task 23C 四个 P1 修复和 reviewer 最终 PASS 均可从 Git history/evidence 追溯。
+- [ ] 从 Git history 和测试复核 Task 23A/B/C commit 链及 Task 23C 四个 P1 修复；内部 reviewer PASS 目前只由本 handoff 持久化，不虚构 GitHub PR Review。
 - [ ] 新增代码继续执行实现子代理 → 独立 reviewer → 修复 → 复审。
 - [ ] 不把 Hosted CI/synthetic MouseInput 当作 Windows 触控硬件、Electron GUI、真实 macOS input 或 `<50 ms` 证据。
-- [ ] 不把旧 Release `v0.1.0-alpha.1` 当作当前 `3519aca` / `7177a07` 构建。
+- [ ] 不把旧 Release `v0.1.0-alpha.1` 当作 `3519aca`、`7177a07` 或任何后继提交的构建。
 - [ ] 所有“完成”声明都附 commit、测试命令、run/job URL 或真实硬件记录。
 
 完成以上核对后，优先按第 8.1 节确认 Task 23D 的实时状态；没有新证据时才按第 8.2 节继续平台输入任务。
