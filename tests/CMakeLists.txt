@@ -21,6 +21,11 @@ add_test(NAME canvas_windows_atomic_open_contract
                  -DAPP_SOURCE=${CMAKE_SOURCE_DIR}/app/windows/whiteboard_app.cpp
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/windows_atomic_open_contract_test.cmake)
 
+add_test(NAME canvas_macos_pointer_seam_source_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_pointer_seam_source_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)
@@ -120,6 +125,26 @@ canvas_enable_warnings(canvas_frame_invalidation_test)
 gtest_discover_tests(canvas_frame_invalidation_test)
 
 if(APPLE)
+    add_executable(canvas_macos_pointer_adapter_test
+                   unit/macos_pointer_adapter_test.cpp)
+    target_include_directories(canvas_macos_pointer_adapter_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_pointer_adapter_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_pointer_adapter_test)
+    gtest_discover_tests(canvas_macos_pointer_adapter_test)
+
+    add_executable(canvas_macos_mouse_session_test
+                   unit/macos_mouse_session_test.cpp)
+    target_include_directories(canvas_macos_mouse_session_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_mouse_session_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_mouse_session_test)
+    gtest_discover_tests(canvas_macos_mouse_session_test)
+
     add_executable(canvas_macos_wkwebview_navigation_seam_test
                    unit/macos_wkwebview_navigation_seam_test.cpp)
     target_include_directories(canvas_macos_wkwebview_navigation_seam_test
