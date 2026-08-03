@@ -1,0 +1,60 @@
+Task 23B macOS whiteboard input controller GREEN evidence
+Date: 2026-08-03 (Asia/Shanghai)
+
+Implemented scope:
+  * InputRouter has an explicit mouse-draw opt-in. It defaults to false, so
+    existing Windows routing is unchanged; an enabled Mouse routes to drawing
+    only while the mode is Draw.
+  * MacosWhiteboardInput is a pure C++ controller with an explicit serialized,
+    future-AppKit-main-thread ownership contract and no internal locking or UI
+    framework dependency.
+  * It owns the mutable Document reference, InputRouter, and one active
+    StrokeBuilder. Only finite, real Mouse samples are accepted; orphan,
+    duplicate, mismatched, predicted, non-Mouse, and non-finite samples do not
+    mutate the document.
+  * Down reverse-scans document order for the topmost Embedded hit. It creates
+    a collision-free Base or Annotation preview with both builder and preview
+    point storage reserved for 512 points.
+  * Move uses the append-only Document path and returns a layer-specific dirty
+    rectangle. The normal reserved hot path does not copy Document and creates
+    no temporary strings or containers.
+  * Up supports a single-point stroke, finalizes Base strokes in world space,
+    and converts an Annotation to parent-normalized coordinates only after
+    revalidating its Embedded parent.
+  * Cancel, mode changes, and document replacement erase an active preview
+    exactly once before clearing state. Logical append, parent-transform, or
+    externally missing-preview failures also clear state and leave no preview.
+  * Result values are fixed: kind, optional layer, optional dirty bounds, and
+    fullRedraw. A real document replacement requests full redraw.
+  * The direct-source/CMake contract includes the controller, rejects native
+    UI/IPC/web/Windows dependencies from compiled seam code, requires the
+    macOS target to compile it, and excludes it from Windows direct sources.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_input_router_test canvas_macos_whiteboard_input_test -j 4
+    PASS
+
+  ctest --preset macos-arm64-release \
+    -R 'InputRouterTest|MacosWhiteboardInputTest|^canvas_macos_pointer_seam_source_contract$' \
+    --output-on-failure
+    PASS: 22/22
+
+  cmake --build --preset macos-arm64-release --parallel
+    PASS
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosWKWebViewSurface)\.'
+    PASS: 198/198 non-GUI tests and source contracts
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 3/3
+
+  git diff --check
+    PASS
+
+Intentionally not covered by this increment:
+  NSView/NSEvent wiring, controller-to-Metal invalidation, pen/touch/coalesced
+  or predicted input, IME, Electron/native IPC, macOS release packaging,
+  GUI/hardware input validation, and end-to-end latency measurement remain
+  pending.

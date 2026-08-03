@@ -105,3 +105,21 @@ TEST(InputRouterTest, FingerDrawOnlyChangesTouchInDrawMode) {
   ASSERT_TRUE(result.parentId.has_value());
   EXPECT_EQ(*result.parentId, "web-1");
 }
+
+TEST(InputRouterTest, MouseDrawIsOptInAndOnlyAppliesInDrawMode) {
+  input::InputRouter router;
+
+  const auto defaultResult =
+      router.route(input::PointerKind::Mouse, std::nullopt);
+  EXPECT_EQ(defaultResult.target, input::InputTarget::Viewport);
+
+  router.setMouseDrawEnabled(true);
+  const auto drawResult = router.route(input::PointerKind::Mouse, kWebId);
+  EXPECT_EQ(drawResult.target, input::InputTarget::Annotation);
+  EXPECT_EQ(drawResult.parentId, kWebId);
+
+  router.setMode(input::InputMode::Select);
+  const auto selectResult = router.route(input::PointerKind::Mouse, kWebId);
+  EXPECT_EQ(selectResult.target, input::InputTarget::Selection);
+  EXPECT_EQ(selectResult.parentId, kWebId);
+}

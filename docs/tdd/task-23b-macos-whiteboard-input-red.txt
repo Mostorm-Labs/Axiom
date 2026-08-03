@@ -1,0 +1,25 @@
+Task 23B macOS whiteboard input controller RED evidence
+Date: 2026-08-03 (Asia/Shanghai)
+
+Scope:
+  InputRouter's opt-in mouse drawing behavior and a pure C++ macOS whiteboard
+  input controller were specified with tests before their implementation. The
+  controller stub returned Ignored for every operation and held no active
+  stroke state.
+
+Commands:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_input_router_test canvas_macos_whiteboard_input_test -j 4
+  ctest --preset macos-arm64-release \
+    -R 'InputRouterTest|MacosWhiteboardInputTest' --output-on-failure
+
+Observed result:
+  Compilation succeeded. CTest exited 8 with 11 failures among 20 focused
+  tests. The failures covered mouse-draw opt-in, Base preview begin/move/up,
+  topmost Embedded annotation attachment, cancel rollback, mode and document
+  replacement invalidation, mismatched phase lifetime, collision-free ids,
+  single-point commit, and failure cleanup. Nine existing/negative-control
+  assertions passed, including the default-disabled mouse route and rejection
+  behavior naturally produced by the inert stub.
+
+Status: RED confirmed.

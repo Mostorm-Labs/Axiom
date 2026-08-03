@@ -8,6 +8,8 @@ RouteResult InputRouter::route(
   const bool drawingPointer =
       kind == PointerKind::Pen ||
       (kind == PointerKind::Touch && fingerDrawEnabled_ &&
+       mode_ == InputMode::Draw) ||
+      (kind == PointerKind::Mouse && mouseDrawEnabled_ &&
        mode_ == InputMode::Draw);
 
   if (drawingPointer) {

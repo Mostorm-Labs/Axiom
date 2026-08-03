@@ -166,6 +166,7 @@ if(APPLE)
                 src/platform/macos/composition_view.mm
                 src/platform/macos/macos_mouse_session.cpp
                 src/platform/macos/macos_pointer_adapter.cpp
+                src/platform/macos/macos_whiteboard_input.cpp
                 src/platform/macos/metal_host.mm
                 src/platform/macos/metal_view.mm
                 src/platform/macos/wkwebview_surface.mm)
