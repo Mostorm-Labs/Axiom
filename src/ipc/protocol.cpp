@@ -49,7 +49,6 @@ EncodeMessageResult encodeFail(std::string error) {
   return EncodeMessageResult{std::nullopt, std::move(error)};
 }
 
-constexpr std::size_t kMaximumRequestIdBytes = 256U;
 constexpr std::size_t kMaximumJsonDepth = 32U;
 constexpr std::size_t kMaximumJsonNodes = 16384U;
 constexpr std::string_view kEnvelopeSkeleton =
@@ -161,7 +160,7 @@ DecodeMessageResult decode(const std::string& line) {
     }
     const std::string requestId = value.at("requestId").get<std::string>();
     if (requestId.empty()) return fail("IPC requestId must not be empty");
-    if (requestId.size() > kMaximumRequestIdBytes) {
+    if (requestId.size() > maximumRequestIdBytes) {
       return fail("IPC requestId exceeds 256 UTF-8 bytes");
     }
     if (!value.contains("payload") || !value.at("payload").is_object()) {
@@ -191,7 +190,7 @@ EncodeMessageResult tryEncodeNativeEvent(const Message& message,
     return encodeFail("outbound IPC message is not a native event");
   }
   if (message.requestId.empty() ||
-      message.requestId.size() > kMaximumRequestIdBytes) {
+      message.requestId.size() > maximumRequestIdBytes) {
     return encodeFail("IPC requestId is empty or too large");
   }
   if (!message.payload.is_object()) {
@@ -214,6 +213,36 @@ EncodeMessageResult tryEncodeNativeEvent(const Message& message,
   } catch (const nlohmann::json::exception& error) {
     return encodeFail(std::string("could not encode IPC message: ") + error.what());
   }
+}
+
+std::string boundedNativeEventRequestId(std::string_view prefix,
+                                        std::string_view requestId) {
+  constexpr std::string_view kNativeFallback = "native";
+  const auto fallback = [&]() {
+    if (prefix.size() >
+        maximumRequestIdBytes - 1U - kNativeFallback.size()) {
+      return std::string(kNativeFallback);
+    }
+    std::string result;
+    result.reserve(prefix.size() + 1U + kNativeFallback.size());
+    result.append(prefix);
+    result.push_back('-');
+    result.append(kNativeFallback);
+    return result;
+  };
+  if (requestId.empty() || requestId.size() > maximumRequestIdBytes) {
+    return fallback();
+  }
+  if (prefix.size() > maximumRequestIdBytes - 1U ||
+      prefix.size() + 1U > maximumRequestIdBytes - requestId.size()) {
+    return std::string(requestId);
+  }
+  std::string result;
+  result.reserve(prefix.size() + 1U + requestId.size());
+  result.append(prefix);
+  result.push_back('-');
+  result.append(requestId);
+  return result;
 }
 
 bool isAuthenticatedHello(const Message& message,

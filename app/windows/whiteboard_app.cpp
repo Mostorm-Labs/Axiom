@@ -32,6 +32,9 @@ namespace {
 constexpr wchar_t kWindowClassName[] = L"MostormCanvasWindow";
 constexpr WORD kSystemArrowCursorId = 32512U;
 constexpr UINT kIpcMessage = WM_APP + 0x4D;
+constexpr UINT kEmbeddedCompletionMessage = WM_APP + 0x4E;
+constexpr UINT_PTR kEmbeddedCompletionTimeoutTimer = 0xCA22U;
+constexpr UINT kEmbeddedCompletionTimeoutMs = 30'000U;
 constexpr std::size_t kMaximumQueuedIpcMessages = 128U;
 constexpr std::size_t kMaximumQueuedIpcBytes = 4U * 1024U * 1024U;
 constexpr std::size_t kMaximumEmbeddedSourceBytes = 1024U * 1024U;
@@ -192,11 +195,21 @@ std::optional<std::wstring> percentEncodeQueryComponent(
 
 }  // namespace
 
-WhiteboardApp::~WhiteboardApp() { stopIpc(); }
+struct WhiteboardApp::EmbeddedLoadCallbackState {
+  WhiteboardApp* owner = nullptr;
+  bool active = true;
+};
+
+WhiteboardApp::~WhiteboardApp() {
+  closing_ = true;
+  cancelPendingOpen();
+  stopIpc();
+}
 
 int WhiteboardApp::run(HINSTANCE instance, int commandShow,
                        const WhiteboardRunOptions& options) {
   lastError_ = S_OK;
+  closing_ = false;
   videoPath_ = options.videoPath;
   ipcQueueOverflowed_ = false;
   if (instance == nullptr) {
@@ -600,6 +613,8 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
+      app->closing_ = true;
+      app->cancelPendingOpen();
       app->stopIpc();
       app->window_ = nullptr;
       (void)app->forwardMouseToEmbedded(window, WM_CANCELMODE, 0, 0);
@@ -616,6 +631,24 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     return 0;
   }
 
+  if (message == kEmbeddedCompletionMessage) {
+    auto* app = reinterpret_cast<WhiteboardApp*>(
+        GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (app != nullptr) app->handleEmbeddedLoadCompletions();
+    return 0;
+  }
+
+  if (message == WM_TIMER) {
+    auto* app = reinterpret_cast<WhiteboardApp*>(
+        GetWindowLongPtrW(window, GWLP_USERDATA));
+    if (app != nullptr && wParam == app->embeddedCompletionTimeoutTimerId_ &&
+        app->pendingOpen_ != nullptr) {
+      app->failPendingOpen(HRESULT_FROM_WIN32(ERROR_TIMEOUT),
+                           "embedded document load timed out");
+      return 0;
+    }
+  }
+
   if (message == WM_MOUSEMOVE || message == WM_MOUSELEAVE ||
       message == WM_LBUTTONDOWN || message == WM_LBUTTONUP ||
       message == WM_LBUTTONDBLCLK || message == WM_RBUTTONDOWN ||
@@ -628,6 +661,7 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
     auto* app = reinterpret_cast<WhiteboardApp*>(
         GetWindowLongPtrW(window, GWLP_USERDATA));
     if (app != nullptr) {
+      if (app->pendingOpen_ != nullptr) return 0;
       const HRESULT forwardResult =
           app->forwardMouseToEmbedded(window, message, wParam, lParam);
       if (forwardResult == S_OK) {
@@ -651,6 +685,13 @@ LRESULT CALLBACK WhiteboardApp::windowProc(HWND window, UINT message,
         window, GWLP_USERDATA));
     if (app == nullptr) {
       return DefWindowProcW(window, message, wParam, lParam);
+    }
+    if (app->pendingOpen_ != nullptr) {
+      if (message == WM_POINTERUP ||
+          message == WM_POINTERCAPTURECHANGED) {
+        ReleaseCapture();
+      }
+      return 0;
     }
 
     const UINT32 pointerId = GET_POINTERID_WPARAM(wParam);
@@ -1405,36 +1446,82 @@ HRESULT WhiteboardApp::openDocument(const std::wstring& path,
     return S_OK;
   }
 
-  // Loading from IPC is a UI-thread transaction: construct every candidate
-  // surface hidden, render the candidate, then atomically exchange ownership.
-  // If any step fails, both the old Document and its visible surfaces remain.
-  std::vector<HostedWebView> candidateSurfaces;
-  HRESULT result = restoreEmbeddedSurfaces(candidate, candidateSurfaces, false);
-  if (FAILED(result)) return result;
-  result = renderDocument(candidate);
+  // Keep the current document and visible surfaces untouched while the
+  // candidate's hidden WebViews report their initial-load terminal states.
+  cancelPendingOpen();
+  pendingOpenNotificationFailure_.reset();
+  if (nextDocumentGeneration_ == 0U ||
+      nextDocumentGeneration_ == (std::numeric_limits<std::uint64_t>::max)())
+    return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+  auto pending = std::make_unique<PendingOpen>();
+  pending->candidate = std::move(candidate);
+  pending->generation = nextDocumentGeneration_++;
+  pending->requestId = std::string(requestId);
+  pending->connectionId = connectionId;
+  pending->callbackState = std::make_shared<EmbeddedLoadCallbackState>();
+  pending->callbackState->owner = this;
+  pendingOpen_ = std::move(pending);
+  openDocumentResponsePending_ = true;
+  openDocumentResponseSent_ = false;
+  if (embeddedCompletionTimeoutTimerId_ ==
+      (std::numeric_limits<UINT_PTR>::max)()) {
+    embeddedCompletionTimeoutTimerId_ = kEmbeddedCompletionTimeoutTimer;
+  } else {
+    ++embeddedCompletionTimeoutTimerId_;
+  }
+  if (SetTimer(window_, embeddedCompletionTimeoutTimerId_,
+               kEmbeddedCompletionTimeoutMs, nullptr) == 0U) {
+    const DWORD timerError = GetLastError();
+    const auto failureGeneration = pendingOpen_->generation;
+    pendingOpen_->callbackState->active = false;
+    pendingOpen_->callbackState->owner = nullptr;
+    (void)embeddedLoadCompletions_.cancelGeneration(failureGeneration);
+    (void)embeddedLoadTracker_.cancelGeneration(failureGeneration);
+    pendingOpen_.reset();
+    openDocumentResponsePending_ = false;
+    return timerError == ERROR_SUCCESS ? E_FAIL
+                                       : HRESULT_FROM_WIN32(timerError);
+  }
+  stagingPendingOpen_ = true;
+  HRESULT result = restoreEmbeddedSurfaces(
+      pendingOpen_->candidate, pendingOpen_->surfaces, false, pendingOpen_.get());
+  stagingPendingOpen_ = false;
+  if (pendingOpenNotificationFailure_) {
+    result = *pendingOpenNotificationFailure_;
+    pendingOpenNotificationFailure_.reset();
+  }
   if (FAILED(result)) {
-    candidateSurfaces.clear();
-    if (!restorePreviousRender(document_, requestId,
-                               "open-document render rollback failed",
-                               connectionId)) {
-      return lastError_;
-    }
+    const auto failureGeneration = pendingOpen_->generation;
+    pendingOpen_->callbackState->active = false;
+    pendingOpen_->callbackState->owner = nullptr;
+    (void)KillTimer(window_, embeddedCompletionTimeoutTimerId_);
+    (void)embeddedLoadCompletions_.cancelGeneration(failureGeneration);
+    (void)embeddedLoadTracker_.cancelGeneration(failureGeneration);
+    pendingOpen_.reset();
+    openDocumentResponsePending_ = false;
     return result;
   }
-  for (const auto& hosted : candidateSurfaces) {
-    result = setSurfaceVisible(*hosted.surface, true);
-    if (FAILED(result)) {
-      candidateSurfaces.clear();
-      if (!restorePreviousRender(document_, requestId,
-                                 "open-document visibility rollback failed",
-                                 connectionId)) {
-        return lastError_;
-      }
-      return result;
-    }
+  pendingOpen_->batch = canvas::app::EmbeddedLoadBatch::create(
+      pendingOpen_->generation, std::move(pendingOpen_->loads));
+  if (!pendingOpen_->batch) {
+    const auto failureGeneration = pendingOpen_->generation;
+    pendingOpen_->callbackState->active = false;
+    pendingOpen_->callbackState->owner = nullptr;
+    (void)KillTimer(window_, embeddedCompletionTimeoutTimerId_);
+    (void)embeddedLoadCompletions_.cancelGeneration(failureGeneration);
+    (void)embeddedLoadTracker_.cancelGeneration(failureGeneration);
+    pendingOpen_.reset();
+    openDocumentResponsePending_ = false;
+    return E_OUTOFMEMORY;
   }
-  document_ = std::move(candidate);
-  embeddedWebViews_.swap(candidateSurfaces);
+  // The response acknowledges synchronous staging admission only. The
+  // document-state event below is emitted by commitPendingOpen after every
+  // embedded surface reaches its terminal Ready state.
+  sendOpenDocumentAdmission();
+  if (pendingOpen_->batch->state() ==
+      canvas::app::EmbeddedLoadBatch::State::Ready) {
+    commitPendingOpen();
+  }
   return S_OK;
 }
 
@@ -1463,14 +1550,26 @@ HRESULT WhiteboardApp::saveDocument(const std::wstring& path) const {
 
 HRESULT WhiteboardApp::restoreEmbeddedSurfaces(
     const document::Document& source, std::vector<HostedWebView>& destinations,
-    bool visible) {
+    bool visible, PendingOpen* pending) {
   if (!destinations.empty()) return E_INVALIDARG;
+  std::size_t embeddedCount = 0U;
   for (const document::Node& node : source.nodes()) {
     if (node.layer != document::LayerClass::Embedded ||
         !std::holds_alternative<document::EmbeddedNode>(node.payload)) {
       continue;
     }
-    const HRESULT result = createEmbeddedSurface(node, destinations, visible);
+    if (!canvas::app::EmbeddedLoadBatch::isLoadCountWithinLimit(
+            embeddedCount + 1U)) {
+      return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+    }
+    ++embeddedCount;
+  }
+  for (const document::Node& node : source.nodes()) {
+    if (node.layer != document::LayerClass::Embedded ||
+        !std::holds_alternative<document::EmbeddedNode>(node.payload)) {
+      continue;
+    }
+    const HRESULT result = createEmbeddedSurface(node, destinations, visible, pending);
     if (FAILED(result)) {
       destinations.clear();
       return result;
@@ -1481,7 +1580,7 @@ HRESULT WhiteboardApp::restoreEmbeddedSurfaces(
 
 HRESULT WhiteboardApp::createEmbeddedSurface(
     const document::Node& node, std::vector<HostedWebView>& destinations,
-    bool visible) {
+    bool visible, PendingOpen* pending) {
   if (window_ == nullptr || node.id.empty() || node.id.size() > 1024U ||
       !isValidEmbeddedBounds(node.bounds) ||
       node.layer != document::LayerClass::Embedded) {
@@ -1584,18 +1683,52 @@ HRESULT WhiteboardApp::createEmbeddedSurface(
 
   auto surface = std::make_unique<WebView2Surface>(composition_, window_,
                                                    std::move(options));
+  std::optional<canvas::app::EmbeddedLoadBatch::Token> loadToken;
+  if (pending != nullptr) {
+    loadToken = embeddedLoadTracker_.begin(
+        node.id, pending->requestId, pending->connectionId,
+        pending->generation);
+    if (!loadToken) return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA);
+    try {
+      pending->loads.push_back({*loadToken, node.id});
+    } catch (...) {
+      (void)embeddedLoadTracker_.cancel(*loadToken);
+      return E_OUTOFMEMORY;
+    }
+  }
+  const auto abandonToken = [&]() noexcept {
+    if (loadToken) (void)embeddedLoadTracker_.cancel(*loadToken);
+  };
   HRESULT result = setSurfaceBounds(*surface, node.bounds);
-  if (FAILED(result)) return result;
+  if (FAILED(result)) { abandonToken(); return result; }
   surface->setInteractive(false);
   result = setSurfaceVisible(*surface, visible);
-  if (FAILED(result)) return result;
+  if (FAILED(result)) { abandonToken(); return result; }
   result = surface->initialize();
+  if (SUCCEEDED(result) && pending != nullptr) {
+    const auto weakState = std::weak_ptr<EmbeddedLoadCallbackState>(
+        pending->callbackState);
+    result = surface->setInitialLoadCompletionHandler(
+        [weakState, token = *loadToken, generation = pending->generation](
+            WebView2Surface::InitialLoadCompletion completion) {
+          const auto state = weakState.lock();
+          if (!state || !state->active || state->owner == nullptr) return;
+          state->owner->enqueueEmbeddedLoadCompletion(generation, token,
+                                                       completion);
+        });
+  }
   if (SUCCEEDED(result)) result = surface->navigate(navigationUri);
   if (SUCCEEDED(result) && initialMessage) result = surface->postMessage(*initialMessage);
-  if (FAILED(result)) return result;
+  if (FAILED(result)) { abandonToken(); return result; }
+  if (pending != nullptr && pendingOpenNotificationFailure_) {
+    const HRESULT notificationFailure = *pendingOpenNotificationFailure_;
+    abandonToken();
+    return notificationFailure;
+  }
   try {
     destinations.push_back(HostedWebView{node.id, std::move(surface)});
   } catch (...) {
+    abandonToken();
     return E_OUTOFMEMORY;
   }
   return S_OK;
@@ -1631,8 +1764,7 @@ void WhiteboardApp::reportFatalFailure(HRESULT result,
   OutputDebugStringA(("Canvas fatal failure: " + detail + "\n").c_str());
   sendIpc(ipc::Message{
       1, "fatal-error",
-      "fatal-" + (requestId.empty() ? std::string("native")
-                                     : std::string(requestId)),
+      ipc::boundedNativeEventRequestId("fatal", requestId),
       nlohmann::json{{"error", detail},
                      {"hresult", static_cast<std::int64_t>(result)}}},
       connectionId);
@@ -1689,6 +1821,248 @@ void WhiteboardApp::handleIpcMessages() {
   }
   if (repost && window_ != nullptr) {
     (void)PostMessageW(window_, kIpcMessage, 0, 0);
+  }
+}
+
+void WhiteboardApp::enqueueEmbeddedLoadCompletion(
+    std::uint64_t generation, canvas::app::EmbeddedLoadBatch::Token token,
+    WebView2Surface::InitialLoadCompletion completion) {
+  if (closing_ || !pendingOpen_ || pendingOpen_->generation != generation) return;
+  const auto outcome = completion.state == WebView2Surface::InitialLoadState::Ready
+                           ? canvas::app::EmbeddedLoadCompletionInbox::Outcome::Ready
+                           : canvas::app::EmbeddedLoadCompletionInbox::Outcome::Failed;
+  std::int32_t failure = 0;
+  if (outcome == canvas::app::EmbeddedLoadCompletionInbox::Outcome::Failed) {
+    failure = static_cast<std::int32_t>(completion.result);
+    if (failure >= 0) failure = -1;
+  }
+  const auto queued = embeddedLoadCompletions_.enqueue(
+      {token, generation, outcome, failure});
+  if (queued.status == canvas::app::EmbeddedLoadCompletionInbox::EnqueueStatus::Invalid ||
+      queued.status == canvas::app::EmbeddedLoadCompletionInbox::EnqueueStatus::Full) {
+    if (stagingPendingOpen_) {
+      pendingOpenNotificationFailure_ = E_OUTOFMEMORY;
+    } else {
+      failPendingOpen(E_OUTOFMEMORY, "embedded completion inbox overflow");
+    }
+    return;
+  }
+  if (queued.shouldPostNotification) {
+    embeddedCompletionMessagePosted_ = true;
+    if (window_ == nullptr ||
+        !PostMessageW(window_, kEmbeddedCompletionMessage, 0, 0)) {
+      embeddedCompletionMessagePosted_ = false;
+      (void)embeddedLoadCompletions_.notificationPostFailed();
+      const DWORD postError = GetLastError();
+      const HRESULT failure = postError == ERROR_SUCCESS
+                                  ? E_FAIL
+                                  : HRESULT_FROM_WIN32(postError);
+      if (stagingPendingOpen_) {
+        pendingOpenNotificationFailure_ = failure;
+      } else {
+        failPendingOpen(failure, "embedded completion notification failed");
+      }
+    }
+  }
+}
+
+void WhiteboardApp::handleEmbeddedLoadCompletions() {
+  embeddedCompletionMessagePosted_ = false;
+  if (closing_) return;
+  (void)embeddedLoadCompletions_.consumeNotification();
+  constexpr std::size_t kMaximumEventsPerUiTurn = 16U;
+  for (std::size_t index = 0; index < kMaximumEventsPerUiTurn; ++index) {
+    canvas::app::EmbeddedLoadCompletionInbox::Event event;
+    if (!embeddedLoadCompletions_.pop(event)) break;
+    if (!pendingOpen_ || event.documentGeneration != pendingOpen_->generation) continue;
+    const auto record = embeddedLoadTracker_.consume(event.token,
+                                                      event.documentGeneration);
+    if (!record || !pendingOpen_->batch) continue;
+    const auto completion = event.outcome ==
+                                    canvas::app::EmbeddedLoadCompletionInbox::Outcome::Ready
+                                ? canvas::app::EmbeddedLoadBatch::Completion::Ready
+                                : canvas::app::EmbeddedLoadBatch::Completion::Failed;
+    if (!pendingOpen_->batch->complete(event.token, event.documentGeneration,
+                                       completion))
+      continue;
+    if (completion == canvas::app::EmbeddedLoadBatch::Completion::Failed) {
+      failPendingOpen(static_cast<HRESULT>(event.failureCode),
+                      "embedded surface initial load failed");
+      return;
+    }
+    if (pendingOpen_ && pendingOpen_->batch->state() ==
+                            canvas::app::EmbeddedLoadBatch::State::Ready) {
+      commitPendingOpen();
+      return;
+    }
+  }
+  if (!pendingOpen_ || embeddedLoadCompletions_.empty()) return;
+  if (embeddedLoadCompletions_.requestNotificationIfNeeded()) {
+    embeddedCompletionMessagePosted_ = true;
+    if (window_ == nullptr ||
+        !PostMessageW(window_, kEmbeddedCompletionMessage, 0, 0)) {
+      embeddedCompletionMessagePosted_ = false;
+      (void)embeddedLoadCompletions_.notificationPostFailed();
+      const DWORD postError = GetLastError();
+      const HRESULT failure = postError == ERROR_SUCCESS
+                                  ? E_FAIL
+                                  : HRESULT_FROM_WIN32(postError);
+      failPendingOpen(failure, "embedded completion notification failed");
+    }
+  }
+}
+
+void WhiteboardApp::sendOpenDocumentAdmission() {
+  if (!pendingOpen_ || openDocumentResponseSent_) return;
+  const auto requestId = pendingOpen_->requestId;
+  const auto connectionId = pendingOpen_->connectionId;
+  openDocumentResponsePending_ = false;
+  openDocumentResponseSent_ = true;
+  sendIpc(ipc::Message{1, "response", requestId,
+                       nlohmann::json{{"accepted", true}}},
+          connectionId);
+}
+
+HRESULT WhiteboardApp::cancelActiveInputForDocumentTransition() {
+  HRESULT firstFailure = S_OK;
+  const auto rememberFailure = [&firstFailure](HRESULT result) {
+    if (FAILED(result) && SUCCEEDED(firstFailure)) firstFailure = result;
+  };
+  if (activePointerId_) {
+    rememberFailure(cancelActivePointer(*activePointerId_));
+  }
+  if (activeEmbeddedPointerId_) {
+    rememberFailure(cancelEmbeddedTouch(*activeEmbeddedPointerId_));
+  }
+  if (embeddedMouseNodeId_ || embeddedMouseSession_.buttons() != 0 ||
+      embeddedMouseSession_.hovered()) {
+    rememberFailure(forwardMouseToEmbedded(window_, WM_CANCELMODE, 0, 0));
+  }
+  // These identifiers describe the old document. Never let a late pointer
+  // message select a node in the newly committed candidate.
+  activePointerId_.reset();
+  activeStroke_.reset();
+  activeStrokeId_.clear();
+  lastPointerSample_.reset();
+  activeEmbeddedPointerId_.reset();
+  activeEmbeddedTouchNodeId_.reset();
+  embeddedMouseNodeId_.reset();
+  (void)embeddedMouseSession_.disable();
+  if (window_ != nullptr && GetCapture() == window_) ReleaseCapture();
+  inputRouter_.setActiveEmbeddedNode(std::nullopt);
+  activeRoute_ = input::RouteResult{};
+  return firstFailure;
+}
+
+void WhiteboardApp::commitPendingOpen() {
+  if (closing_ || !pendingOpen_ || !pendingOpen_->batch ||
+      pendingOpen_->batch->state() != canvas::app::EmbeddedLoadBatch::State::Ready)
+    return;
+  const auto requestId = pendingOpen_->requestId;
+  const auto connectionId = pendingOpen_->connectionId;
+  const auto nodeCount = pendingOpen_->candidate.nodes().size();
+  const HRESULT inputCancelResult = cancelActiveInputForDocumentTransition();
+  if (FAILED(inputCancelResult)) {
+    reportFatalFailure(inputCancelResult, requestId,
+                       "open-document active input cancellation failed",
+                       connectionId);
+    failPendingOpen(inputCancelResult,
+                    "could not cancel active input for document commit");
+    return;
+  }
+  HRESULT result = renderDocument(pendingOpen_->candidate);
+  if (FAILED(result)) {
+    if (!restorePreviousRender(document_, requestId,
+                               "open-document render rollback failed",
+                               connectionId)) {
+      failPendingOpen(lastError_, "open-document render rollback failed");
+      return;
+    }
+    failPendingOpen(result, "could not render candidate document");
+    return;
+  }
+  for (const auto& hosted : pendingOpen_->surfaces) {
+    result = setSurfaceVisible(*hosted.surface, true);
+    if (FAILED(result)) {
+      for (const auto& shown : pendingOpen_->surfaces)
+        (void)setSurfaceVisible(*shown.surface, false);
+      if (!restorePreviousRender(document_, requestId,
+                                 "open-document visibility rollback failed",
+                                 connectionId)) {
+        failPendingOpen(lastError_, "open-document visibility rollback failed");
+        return;
+      }
+      failPendingOpen(result, "could not show candidate embedded surface");
+      return;
+    }
+  }
+  pendingOpen_->callbackState->active = false;
+  pendingOpen_->callbackState->owner = nullptr;
+  stagingPendingOpen_ = false;
+  pendingOpenNotificationFailure_.reset();
+  (void)KillTimer(window_, embeddedCompletionTimeoutTimerId_);
+  (void)embeddedLoadCompletions_.cancelGeneration(pendingOpen_->generation);
+  (void)embeddedLoadTracker_.cancelGeneration(pendingOpen_->generation);
+  document_ = std::move(pendingOpen_->candidate);
+  embeddedWebViews_.swap(pendingOpen_->surfaces);
+  pendingOpen_.reset();
+  openDocumentResponsePending_ = false;
+  openDocumentResponseSent_ = true;
+  sendIpc(ipc::Message{1, "document-state",
+                       ipc::boundedNativeEventRequestId("state", requestId),
+                       nlohmann::json{{"nodeCount", nodeCount}}},
+          connectionId);
+}
+
+void WhiteboardApp::failPendingOpen(HRESULT result, std::string_view reason) {
+  if (!pendingOpen_) return;
+  const auto requestId = pendingOpen_->requestId;
+  const auto connectionId = pendingOpen_->connectionId;
+  const bool admissionSent = openDocumentResponseSent_;
+  pendingOpen_->callbackState->active = false;
+  pendingOpen_->callbackState->owner = nullptr;
+  stagingPendingOpen_ = false;
+  pendingOpenNotificationFailure_.reset();
+  (void)KillTimer(window_, embeddedCompletionTimeoutTimerId_);
+  (void)embeddedLoadCompletions_.cancelGeneration(pendingOpen_->generation);
+  (void)embeddedLoadTracker_.cancelGeneration(pendingOpen_->generation);
+  pendingOpen_.reset();
+  openDocumentResponsePending_ = false;
+  openDocumentResponseSent_ = true;
+  if (!closing_) {
+    if (admissionSent) {
+      sendIpc(ipc::Message{
+                  1, "diagnostics", requestId,
+                  nlohmann::json{{"phase", "open-document"},
+                                 {"status", "failed"},
+                                 {"error", std::string(reason)}}},
+              connectionId);
+    }
+  }
+  (void)result;
+}
+
+void WhiteboardApp::cancelPendingOpen() noexcept {
+  if (!pendingOpen_) return;
+  const auto requestId = pendingOpen_->requestId;
+  const auto connectionId = pendingOpen_->connectionId;
+  const bool admissionSent = openDocumentResponseSent_;
+  pendingOpen_->callbackState->active = false;
+  pendingOpen_->callbackState->owner = nullptr;
+  stagingPendingOpen_ = false;
+  pendingOpenNotificationFailure_.reset();
+  (void)KillTimer(window_, embeddedCompletionTimeoutTimerId_);
+  (void)embeddedLoadCompletions_.cancelGeneration(pendingOpen_->generation);
+  (void)embeddedLoadTracker_.cancelGeneration(pendingOpen_->generation);
+  pendingOpen_.reset();
+  openDocumentResponsePending_ = false;
+  openDocumentResponseSent_ = true;
+  if (!closing_ && admissionSent && !requestId.empty()) {
+    sendIpc(ipc::Message{
+                1, "diagnostics", requestId,
+                nlohmann::json{{"phase", "open-document"},
+                               {"status", "superseded"}}},
+            connectionId);
   }
 }
 
@@ -1760,6 +2134,7 @@ void WhiteboardApp::handleIpcMessage(
   bool accepted = true;
   std::string error;
   bool emitDocumentState = false;
+  bool deferResponse = false;
   const auto stringField = [&message](const char* name)
       -> std::optional<std::string> {
     const auto value = message.payload.find(name);
@@ -1777,6 +2152,13 @@ void WhiteboardApp::handleIpcMessage(
     } else if (mode == "interact") {
       inputRouter_.setMode(input::InputMode::Interact);
     } else {
+      return false;
+    }
+    return true;
+  };
+  const auto documentMutationAllowed = [this, &error]() {
+    if (pendingOpen_ != nullptr) {
+      error = "document open in progress";
       return false;
     }
     return true;
@@ -1825,16 +2207,23 @@ void WhiteboardApp::handleIpcMessage(
                         "application is closing"
                       : "could not open document; previous state retained";
         } else {
-          emitDocumentState = true;
+          deferResponse = openDocumentResponsePending_ ||
+                          openDocumentResponseSent_;
+          emitDocumentState = !deferResponse;
         }
       } else error = "path is not valid UTF-8";
     } else if (message.type == "save-document") {
-      const auto path = stringField("path");
-      if (!path) error = "save-document requires a path";
-      else if (const auto widePath = utf8ToWide(*path)) {
-        if (FAILED(saveDocument(*widePath))) error = "could not save document";
-      } else error = "path is not valid UTF-8";
+      if (documentMutationAllowed()) {
+        const auto path = stringField("path");
+        if (!path) error = "save-document requires a path";
+        else if (const auto widePath = utf8ToWide(*path)) {
+          if (FAILED(saveDocument(*widePath))) error = "could not save document";
+        } else error = "path is not valid UTF-8";
+      }
     } else if (message.type == "create-embedded") {
+      if (!documentMutationAllowed()) {
+        // Keep the command response as the single busy acknowledgement.
+      } else {
       const auto kind = stringField("kind");
       document::EmbeddedKind embeddedKind = document::EmbeddedKind::Web;
       if (kind && *kind == "video") embeddedKind = document::EmbeddedKind::Video;
@@ -1906,7 +2295,11 @@ void WhiteboardApp::handleIpcMessage(
           }
         }
       }
+      }
     } else if (message.type == "set-embedded-bounds") {
+      if (!documentMutationAllowed()) {
+        // Keep the command response as the single busy acknowledgement.
+      } else {
       const auto id = stringField("id");
       const auto x = message.payload.find("x");
       const auto y = message.payload.find("y");
@@ -1975,7 +2368,11 @@ void WhiteboardApp::handleIpcMessage(
           }
         }
       }
+      }
     } else if (message.type == "delete-node") {
+      if (!documentMutationAllowed()) {
+        // Keep the command response as the single busy acknowledgement.
+      } else {
       const auto id = stringField("id");
       const document::Node* node = id ? document_.find(*id) : nullptr;
       if (node == nullptr) error = "unknown node id";
@@ -2012,6 +2409,7 @@ void WhiteboardApp::handleIpcMessage(
           }
         }
       }
+      }
     } else {
       accepted = false;
       error = "IPC message is not a launcher command";
@@ -2023,11 +2421,15 @@ void WhiteboardApp::handleIpcMessage(
   accepted = accepted && error.empty();
   nlohmann::json response{{"accepted", accepted}};
   if (!error.empty()) response["error"] = error;
-  sendIpc(ipc::Message{1, "response", message.requestId, std::move(response)},
-          connectionId);
-  if (accepted && emitDocumentState) {
-    sendIpc(ipc::Message{1, "document-state", "state-" + message.requestId,
-                         nlohmann::json{{"nodeCount", document_.nodes().size()}}},
+  if (!deferResponse) {
+    sendIpc(ipc::Message{1, "response", message.requestId, std::move(response)},
+            connectionId);
+  }
+  if (!deferResponse && accepted && emitDocumentState) {
+    sendIpc(ipc::Message{
+                1, "document-state",
+                ipc::boundedNativeEventRequestId("state", message.requestId),
+                nlohmann::json{{"nodeCount", document_.nodes().size()}}},
             connectionId);
   }
 }

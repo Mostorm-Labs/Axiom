@@ -1,6 +1,9 @@
 #pragma once
 
 #include "canvas/app/whiteboard_lifecycle.h"
+#include "canvas/app/embedded_load_batch.h"
+#include "canvas/app/embedded_load_completion_inbox.h"
+#include "canvas/app/embedded_load_tracker.h"
 #include "platform/windows/dcomp_host.h"
 #include "platform/windows/embedded_mouse_session.h"
 
@@ -53,6 +56,19 @@ class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
     std::unique_ptr<WebView2Surface> surface;
   };
 
+  struct EmbeddedLoadCallbackState;
+  struct PendingOpen {
+    document::Document candidate;
+    std::vector<HostedWebView> surfaces;
+    std::vector<canvas::app::EmbeddedLoadBatch::Load> loads;
+    std::optional<canvas::app::EmbeddedLoadBatch> batch;
+    std::shared_ptr<EmbeddedLoadCallbackState> callbackState;
+    std::uint64_t generation = 0U;
+    std::string requestId;
+    NamedPipeServer::ConnectionId connectionId =
+        NamedPipeServer::kInvalidConnectionId;
+  };
+
   struct QueuedIpcMessage {
     ipc::Message message;
     NamedPipeServer::ConnectionId connectionId =
@@ -83,10 +99,11 @@ class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
   HRESULT saveDocument(const std::wstring& path) const;
   HRESULT restoreEmbeddedSurfaces(
       const document::Document& source,
-      std::vector<HostedWebView>& destinations, bool visible);
+      std::vector<HostedWebView>& destinations, bool visible,
+      PendingOpen* pending = nullptr);
   HRESULT createEmbeddedSurface(const document::Node& node,
                                 std::vector<HostedWebView>& destinations,
-                                bool visible);
+                                bool visible, PendingOpen* pending = nullptr);
   HRESULT setSurfaceBounds(WebView2Surface& surface, core::Rect bounds);
   HRESULT setSurfaceVisible(WebView2Surface& surface, bool visible);
   bool restorePreviousRender(const document::Document& previous,
@@ -97,6 +114,15 @@ class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
                           std::string_view context,
                           NamedPipeServer::ConnectionId connectionId);
   void handleIpcMessages();
+  void handleEmbeddedLoadCompletions();
+  void enqueueEmbeddedLoadCompletion(
+      std::uint64_t generation, canvas::app::EmbeddedLoadBatch::Token token,
+      WebView2Surface::InitialLoadCompletion completion);
+  void commitPendingOpen();
+  void sendOpenDocumentAdmission();
+  HRESULT cancelActiveInputForDocumentTransition();
+  void failPendingOpen(HRESULT result, std::string_view reason);
+  void cancelPendingOpen() noexcept;
   void handleIpcMessage(const ipc::Message& message,
                         NamedPipeServer::ConnectionId connectionId);
   void sendIpc(const ipc::Message& message,
@@ -118,6 +144,21 @@ class WhiteboardApp : private canvas::app::WhiteboardLifecycleOperations {
   SkiaSwapChainLayer annotationLayer_;
   SkiaSwapChainLayer chromeLayer_;
   std::vector<HostedWebView> embeddedWebViews_;
+  std::unique_ptr<PendingOpen> pendingOpen_;
+  canvas::app::EmbeddedLoadTracker embeddedLoadTracker_;
+  canvas::app::EmbeddedLoadCompletionInbox embeddedLoadCompletions_;
+  std::uint64_t nextDocumentGeneration_ = 1U;
+  UINT_PTR embeddedCompletionTimeoutTimerId_ = 0xCA22U;
+  bool embeddedCompletionMessagePosted_ = false;
+  // A completion callback can run synchronously from WebView2::Navigate().
+  // During candidate staging, notification failures are recorded and
+  // propagated after the current surface call unwinds; resetting PendingOpen
+  // from inside that callback would invalidate the vector being populated.
+  std::optional<HRESULT> pendingOpenNotificationFailure_;
+  bool stagingPendingOpen_ = false;
+  bool closing_ = false;
+  bool openDocumentResponsePending_ = false;
+  bool openDocumentResponseSent_ = false;
   input::InputRouter inputRouter_;
   std::optional<stroke::StrokeBuilder> activeStroke_;
   std::optional<std::uint64_t> activePointerId_;

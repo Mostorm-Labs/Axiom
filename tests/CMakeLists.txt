@@ -16,6 +16,11 @@ add_test(NAME canvas_webview2_navigation_source_contract
                  -DSURFACE_SOURCE=${CMAKE_SOURCE_DIR}/src/platform/windows/webview2_surface.cpp
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/webview2_navigation_source_contract_test.cmake)
 
+add_test(NAME canvas_windows_atomic_open_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DAPP_SOURCE=${CMAKE_SOURCE_DIR}/app/windows/whiteboard_app.cpp
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/windows_atomic_open_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)
@@ -75,6 +80,27 @@ target_link_libraries(canvas_embedded_load_tracker_test
                       PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_embedded_load_tracker_test)
 gtest_discover_tests(canvas_embedded_load_tracker_test)
+
+add_executable(canvas_embedded_load_batch_test
+               unit/embedded_load_batch_test.cpp)
+target_link_libraries(canvas_embedded_load_batch_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_load_batch_test)
+gtest_discover_tests(canvas_embedded_load_batch_test)
+
+add_executable(canvas_embedded_load_completion_inbox_test
+               unit/embedded_load_completion_inbox_test.cpp)
+target_link_libraries(canvas_embedded_load_completion_inbox_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_load_completion_inbox_test)
+gtest_discover_tests(canvas_embedded_load_completion_inbox_test)
+
+add_executable(canvas_embedded_document_open_coordinator_test
+               unit/embedded_document_open_coordinator_test.cpp)
+target_link_libraries(canvas_embedded_document_open_coordinator_test
+                      PRIVATE canvas::core GTest::gtest_main)
+canvas_enable_warnings(canvas_embedded_document_open_coordinator_test)
+gtest_discover_tests(canvas_embedded_document_open_coordinator_test)
 
 add_executable(canvas_webview2_initial_load_seam_test
                unit/webview2_initial_load_seam_test.cpp)

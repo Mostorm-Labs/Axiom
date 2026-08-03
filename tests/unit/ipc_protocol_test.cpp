@@ -67,6 +67,35 @@ TEST(IpcProtocolTest, EnforcesRequestIdUtf8ByteLimit) {
   EXPECT_NE(rejected.error.find("256 UTF-8 bytes"), std::string::npos);
 }
 
+TEST(IpcProtocolTest, KeepsDerivedNativeEventIdsWithinUtf8ByteBudget) {
+  const std::string twoByte = "\xC2\xA2";
+  const std::string at250 = std::string(248U, 'x') + twoByte;
+  ASSERT_EQ(at250.size(), 250U);
+  const auto decorated250 = ipc::boundedNativeEventRequestId("state", at250);
+  EXPECT_EQ(decorated250.size(), 256U);
+  EXPECT_EQ(decorated250.substr(0U, 6U), "state-");
+  EXPECT_TRUE(ipc::tryEncodeNativeEvent(
+                  ipc::Message{1, "document-state", decorated250,
+                               nlohmann::json::object()},
+                  ipc::LineFramer::kMaximumLineBytes)
+                  .encoded.has_value());
+
+  const std::string at251 = std::string(249U, 'x') + twoByte;
+  ASSERT_EQ(at251.size(), 251U);
+  EXPECT_EQ(ipc::boundedNativeEventRequestId("state", at251), at251);
+
+  const std::string at256(256U, 'x');
+  EXPECT_EQ(ipc::boundedNativeEventRequestId("state", at256), at256);
+  EXPECT_EQ(ipc::boundedNativeEventRequestId("state", ""),
+            "state-native");
+  EXPECT_EQ(ipc::boundedNativeEventRequestId(std::string(255U, 'p'), ""),
+            "native");
+  EXPECT_EQ(ipc::boundedNativeEventRequestId(std::string(256U, 'p'), at256),
+            at256);
+  EXPECT_EQ(ipc::boundedNativeEventRequestId(std::string(300U, 'p'), ""),
+            "native");
+}
+
 TEST(IpcProtocolTest, AuthenticatesExactlyOneHelloThenOnlyCommands) {
   ipc::ClientSession session("secret");
   const auto hello = session.accept(
