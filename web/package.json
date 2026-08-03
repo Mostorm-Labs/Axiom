@@ -1,0 +1,21 @@
+{
+  "name": "@mostorm/canvas-embedded-content",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lexical/history": "0.48.0",
+    "@lexical/rich-text": "0.48.0",
+    "lexical": "0.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

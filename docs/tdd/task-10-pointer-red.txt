@@ -1,0 +1,16 @@
+Task 10 Windows pointer adapter RED (macOS, 2026-07-21)
+
+The Windows-only adapter test target and platform source are gated by WIN32.
+The required Windows preset was attempted on this macOS host:
+
+    cmake --preset windows-x64
+
+It failed before generation because Visual Studio 17 2022 is not installed:
+
+    CMake Error: Could not create named generator Visual Studio 17 2022
+
+Consequently the `canvas_win_pointer_adapter_test` target was not generated or
+executed. This host also has no Windows SDK (`windows.h` and the pointer
+history declarations), and no MinGW cross-compiler was available, so no local
+header-only or cross-compile result is claimed. Windows VS2022/vcpkg CI is the
+authoritative environment for this Windows-only RED/GREEN check.

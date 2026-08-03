@@ -1,0 +1,13 @@
+Task 5 input router RED
+
+Command (fresh workaround build, before implementing input_router.h):
+
+    cmake -S . -B out/build/task-05-red -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS='-fno-rtti'
+    cmake --build out/build/task-05-red --target canvas_input_router_test
+
+Result: exit code 2. The test compile failed because the production API had not
+been implemented yet:
+
+    fatal error: 'canvas/input/input_router.h' file not found
+    make[3]: *** [tests/CMakeFiles/canvas_input_router_test.dir/unit/input_router_test.cpp.o] Error 1
+    make: *** [canvas_input_router_test] Error 2

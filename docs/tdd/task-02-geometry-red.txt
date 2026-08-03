@@ -1,0 +1,20 @@
+Task 02 TDD RED evidence
+
+The geometry and pointer tests were added before their headers. A native
+AppleClang CMake configure succeeded, but the geometry test target failed to
+compile because canvas/core/geometry.h did not yet exist. This is the expected
+RED state.
+
+Configure command:
+cmake -S . -B out/build/native -DBUILD_TESTING=ON
+
+RED command:
+cmake --build out/build/native --target canvas_geometry_test --parallel
+
+Observed output (key failure):
+/Users/qing/.config/superpowers/worktrees/canvas/windows-vertical-slice/tests/unit/geometry_test.cpp:1:10: fatal error: 'canvas/core/geometry.h' file not found
+    1 | #include "canvas/core/geometry.h"
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.
+
+The command exited non-zero while compiling canvas_geometry_test.

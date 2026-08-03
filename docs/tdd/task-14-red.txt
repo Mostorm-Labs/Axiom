@@ -1,0 +1,15 @@
+Task 14 red phase (2026-07-23)
+
+Added tests/unit/document_codec_test.cpp for versioned JSON/MessagePack
+round-trip, unknown-node preservation, schema/parent/cycle validation,
+malformed payloads, non-finite bounds, and the Windows DocumentStore seam.
+
+Replayed against baseline b0f3c84 before the implementation files:
+
+  g++ -std=c++17 -I<baseline>/include -c tests/unit/document_codec_test.cpp
+
+Observed failure:
+
+  fatal error: 'canvas/storage/document_codec.h' file not found
+
+Windows build/store tests are intentionally not run on this macOS host.

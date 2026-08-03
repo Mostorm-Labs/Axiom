@@ -1,0 +1,13 @@
+Task 9 DirectComposition host RED (macOS, 2026-07-21)
+
+The Windows-only composition-order integration test and CMake target were
+added before the production DirectComposition host. The requested Windows
+preset was attempted on this macOS host:
+
+  cmake --preset windows-x64
+
+It failed before generation because the Visual Studio generator is unavailable
+on macOS (and VCPKG_ROOT is unset, so the Windows vcpkg toolchain cannot be
+resolved). The test cannot be compiled locally because <windows.h> and
+<dcomp.h> are Windows SDK headers. This is an environment limitation, not a
+test assertion failure; Windows VS2022/vcpkg CI is authoritative.

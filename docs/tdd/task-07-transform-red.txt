@@ -1,0 +1,16 @@
+Task 7 RED (macOS, 2026-07-21)
+
+Added embedded_transform_test.cpp and canvas_embedded_transform_test target
+before implementing the transform header. The direct compile command:
+
+  c++ -std=c++17 -Iinclude -I/Users/qing/opt/anaconda3/include \
+    -c tests/unit/embedded_transform_test.cpp -o /tmp/embedded_transform_test.o
+
+failed as expected with:
+
+  fatal error: 'canvas/document/embedded_transform.h' file not found
+
+The full CMake configure is also blocked on this macOS host because
+unofficial-skia is not installed (no VCPKG_ROOT), so the Skia renderer target
+cannot be configured locally. Windows VS2022/vcpkg CI remains authoritative for
+the renderer regression.

@@ -1,0 +1,17 @@
+Task 9 DirectComposition host GREEN (Windows CI pending, 2026-07-21)
+
+The fixed four-layer DCompHost tree and minimal borderless Win32 host are now
+implemented. The composition-order test is wired only for WIN32 and asserts
+the required back-to-front sequence: BaseCanvas, EmbeddedContent, Annotation,
+InteractionChrome.
+
+The follow-up fix now forwards a null content pointer to
+`IDCompositionVisual::SetContent(nullptr)` so callers can detach a layer, and
+scopes `WhiteboardApp` so all COM smart pointers are destroyed before
+`CoUninitialize`.
+
+This macOS environment cannot execute the Windows target: CMake cannot create
+the Visual Studio 17 2022 generator, Windows SDK headers are unavailable, and
+VCPKG_ROOT is unset. Therefore no local GREEN run is claimed. Windows
+VS2022/vcpkg CI must configure, build, run
+`canvas_windows_composition_test`, and provide the authoritative GREEN result.

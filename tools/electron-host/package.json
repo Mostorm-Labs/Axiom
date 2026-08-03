@@ -1,0 +1,16 @@
+{
+  "name": "@mostorm/canvas-electron-host",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && electron ."
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "electron": "43.1.1",
+    "typescript": "7.0.2"
+  }
+}

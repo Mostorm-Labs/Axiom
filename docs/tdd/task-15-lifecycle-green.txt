@@ -1,0 +1,25 @@
+Task 15 Whiteboard lifecycle GREEN (macOS, 2026-07-25)
+
+The lifecycle seam is standard C++17 and was compiled with the original
+AppleClang toolchain for x86_64, then linked against the available x86_64
+GoogleTest libraries/dylibs:
+
+  c++ -arch x86_64 -std=c++17 -stdlib=libc++ -Iinclude \
+    -I/Users/qing/opt/anaconda3/include -c \
+    tests/unit/whiteboard_lifecycle_test.cpp \
+    -o /tmp/whiteboard_lifecycle_green.o
+  c++ -arch x86_64 -stdlib=libc++ \
+    /tmp/whiteboard_lifecycle_green.o \
+    -L/Users/qing/opt/anaconda3/lib \
+    -Wl,-rpath,/Users/qing/opt/anaconda3/lib \
+    -lgtest_main -lgtest -lpthread \
+    -o /tmp/whiteboard_lifecycle_green
+  /tmp/whiteboard_lifecycle_green
+
+Result: 3 tests passed. They verify stop/join precedes callback queue access and
+is repeatable, WM_QUIT cleans a still-live window and IPC state, and GetMessage
+failure captures its error before cleanup can overwrite it while still stopping
+IPC. A warning-parity compile with -Wall -Wextra -Wpedantic also passed.
+
+The WhiteboardApp Win32 adapter cannot be compiled on this macOS host. The
+Windows VS2022/vcpkg build remains authoritative for that integration.

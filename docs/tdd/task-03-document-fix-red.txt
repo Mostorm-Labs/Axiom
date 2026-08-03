@@ -1,0 +1,21 @@
+Task 3 document edge-case repair TDD evidence (RED)
+
+The two regression tests were added before changing the implementation and
+were run against the prior document.cpp implementation.
+
+Command:
+
+    cmake --build out/build/task-03-green-x86-nortti-rpath \
+      --target canvas_document_test --parallel
+    ctest --test-dir out/build/task-03-green-x86-nortti-rpath \
+      -R 'DocumentTest\.(EraseCopiesAliasedIdBeforeCompactingNodes|RejectsNaNBoundsAndPreservesPreviousBounds)' \
+      --output-on-failure
+
+Both new tests failed as expected:
+
+    DocumentTest.EraseCopiesAliasedIdBeforeCompactingNodes: expected
+    doc.find("child") == nullptr, but the child remained.
+    DocumentTest.RejectsNaNBoundsAndPreservesPreviousBounds: setBounds with
+    a NaN width returned true instead of false.
+
+Status: RED confirmed (2 tests failed, ctest exit code 8).

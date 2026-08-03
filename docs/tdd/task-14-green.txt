@@ -1,0 +1,50 @@
+Task 14 green phase (updated 2026-07-24)
+
+Implemented the version 1 canonical JSON schema with MessagePack file
+encoding, strict finite/type/parent-graph validation, and semantic retention of
+representable fields for unknown node types. Values that canonical JSON or
+MessagePack cannot preserve losslessly (including out-of-range JSON integers,
+binary values, non-finite numbers, and invalid UTF-8) are rejected.
+
+The codec validates live models before encoding and applies explicit budgets
+for nodes, stroke points, strings, retained unknown nodes, parent depth, input
+nesting, and the 512 MiB encoded size. JSON integers are checked lexically
+before DOM parsing. MessagePack is structurally preflighted with an iterative
+stack, so excessive nesting cannot overflow nlohmann's recursive binary
+reader. Parent graphs are checked iteratively and decoded nodes are installed
+with one atomic linear-time bulk replacement; corrupt input never partially
+replaces the live Document.
+
+Added the Win32 atomic DocumentStore, a shared 512 MiB save/load boundary,
+and explicit --open/--save/--self-test-document wiring. Saves write and flush
+<path>.tmp before MoveFileExW replacement. Restored Video nodes always
+navigate to the packaged video adapter and receive an approved remote or local
+source through the versioned host bridge; process-local media mappings are not
+trusted after restart. Embedded surfaces and their ParentNormalized annotation
+strokes are recreated from the decoded document.
+
+Real checks on this macOS host (strict warnings treated as errors):
+
+  clang++ -arch x86_64 -std=c++17 -fno-rtti \
+      -Wall -Wextra -Wpedantic -Werror ... \
+      tests/unit/document_codec_test.cpp src/storage/document_codec.cpp \
+      src/document/document.cpp
+  /tmp/canvas_document_codec_test_final
+
+Result: 14/14 DocumentCodec tests passed. These include exact 256/257
+MessagePack nesting and 4096/4097 parent-depth boundaries, invalid UTF-8,
+lossless unknown integers, invalid live-model refusal, child-before-parent
+bulk loading, and atomic decodeInto replacement.
+
+Also passed:
+
+  - 11/11 Document tests under the same -Werror policy.
+  - 14/14 DocumentCodec tests with UndefinedBehaviorSanitizer.
+  - 30/30 embedded Web Vitest tests.
+  - git diff --check.
+
+Not run on macOS: Visual Studio/CMake Windows build, Windows CTest (including
+DocumentStore and video-restore seams), Win32 DocumentStore execution,
+WebView2 surface restoration, IME/touch/video checks, or i5-1235U latency
+measurements. Those remain explicit pending evidence rather than inferred
+successes.

@@ -1,0 +1,13 @@
+Task 11 second-review GREEN implementation
+===========================================
+
+Explicit full invalidation now overrides pending dirty state. Cancellation is
+pointer-id scoped. Presented callbacks require a mapped DXGI media PresentCount.
+WARP is opt-in through `initialize(true)` and is used only by the integration
+test; production keeps hardware-only initialization. The deterministic
+self-test uses crossing red annotations with blue chrome handles at the same
+endpoints.
+
+`git diff --check` is run locally. Visual Studio 2022, the Windows SDK, D3D12,
+and DirectComposition are unavailable on this macOS host, so no Windows build,
+test pass, or screenshot is claimed here.

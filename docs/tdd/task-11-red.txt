@@ -1,0 +1,16 @@
+Task 11 TDD RED evidence
+=========================
+
+The first test change adds `WindowsComposition.CreatesTransparentAnnotationSwapChain`
+to `tests/integration/windows_composition_test.cpp`.  It creates a hidden top-level
+window, initializes `DCompHost` and the not-yet-implemented
+`SkiaD3D12Context`/`SkiaSwapChainLayer`, and asserts a premultiplied annotation
+swap chain.
+
+Expected RED state: before the Task 11 implementation, the Windows integration
+target cannot compile because the two new headers/classes do not exist.
+
+This repository is being developed on macOS, which has no Visual Studio 2022,
+Windows SDK, D3D12, or DirectComposition headers.  Therefore the Windows RED
+command could not be executed locally; the failure is the intentional missing
+implementation and Windows CI is the authoritative build/test environment.

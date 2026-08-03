@@ -1,0 +1,22 @@
+{
+  "name": "mostorm-canvas",
+  "version-string": "0.1.0",
+  "builtin-baseline": "a51bb4d1434e6d0927ff79db8033bed8522b85df",
+  "dependencies": [
+    "gtest",
+    "nlohmann-json",
+    "spdlog",
+    {
+      "name": "skia",
+      "default-features": false,
+      "features": ["png"],
+      "platform": "!windows"
+    },
+    {
+      "name": "skia",
+      "default-features": false,
+      "features": ["direct3d", "png"],
+      "platform": "windows"
+    }
+  ]
+}

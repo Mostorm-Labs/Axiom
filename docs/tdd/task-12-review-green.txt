@@ -1,0 +1,30 @@
+Task 12 quality-review static GREEN evidence
+=============================================
+
+The review gaps are covered by:
+
+  - an ordered best-effort close runner that returns the first failure, always
+    releases local ownership, and leaves destructor termination exclusively to
+    a wrong-STA contract violation;
+  - a five-button mouse-session bitmask with last-UP capture release, explicit
+    hover transitions, TME_LEAVE tracking, and LEAVE plus surface-local outside
+    cancellation UPs after capture loss;
+  - a cancellation integration check proving the next ordinary WebView click
+    remains usable after a cancelled DOWN;
+  - executable-directory-relative virtual-host normalization whose output is
+    shared by directory validation and WebView2 mapping, with the SDK's
+    MAX_PATH boundary enforced;
+  - restore completeness checks for both WebView2.h and the x64 static loader,
+    including removal of a partial package before retrying NuGet.
+
+Authoring-host checks:
+
+  - git diff --check: PASS
+  - restore script contract CMake check: PASS
+  - header-only close/mouse/path seams parsed with C++17 warnings-as-errors
+    against a temporary Win32 type stub: PASS
+
+This host is macOS and has no Visual Studio 2022, Windows runtime libraries,
+DirectComposition runtime, or WebView2 runtime. No Windows build, CTest result,
+or real WebView2/touch-display result is claimed; Windows CI and the target
+i5-1235U touch display remain authoritative.

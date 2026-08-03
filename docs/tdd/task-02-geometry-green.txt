@@ -1,0 +1,21 @@
+Task 02 TDD GREEN evidence
+
+The geometry and pointer value types compile and all seven new tests pass with
+AppleClang using the available x86_64 GTest dylibs. The local GTest package was
+built without RTTI and only for x86_64, so this reproducible native workaround
+was used:
+
+cmake -S . -B out/build/native-x86-nortti-rpath -DBUILD_TESTING=ON \
+  -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_CXX_FLAGS=-fno-rtti \
+  -DCMAKE_BUILD_RPATH=/Users/qing/opt/anaconda3/lib
+cmake --build out/build/native-x86-nortti-rpath --target clean
+cmake --build out/build/native-x86-nortti-rpath --parallel
+ctest --test-dir out/build/native-x86-nortti-rpath --output-on-failure
+
+Result: 8/8 tests passed, 0 failed (including the existing version smoke test).
+The regression suite also checks four-float Transform2D layout and ordinary
+composability of inverse()/map() using non-integral points.
+
+On the default arm64 AppleClang configure, compilation succeeds but linking
+against the preinstalled x86_64 GTest fails. The Windows VS2022/vcpkg preset
+was not runnable on macOS and remains to be verified in the Windows CI/toolchain.

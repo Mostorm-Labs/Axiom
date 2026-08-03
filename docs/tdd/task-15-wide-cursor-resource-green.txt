@@ -1,0 +1,32 @@
+Explicit wide cursor resource green phase (2026-07-25)
+
+The initial MAKEINTRESOURCEW(OCR_NORMAL) candidate was rejected by real SDK
+run 30122320834 because OCR_NORMAL is protected by OEMRESOURCE. The corrected
+LoadCursorW call names the documented standard arrow cursor resource ID as
+`kSystemArrowCursorId = 32512U` and passes it to MAKEINTRESOURCEW. The explicit
+W macro produces the LPCWSTR-compatible integer resource pointer without
+relying on IDC_ARROW, OCR_NORMAL, UNICODE, or OEMRESOURCE.
+
+Added the exact expression to the existing Windows-only OBJECT compile target:
+
+  HCURSOR canvasWindowsWideCursorResourceCompileProbe() {
+    return LoadCursorW(nullptr, MAKEINTRESOURCEW(kSystemArrowCursorId));
+  }
+
+The `canvas_windows_header_hygiene_compile_test` target is built by the normal
+all-target Windows build and does not link an executable, so this contract
+checks the real Windows SDK declaration and macro types without runtime or
+user32 linkage requirements.
+
+Local static checks:
+
+  rg -n 'OCR_NORMAL|LoadCursorW.*IDC_ARROW|(^|[^W])MAKEINTRESOURCE\(' \
+      app src tests
+  rg -n '(UNICODE|_UNICODE|OEMRESOURCE)' CMakeLists.txt app src tests
+  git diff --check
+
+Result: passed. Both production and compile-contract sites use the explicit
+wide numeric resource; no OCR_NORMAL use in compiled code, generic
+MAKEINTRESOURCE, or global UNICODE/OEMRESOURCE definition remains; and the
+diff has no whitespace errors. Compilation of the corrected expression
+against the real Windows SDK remains pending the next Windows CI run.

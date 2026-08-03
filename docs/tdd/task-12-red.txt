@@ -1,0 +1,28 @@
+Task 12 RED - WebView2 composition surface
+Date: 2026-07-22
+Baseline: c8acc21
+
+Test written first:
+  tests/integration/webview2_surface_test.cpp
+
+Windows integration target added first:
+  canvas_webview2_surface_test
+
+Expected RED at this point:
+  platform/windows/webview2_surface.h does not exist, so the new Windows
+  integration test cannot compile. The canvas::webview2_loader target also
+  does not exist yet.
+
+Static RED evidence captured on the macOS authoring host:
+  test ! -e src/platform/windows/webview2_surface.h
+  rg -n "webview2_surface.h|canvas::webview2_loader" \
+    tests/integration/webview2_surface_test.cpp tests/CMakeLists.txt
+
+Result:
+  PASS: the required production header is absent while the test and target
+  already reference it. This is the intended compile-time RED boundary.
+
+Environment limitation:
+  This host is macOS and has no Windows SDK, DirectComposition, WebView2
+  runtime, or Visual Studio 2022. A Windows configure/build/test cannot be
+  executed here; no Windows test result is claimed.

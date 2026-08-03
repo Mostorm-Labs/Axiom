@@ -1,0 +1,39 @@
+Task 4 predicted-tail invalidation fix TDD evidence (RED)
+
+Environment: macOS AppleClang 17, CMake 3.21+, C++17, x86_64 GTest with
+`-fno-rtti` and GTest RPATH.
+
+After adding the two regression tests, the old StrokeBuilder implementation
+was rebuilt and the focused test run was executed:
+
+    cmake --build out/build/task-04-green-x86-nortti-rpath \
+      --target canvas_stroke_builder_test --parallel
+    ctest --test-dir out/build/task-04-green-x86-nortti-rpath \
+      -R 'StrokeBuilderTest\.(RealSampleInvalidatesDistantPredictedTail|FilteredRealSampleStillInvalidatesPredictedTail)' \
+      --output-on-failure
+
+The target build exited 0. Both focused tests failed as expected because the
+old implementation returned only the committed-to-real segment (or an empty
+rect when the real sample was filtered), rather than invalidating the distant
+predicted path:
+
+    Value of: update.dirtyBounds == (core::Rect{-1, -1, 102, 2})
+      Actual: false
+    Expected: true
+    2 tests failed out of 2
+
+Status: RED confirmed (ctest exit code 8).
+
+For the final predicted-tail invalidation area, the new finish regression was
+compiled against the same old implementation:
+
+    cmake --build out/build/task-04-fix-green-x86-nortti-rpath \
+      --target canvas_stroke_builder_test --parallel
+
+The target failed as expected because the new accessor was not yet present:
+
+    error: no member named 'finishDirtyBounds' in 'canvas::stroke::StrokeBuilder'
+    2 errors generated.
+    make: *** [canvas_stroke_builder_test] Error 2
+
+Status: RED confirmed (target build exit code 2).

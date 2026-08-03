@@ -1,0 +1,17 @@
+/out/
+/build/
+/dist/
+/third_party/nuget/
+/vcpkg_installed/
+/web/node_modules/
+/web/dist/
+/tests/fixtures/*.mp4
+/tools/electron-host/node_modules/
+/tools/electron-host/dist/
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+*.log
+*.etl
+*.jsonl.actual

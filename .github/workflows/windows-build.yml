@@ -1,0 +1,176 @@
+name: Windows Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    outputs:
+      package-version: ${{ steps.package-metadata.outputs.version }}
+      package-artifact-name: ${{ steps.package-metadata.outputs.artifact-name }}
+      package-archive-name: ${{ steps.package-metadata.outputs.archive-name }}
+      package-checksum-name: ${{ steps.package-metadata.outputs.checksum-name }}
+    env:
+      VCPKG_ROOT: C:/vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Resolve runner image version
+        id: runner-image
+        run: |
+          $imageVersion = if ([string]::IsNullOrWhiteSpace($env:ImageVersion)) {
+            "windows-2022"
+          } else {
+            $env:ImageVersion
+          }
+          "version=$imageVersion" >> $env:GITHUB_OUTPUT
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: canvas-vcpkg-${{ runner.os }}-${{ runner.arch }}-x64-windows-static-${{ steps.runner-image.outputs.version }}-${{ hashFiles('vcpkg.json', 'CMakePresets.json') }}
+      - name: Prepare vcpkg binary cache
+        run: New-Item -ItemType Directory -Force "${{ github.workspace }}/.vcpkg-binary-cache" | Out-Null
+      - name: Restore WebView2 SDK
+        run: ./scripts/Restore-WebView2.ps1
+      - name: Test and build embedded web content
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: Install vcpkg dependencies
+        id: vcpkg-install
+        run: |
+          $manifestRoot = "${{ github.workspace }}"
+          $installRoot = "${{ github.workspace }}/out/build/windows-x64/vcpkg_installed"
+          & "$env:VCPKG_ROOT/vcpkg.exe" install `
+            --triplet x64-windows-static `
+            "--x-manifest-root=$manifestRoot" `
+            "--x-install-root=$installRoot"
+      - name: Save vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-install.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+      - name: Configure
+        run: cmake --preset windows-x64
+      - name: Build
+        run: cmake --build --preset windows-x64-release --parallel
+      - name: Test
+        run: ctest --preset windows-x64-release
+      - name: Composition integration tests
+        run: ctest --preset windows-x64-release -R "canvas_(windows_composition|webview2_surface)_test"
+      - name: Release packaging contract
+        run: |
+          node --test tests/contracts/windows_release_workflow.test.mjs
+          ./tests/contracts/Test-WindowsPortablePackage.ps1
+      - name: Whitespace check
+        run: git diff --check
+      - name: Resolve package metadata
+        id: package-metadata
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          $shortSha = $env:GITHUB_SHA.Substring(0, [Math]::Min(12, $env:GITHUB_SHA.Length))
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $version = $env:GITHUB_REF_NAME
+          } elseif ($env:EVENT_NAME -eq "pull_request") {
+            if ([string]::IsNullOrWhiteSpace($env:PR_NUMBER)) {
+              throw "Pull-request package metadata requires a PR number."
+            }
+            $version = "pr-$env:PR_NUMBER-$shortSha"
+          } else {
+            $version = "manual-$shortSha"
+          }
+          if ($version -cnotmatch '\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z') {
+            throw "Unsafe package version: $version"
+          }
+          $artifactName = "canvas-windows-x64-$version"
+          $archiveName = "$artifactName.zip"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "artifact-name=$artifactName" >> $env:GITHUB_OUTPUT
+          "archive-name=$archiveName" >> $env:GITHUB_OUTPUT
+          "checksum-name=$archiveName.sha256" >> $env:GITHUB_OUTPUT
+      - name: Package Windows portable bundle
+        run: |
+          ./scripts/New-WindowsPortablePackage.ps1 `
+            -BuildDirectory "${{ github.workspace }}/out/build/windows-x64/app/windows/Release" `
+            -OutputDirectory "${{ github.workspace }}/out/package" `
+            -Version "${{ steps.package-metadata.outputs.version }}"
+      - name: Upload Windows portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package-metadata.outputs.artifact-name }}
+          path: |
+            ${{ github.workspace }}/out/package/${{ steps.package-metadata.outputs.archive-name }}
+            ${{ github.workspace }}/out/package/${{ steps.package-metadata.outputs.checksum-name }}
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download tested Windows package
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.package-artifact-name }}
+          path: release-assets
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+          ARCHIVE_NAME: ${{ needs.build.outputs.package-archive-name }}
+          CHECKSUM_NAME: ${{ needs.build.outputs.package-checksum-name }}
+        run: |
+          set -euo pipefail
+          archive="release-assets/$ARCHIVE_NAME"
+          checksum="release-assets/$CHECKSUM_NAME"
+          test -s "$archive"
+          test -s "$checksum"
+
+          prerelease=false
+          if [[ "$TAG_NAME" == *-* ]]; then
+            prerelease=true
+          fi
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release edit "$TAG_NAME" \
+              --title "$TAG_NAME" \
+              --draft=false \
+              --prerelease="$prerelease"
+          else
+            create_args=("$TAG_NAME" --verify-tag --generate-notes --title "$TAG_NAME")
+            if [[ "$prerelease" == true ]]; then
+              create_args+=(--prerelease)
+            fi
+            gh release create "${create_args[@]}"
+          fi
+
+          gh release upload "$TAG_NAME" "$archive" "$checksum" --clobber

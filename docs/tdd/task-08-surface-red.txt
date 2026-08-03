@@ -1,0 +1,32 @@
+Task 8 embedded surface manager RED (macOS, 2026-07-21)
+
+The fake surface/factory tests and their CMake target were added before the
+production interface or implementation. The direct x86_64 compile command:
+
+  arch -x86_64 clang++ -std=c++17 -Iinclude \
+    -c tests/unit/embedded_surface_manager_test.cpp \
+    -o /tmp/canvas_embedded_surface_manager_test.o
+
+failed as expected with exit code 1:
+
+  fatal error: 'canvas/embed/embedded_surface.h' file not found
+
+This verifies the test target was RED because the requested production API was
+missing, rather than because of the repository's unavailable Skia dependency.
+
+Follow-up review regression (after the initial 8-test implementation) added
+`ActiveRichTextIsNeverLive`. Running that focused test against the old manager
+also reproduced the bug with exit code 1:
+
+  Expected factory.createCalls == 0, which was 1
+  Expected manager.liveCount() == 0, which was 1
+
+The failure identified the overly broad old condition that treated any active
+embedded kind as live.
+
+A second follow-up regression added
+`SetterExceptionDoesNotLeaveNewOrStaleSurfaces`. Against the old implementation
+the focused direct run failed with exit code 1: after a new surface setter
+threw, `liveCount` was 3 instead of 1, and neither the stale nor failed-new
+surface had been destroyed. This demonstrated that cleanup at the end of
+`sync` and emplacing before setters were both unsafe under exceptions.

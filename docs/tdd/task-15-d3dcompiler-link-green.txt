@@ -1,0 +1,34 @@
+D3D compiler link dependency green phase (2026-07-25)
+
+Added d3dcompiler as a PRIVATE link dependency of the STATIC
+canvas_windows_platform target. PRIVATE is the narrow semantic scope: no
+public header or consumer compilation requires D3DCompiler declarations.
+For a static library, CMake retains such implementation link dependencies in
+INTERFACE_LINK_LIBRARIES as $<LINK_ONLY:d3dcompiler>. Consequently the app and
+every test executable linking canvas::windows_platform receive
+d3dcompiler.lib on their final link line without inheriting compile usage
+requirements.
+
+PUBLIC would also place the library on consumer link lines, but would describe
+it as a public usage requirement rather than a link-only implementation
+dependency. Adding it directly to canvas_windows would not cover the Windows
+test executables.
+
+Added a Windows configure-time contract in tests/CMakeLists.txt that reads the
+real canvas_windows_platform INTERFACE_LINK_LIBRARIES target property and
+requires the exact $<LINK_ONLY:d3dcompiler> entry. This verifies both the
+dependency's owner and CMake's STATIC/PRIVATE propagation semantics before any
+Windows test targets are generated.
+
+Local static checks:
+
+  rg -n 'd3dcompiler|LINK_ONLY:d3dcompiler' CMakeLists.txt tests/CMakeLists.txt
+  git diff --check
+
+Result: passed. An isolated CMake 3.21-compatible configure probe using the
+same STATIC target plus PRIVATE d3dcompiler declaration also reported:
+
+  interface links: $<LINK_ONLY:d3dcompiler>
+
+The final MSVC link and full test suite remain pending the next Windows CI
+run.

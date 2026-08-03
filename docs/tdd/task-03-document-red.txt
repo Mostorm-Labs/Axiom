@@ -1,0 +1,17 @@
+Task 3 document model TDD evidence (RED)
+
+Environment: macOS AppleClang 17, CMake 3.21+, C++17.
+
+Commands:
+
+    cmake -S . -B out/build/task-03-red -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+    cmake --build out/build/task-03-red --target canvas_document_test --parallel
+
+The configure step succeeded. The target build failed as expected before any
+document headers or implementation existed:
+
+    fatal error: 'canvas/document/document.h' file not found
+    make[3]: *** [tests/CMakeFiles/canvas_document_test.dir/unit/document_test.cpp.o] Error 1
+    make: *** [canvas_document_test] Error 2
+
+Status: RED confirmed (exit code 2).

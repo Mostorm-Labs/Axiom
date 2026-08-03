@@ -1,0 +1,17 @@
+Task 15 red phase (2026-07-24)
+
+Added tests/unit/ipc_protocol_test.cpp for the authenticated versioned
+command envelope, direction allowlists, raw-pointer rejection, framing limits,
+bounded outbound encoding, and authenticated client-session sequencing.
+
+Replayed against baseline bb81855 before the IPC implementation files:
+
+  clang++ -std=c++17 -I<baseline>/include \
+      -c tests/unit/ipc_protocol_test.cpp
+
+Observed failure:
+
+  fatal error: 'canvas/ipc/protocol.h' file not found
+
+MSVC, Windows CTest, named-pipe, WebView2, and Electron/native runtime checks
+were intentionally not run on this macOS host.

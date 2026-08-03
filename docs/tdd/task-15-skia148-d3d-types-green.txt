@@ -1,0 +1,28 @@
+Skia 148 D3D resource type green phase (2026-07-25)
+
+Added the public Skia header include/gpu/ganesh/d3d/GrD3DTypes.h directly to
+skia_swap_chain_layer.cpp. This is the header that owns the complete
+GrD3DTextureResourceInfo definition in the locked Skia 148 source. The change
+does not alter construction, resource ownership, rendering, or presentation
+logic.
+
+Exact-header syntax probe, using Skia commit
+e7c90ecca9444fe09598f1630ab7cee2c0ee027a:
+
+  clang++ -std=c++17 -Wall -Wextra -Wpedantic -Werror -fsyntax-only \
+      -Iout/probes/skia148-d3d-sdk -isystem /tmp/canvas-skia148 -x c++ -
+
+Probe body:
+
+  #include "include/gpu/ganesh/d3d/GrD3DBackendSurface.h"
+  #include "include/gpu/ganesh/d3d/GrD3DTypes.h"
+  static_assert(sizeof(GrD3DTextureResourceInfo) > 0);
+
+Result: passed with no diagnostics. The local SDK declarations only supply
+the small set of D3D names required to parse this exact public header. The
+full Windows translation unit, linkage, and tests remain pending Windows CI
+with the real Windows SDK and vcpkg Skia package.
+
+  git diff --check
+
+Result: passed.
