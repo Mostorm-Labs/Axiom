@@ -16,7 +16,7 @@ jobs:
     runs-on: macos-14
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
-      GUI_TEST_REGEX: '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosWKWebViewSurface)\.'
+      GUI_TEST_REGEX: '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
     defaults:
       run:
         shell: bash

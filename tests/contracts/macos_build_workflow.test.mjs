@@ -42,6 +42,7 @@ test("macOS workflow validates Node and vcpkg inputs before configure", () => {
 });
 
 test("GUI and Metal tests are explicit required gates", () => {
+  assert.match(workflow, /MacosMouseInput/);
   assert.match(workflow, /-E \"\$GUI_TEST_REGEX\"/);
   assert.match(workflow, /-N -R \"\$GUI_TEST_REGEX\"/);
   assert.match(workflow, /No macOS GUI\/Metal tests were discovered/);

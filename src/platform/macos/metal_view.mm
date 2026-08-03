@@ -49,6 +49,10 @@
   if (metalHost_) metalHost_->setDocument(std::move(document));
 }
 
+- (void)invalidateCanvas {
+  if (metalHost_) metalHost_->invalidate();
+}
+
 - (void)setFrameSize:(NSSize)newSize {
   [super setFrameSize:newSize];
   [self resizeDrawable];

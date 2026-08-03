@@ -26,6 +26,7 @@ class MetalRenderResources;
 
 - (void)setCanvasDocument:
     (std::shared_ptr<const canvas::document::Document>)document;
+- (void)invalidateCanvas;
 - (std::uint64_t)nativeDisplayRequestCount;
 - (std::uint64_t)committedFrameCount;
 - (BOOL)sharesRenderResourcesWithView:(CanvasMetalView*)other;

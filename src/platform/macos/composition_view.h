@@ -24,5 +24,7 @@ class Document;
 
 - (void)setCanvasDocument:
     (std::shared_ptr<const canvas::document::Document>)document;
+- (void)setEditableCanvasDocument:
+    (std::shared_ptr<canvas::document::Document>)document;
 
 @end

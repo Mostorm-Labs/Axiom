@@ -40,7 +40,7 @@
   }
   CanvasCompositionView* view =
       [[CanvasCompositionView alloc] initWithFrame:frame];
-  [view setCanvasDocument:document];
+  [view setEditableCanvasDocument:document];
   self.window.contentView = view;
   [self.window center];
   [self.window makeKeyAndOrderFront:nil];

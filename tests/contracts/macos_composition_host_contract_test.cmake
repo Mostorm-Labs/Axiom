@@ -16,10 +16,34 @@ foreach(required_header_token IN ITEMS
         "baseMetalView"
         "embeddedContainerView"
         "overlayMetalView"
-        "embeddedInteractionEnabled")
+        "embeddedInteractionEnabled"
+        "setCanvasDocument"
+        "setEditableCanvasDocument")
     string(FIND "${composition_header}" "${required_header_token}" token_position)
     if(token_position EQUAL -1)
         message(FATAL_ERROR "CanvasCompositionView is missing API: ${required_header_token}")
+    endif()
+endforeach()
+
+foreach(required_pointer_input_token IN ITEMS
+        "CanvasPointerMetalView : CanvasMetalView"
+        "canvas::macos::MacosMouseSession mouseSession_"
+        "mouseSession_.consume"
+        "mouseSession_.cancel"
+        "didProduceSample"
+        "NSApplicationWillResignActiveNotification"
+        "NSWindowDidResignKeyNotification"
+        "NSWindowWillCloseNotification"
+        "cancelOperation:"
+        "viewWillMoveToWindow:"
+        "canvas::macos::MacosWhiteboardInput"
+        "whiteboardInput_->consume(sample)"
+        "[baseMetalView_ invalidateCanvas]"
+        "[overlayMetalView_ invalidateCanvas]")
+    string(FIND "${composition_source}" "${required_pointer_input_token}" token_position)
+    if(token_position EQUAL -1)
+        message(FATAL_ERROR
+            "The macOS composition host is missing mouse-input integration: ${required_pointer_input_token}")
     endif()
 endforeach()
 
@@ -82,6 +106,7 @@ foreach(required_shared_resource_token IN ITEMS
 endforeach()
 
 if(NOT app_source MATCHES "CanvasCompositionView" OR
-   NOT app_source MATCHES "setCanvasDocument:document")
-    message(FATAL_ERROR "The macOS app must exercise the fixed composition host")
+   NOT app_source MATCHES "setEditableCanvasDocument:document")
+    message(FATAL_ERROR
+        "The macOS app must exercise the editable composition host")
 endif()

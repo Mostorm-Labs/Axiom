@@ -206,6 +206,22 @@ if(APPLE)
         canvas_macos_composition_layer_stack_test
         PROPERTIES TIMEOUT 20 ENVIRONMENT "MTL_DEBUG_LAYER=1")
 
+    add_executable(canvas_macos_mouse_input_test
+                   integration/macos_mouse_input_test.mm)
+    target_include_directories(canvas_macos_mouse_input_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_mouse_input_test
+                          PRIVATE canvas::macos_platform
+                                  canvas::core
+                                  GTest::gtest_main)
+    target_compile_options(canvas_macos_mouse_input_test PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_mouse_input_test)
+    gtest_discover_tests(
+        canvas_macos_mouse_input_test
+        PROPERTIES TIMEOUT 20 RUN_SERIAL TRUE
+                   ENVIRONMENT "MTL_DEBUG_LAYER=1")
+
     add_executable(canvas_macos_wkwebview_surface_test
                    integration/macos_wkwebview_surface_test.mm)
     target_include_directories(canvas_macos_wkwebview_surface_test

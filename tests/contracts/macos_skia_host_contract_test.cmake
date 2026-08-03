@@ -59,8 +59,9 @@ if(draw_layer GREATER flush_surface OR flush_surface GREATER submit_context OR
     message(FATAL_ERROR "Skia draw/flush/submit must finish before the drawable is presented")
 endif()
 
-if(NOT app_source MATCHES "setCanvasDocument:document")
-    message(FATAL_ERROR "The AppKit vertical slice must bind an actual Document to MetalHost")
+if(NOT app_source MATCHES "setEditableCanvasDocument:document")
+    message(FATAL_ERROR
+        "The AppKit vertical slice must bind an editable Document to MetalHost")
 endif()
 
 foreach(required_view_token IN ITEMS
