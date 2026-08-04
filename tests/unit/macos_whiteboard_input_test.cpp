@@ -14,15 +14,26 @@ namespace {
 
 constexpr float kStrokeWidth = 4.0F;
 
-input::PointerSample mouse(std::uint64_t pointerId,
-                           input::PointerPhase phase, float x, float y) {
+input::PointerSample pointer(input::PointerKind kind,
+                             std::uint64_t pointerId,
+                             input::PointerPhase phase, float x, float y) {
   input::PointerSample sample;
   sample.pointerId = pointerId;
   sample.timestampMicros = static_cast<std::uint64_t>(x + y + 100.0F);
   sample.screenPosition = {x, y};
-  sample.kind = input::PointerKind::Mouse;
+  sample.kind = kind;
   sample.phase = phase;
   return sample;
+}
+
+input::PointerSample mouse(std::uint64_t pointerId,
+                           input::PointerPhase phase, float x, float y) {
+  return pointer(input::PointerKind::Mouse, pointerId, phase, x, y);
+}
+
+input::PointerSample pen(std::uint64_t pointerId,
+                         input::PointerPhase phase, float x, float y) {
+  return pointer(input::PointerKind::Pen, pointerId, phase, x, y);
 }
 
 document::Node embedded(std::string id, core::Rect bounds) {
@@ -170,11 +181,11 @@ TEST(MacosWhiteboardInputTest, SelectAndInteractNeverCreateMouseStrokes) {
   EXPECT_TRUE(document->nodes().empty());
 }
 
-TEST(MacosWhiteboardInputTest, RejectsNonMouseAndNonFiniteSamples) {
+TEST(MacosWhiteboardInputTest, RejectsTouchAndNonFiniteSamples) {
   auto document = std::make_shared<document::Document>();
   MacosWhiteboardInput controller(document);
-  auto pen = mouse(1, input::PointerPhase::Down, 1, 2);
-  pen.kind = input::PointerKind::Pen;
+  auto touch = mouse(1, input::PointerPhase::Down, 1, 2);
+  touch.kind = input::PointerKind::Touch;
   auto nonFinitePosition = mouse(2, input::PointerPhase::Down, 1, 2);
   nonFinitePosition.screenPosition.x =
       std::numeric_limits<float>::quiet_NaN();
@@ -186,7 +197,7 @@ TEST(MacosWhiteboardInputTest, RejectsNonMouseAndNonFiniteSamples) {
   auto excessivePressure = mouse(6, input::PointerPhase::Down, 1, 2);
   excessivePressure.pressure = 1.01F;
 
-  EXPECT_EQ(controller.consume(pen).kind,
+  EXPECT_EQ(controller.consume(touch).kind,
             MacosWhiteboardInputResultKind::Ignored);
   EXPECT_EQ(controller.consume(nonFinitePosition).kind,
             MacosWhiteboardInputResultKind::Ignored);
@@ -210,6 +221,53 @@ TEST(MacosWhiteboardInputTest, RejectsNonMouseAndNonFiniteSamples) {
   EXPECT_TRUE(controller.active());
   ASSERT_EQ(document->nodes().size(), 1U);
   EXPECT_EQ(stroke(document->nodes().front()).points.size(), 1U);
+}
+
+TEST(MacosWhiteboardInputTest,
+     AcceptsPenButNeverCrossesPointerKindForSameId) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+
+  auto predictedPen = pen(9, input::PointerPhase::Down, 1, 2);
+  predictedPen.predicted = true;
+  EXPECT_EQ(controller.consume(predictedPen).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  ASSERT_EQ(controller.consume(pen(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  EXPECT_EQ(controller.consume(mouse(1, input::PointerPhase::Move, 30, 40)).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(mouse(1, input::PointerPhase::Cancel, 30, 40)).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_TRUE(controller.active());
+  EXPECT_EQ(controller.consume(pen(1, input::PointerPhase::Move, 30, 40)).kind,
+            MacosWhiteboardInputResultKind::Changed);
+  EXPECT_EQ(controller.consume(pen(1, input::PointerPhase::Cancel, 30, 40)).kind,
+            MacosWhiteboardInputResultKind::Cancelled);
+  EXPECT_FALSE(controller.active());
+  EXPECT_TRUE(document->nodes().empty());
+}
+
+TEST(MacosWhiteboardInputTest, PenBeginsOnlyInDrawMode) {
+  auto document = std::make_shared<document::Document>();
+  MacosWhiteboardInput controller(document);
+
+  EXPECT_EQ(controller.setMode(input::InputMode::Select).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(pen(1, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.setMode(input::InputMode::Interact).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(pen(2, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_FALSE(controller.active());
+  EXPECT_TRUE(document->nodes().empty());
+
+  EXPECT_EQ(controller.setMode(input::InputMode::Draw).kind,
+            MacosWhiteboardInputResultKind::Ignored);
+  EXPECT_EQ(controller.consume(pen(3, input::PointerPhase::Down, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Began);
+  EXPECT_EQ(controller.consume(pen(3, input::PointerPhase::Cancel, 10, 20)).kind,
+            MacosWhiteboardInputResultKind::Cancelled);
 }
 
 TEST(MacosWhiteboardInputTest, IgnoresOrphanAndMismatchedPhasesSafely) {

@@ -33,14 +33,17 @@ MacosWhiteboardInput::MacosWhiteboardInput(
     std::shared_ptr<document::Document> document)
     : document_(std::move(document)) {
   // Mouse drawing remains disabled by default in the shared router. Only this
-  // macOS mouse controller opts in, preserving existing Windows behavior.
+  // macOS controller opts in, preserving existing Windows behavior. Pen keeps
+  // the shared router's existing annotation-first policy.
   router_.setMouseDrawEnabled(true);
 }
 
 bool MacosWhiteboardInput::isAcceptedSample(
     const input::PointerSample& sample) noexcept {
+  const bool acceptedKind = sample.kind == input::PointerKind::Mouse ||
+                            sample.kind == input::PointerKind::Pen;
   return sample.pointerId != 0 &&
-         sample.kind == input::PointerKind::Mouse && !sample.predicted &&
+         acceptedKind && !sample.predicted &&
          std::isfinite(sample.screenPosition.x) &&
          std::isfinite(sample.screenPosition.y) &&
          std::isfinite(sample.pressure) && sample.pressure >= 0.0F &&
@@ -106,7 +109,10 @@ MacosWhiteboardInputResult MacosWhiteboardInput::consume(
     if (active_) return {};
     return begin(sample);
   }
-  if (!active_ || active_->pointerId != sample.pointerId) return {};
+  if (!active_ || active_->pointerId != sample.pointerId ||
+      active_->kind != sample.kind) {
+    return {};
+  }
 
   switch (sample.phase) {
     case input::PointerPhase::Move:
@@ -124,10 +130,14 @@ MacosWhiteboardInputResult MacosWhiteboardInput::consume(
 MacosWhiteboardInputResult MacosWhiteboardInput::begin(
     const input::PointerSample& sample) {
   if (!document_) return {};
+  if (sample.kind == input::PointerKind::Pen &&
+      mode_ != input::InputMode::Draw) {
+    return {};
+  }
 
   const auto hitEmbedded = topmostEmbeddedHit(sample.screenPosition);
   const input::RouteResult route =
-      router_.route(input::PointerKind::Mouse, hitEmbedded);
+      router_.route(sample.kind, hitEmbedded);
   if (route.target != input::InputTarget::BaseCanvas &&
       route.target != input::InputTarget::Annotation) {
     return {};
@@ -145,7 +155,7 @@ MacosWhiteboardInputResult MacosWhiteboardInput::begin(
     return failed;
   }
 
-  active_.emplace(sample.pointerId, std::move(*nodeId), layer,
+  active_.emplace(sample.pointerId, sample.kind, std::move(*nodeId), layer,
                   route.parentId, kStrokeWidth);
   active_->builder.begin(sample);
   active_->bounds = core::Rect::fromPoints(sample.screenPosition,

@@ -2,6 +2,7 @@
 
 #include "platform/macos/macos_mouse_session.h"
 #include "platform/macos/macos_tablet_input.h"
+#include "platform/macos/macos_tablet_pointer_bridge.h"
 #include "platform/macos/macos_whiteboard_input.h"
 #include "platform/macos/metal_host.h"
 #include "platform/macos/metal_view.h"
@@ -133,8 +134,8 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
 @property(nonatomic, weak) id<CanvasPointerMetalViewDelegate>
     pointerInputDelegate;
 - (canvas::macos::MacosMouseSessionOutput)takeMouseCancellationOutput;
-- (void)cancelActiveMouseSession;
-- (void)resetTabletSession;
+- (canvas::macos::MacosTabletSessionOutput)takeTabletCancellationOutput;
+- (void)cancelActivePointerSessions;
 @end
 
 @implementation CanvasPointerMetalView {
@@ -164,7 +165,7 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
                   object:nil
                    queue:nil
               usingBlock:^(NSNotification*) {
-                [weakSelf cancelActiveMouseSession];
+                [weakSelf cancelActivePointerSessions];
               }];
   windowResignObserver_ = [center
       addObserverForName:NSWindowDidResignKeyNotification
@@ -173,7 +174,7 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
               usingBlock:^(NSNotification* notification) {
                 CanvasPointerMetalView* view = weakSelf;
                 if (view != nil && notification.object == view.window) {
-                  [view cancelActiveMouseSession];
+                  [view cancelActivePointerSessions];
                 }
               }];
   windowCloseObserver_ = [center
@@ -183,7 +184,7 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
               usingBlock:^(NSNotification* notification) {
                 CanvasPointerMetalView* view = weakSelf;
                 if (view != nil && notification.object == view.window) {
-                  [view cancelActiveMouseSession];
+                  [view cancelActivePointerSessions];
                 }
               }];
   return self;
@@ -191,7 +192,7 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
 
 - (void)dealloc {
   requireAppKitMainThread();
-  [self cancelActiveMouseSession];
+  [self cancelActivePointerSessions];
   NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
   if (applicationResignObserver_ != nil) {
     [center removeObserver:applicationResignObserver_];
@@ -214,6 +215,19 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
   if (delegate == nil) return;
   for (std::size_t index = 0; index < output.size(); ++index) {
     [delegate canvasPointerMetalView:self didProduceSample:output[index]];
+  }
+}
+
+- (void)dispatchTabletOutput:
+    (const canvas::macos::MacosTabletSessionOutput&)output {
+  const canvas::macos::MacosTabletPointerOutput pointerOutput =
+      canvas::macos::MacosTabletPointerBridge::convertOutput(output);
+  __strong id<CanvasPointerMetalViewDelegate> delegate =
+      self.pointerInputDelegate;
+  if (delegate == nil) return;
+  for (std::size_t index = 0; index < pointerOutput.size(); ++index) {
+    [delegate canvasPointerMetalView:self
+                    didProduceSample:pointerOutput[index]];
   }
 }
 
@@ -242,16 +256,19 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
       // tablet event is consumed and before this method returns early.
       const auto mouseCancellation = [self takeMouseCancellationOutput];
       [self dispatchOutput:mouseCancellation];
-      // Tablet output remains fail-closed until it can be represented without
-      // losing tool identity or scaled tilt in PointerSample.
-      (void)tabletSession_.consumePoint(rawTabletPointEvent(
-          self, event, canvas::macos::MacTabletPointSource::AssociatedMouse,
-          phase));
+      const auto associatedTabletOutput =
+          tabletSession_.consumePoint(rawTabletPointEvent(
+              self, event,
+              canvas::macos::MacTabletPointSource::AssociatedMouse, phase));
+      [self dispatchTabletOutput:associatedTabletOutput];
       return YES;
     }
-    case NSEventSubtypeTabletProximity:
-      (void)tabletSession_.consumeProximity(rawTabletProximityEvent(event));
+    case NSEventSubtypeTabletProximity: {
+      const auto associatedProximityOutput =
+          tabletSession_.consumeProximity(rawTabletProximityEvent(event));
+      [self dispatchTabletOutput:associatedProximityOutput];
       return YES;
+    }
     default:
       return NO;
   }
@@ -262,10 +279,10 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
   if ([self consumeTabletMouseEvent:event
                               phase:canvas::macos::MacTabletPointPhase::Down])
     return;
-  // An ordinary mouse Down begins a new modality epoch. Tablet contacts and
-  // their profiles are discarded so later native updates cannot rejoin a
-  // pre-mouse contact.
-  [self resetTabletSession];
+  // An ordinary mouse Down begins a new modality epoch. Eligible tablet
+  // cancellation must reach the controller before the mouse session starts.
+  const auto tabletCancellation = [self takeTabletCancellationOutput];
+  [self dispatchTabletOutput:tabletCancellation];
   [self consumeEvent:event phase:canvas::macos::MacMousePhase::Down];
 }
 
@@ -290,9 +307,12 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
     [super tabletPoint:event];
     return;
   }
-  (void)tabletSession_.consumePoint(rawTabletPointEvent(
-      self, event, canvas::macos::MacTabletPointSource::NativeTabletPoint,
-      canvas::macos::MacTabletPointPhase::NativeUpdate));
+  const auto nativeTabletOutput =
+      tabletSession_.consumePoint(rawTabletPointEvent(
+          self, event,
+          canvas::macos::MacTabletPointSource::NativeTabletPoint,
+          canvas::macos::MacTabletPointPhase::NativeUpdate));
+  [self dispatchTabletOutput:nativeTabletOutput];
 }
 
 - (void)tabletProximity:(NSEvent*)event {
@@ -302,23 +322,22 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
     [super tabletProximity:event];
     return;
   }
-  (void)tabletSession_.consumeProximity(rawTabletProximityEvent(event));
+  const auto nativeProximityOutput =
+      tabletSession_.consumeProximity(rawTabletProximityEvent(event));
+  [self dispatchTabletOutput:nativeProximityOutput];
 }
 
 - (void)cancelOperation:(id)sender {
   (void)sender;
-  [self cancelActiveMouseSession];
+  [self cancelActivePointerSessions];
 }
 
-- (void)cancelActiveMouseSession {
-  [self resetTabletSession];
-  const auto output = [self takeMouseCancellationOutput];
-  [self dispatchOutput:output];
-}
-
-- (void)resetTabletSession {
+- (void)cancelActivePointerSessions {
   requireAppKitMainThread();
-  (void)tabletSession_.reset();
+  const auto tabletCancellation = [self takeTabletCancellationOutput];
+  [self dispatchTabletOutput:tabletCancellation];
+  const auto mouseCancellation = [self takeMouseCancellationOutput];
+  [self dispatchOutput:mouseCancellation];
 }
 
 - (canvas::macos::MacosMouseSessionOutput)takeMouseCancellationOutput {
@@ -331,9 +350,14 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
   return output;
 }
 
+- (canvas::macos::MacosTabletSessionOutput)takeTabletCancellationOutput {
+  requireAppKitMainThread();
+  return tabletSession_.reset();
+}
+
 - (void)viewWillMoveToWindow:(NSWindow*)newWindow {
   if (self.window != nil && newWindow != self.window) {
-    [self cancelActiveMouseSession];
+    [self cancelActivePointerSessions];
   }
   [super viewWillMoveToWindow:newWindow];
 }
@@ -418,15 +442,22 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
   requireAppKitMainThread();
   CanvasPointerMetalView* pointerView =
       (CanvasPointerMetalView*)overlayMetalView_;
-  canvas::macos::MacosMouseSessionOutput cancellation;
+  canvas::macos::MacosTabletSessionOutput tabletCancellation;
+  canvas::macos::MacosMouseSessionOutput mouseCancellation;
   if (pointerView != nil) {
     pointerView.pointerInputDelegate = nil;
-    [pointerView resetTabletSession];
-    cancellation = [pointerView takeMouseCancellationOutput];
+    tabletCancellation = [pointerView takeTabletCancellationOutput];
+    mouseCancellation = [pointerView takeMouseCancellationOutput];
   }
   if (whiteboardInput_) {
-    for (std::size_t index = 0; index < cancellation.size(); ++index) {
-      (void)whiteboardInput_->consume(cancellation[index]);
+    const canvas::macos::MacosTabletPointerOutput tabletPointers =
+        canvas::macos::MacosTabletPointerBridge::convertOutput(
+            tabletCancellation);
+    for (std::size_t index = 0; index < tabletPointers.size(); ++index) {
+      (void)whiteboardInput_->consume(tabletPointers[index]);
+    }
+    for (std::size_t index = 0; index < mouseCancellation.size(); ++index) {
+      (void)whiteboardInput_->consume(mouseCancellation[index]);
     }
     if (whiteboardInput_->active()) {
       (void)whiteboardInput_->setMode(canvas::input::InputMode::Interact);
@@ -505,7 +536,7 @@ canvas::macos::RawMacTabletProximityEvent rawTabletProximityEvent(
 }
 
 - (void)cancelPointerInput {
-  [(CanvasPointerMetalView*)overlayMetalView_ cancelActiveMouseSession];
+  [(CanvasPointerMetalView*)overlayMetalView_ cancelActivePointerSessions];
 }
 
 - (void)canvasPointerMetalView:(CanvasPointerMetalView*)view

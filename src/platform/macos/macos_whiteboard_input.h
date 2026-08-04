@@ -52,16 +52,19 @@ class MacosWhiteboardInput {
 
  private:
   struct ActiveStroke {
-    ActiveStroke(std::uint64_t pointer, document::NodeId id,
+    ActiveStroke(std::uint64_t pointer, input::PointerKind pointerKind,
+                 document::NodeId id,
                  document::LayerClass strokeLayer,
                  std::optional<document::NodeId> parent, float width)
         : pointerId(pointer),
+          kind(pointerKind),
           nodeId(std::move(id)),
           layer(strokeLayer),
           parentId(std::move(parent)),
           builder(width) {}
 
     std::uint64_t pointerId = 0;
+    input::PointerKind kind = input::PointerKind::Pen;
     document::NodeId nodeId;
     document::LayerClass layer = document::LayerClass::Base;
     std::optional<document::NodeId> parentId;
