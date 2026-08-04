@@ -224,7 +224,7 @@ Task 23C 的关键自动化语义：
 - read-only setter 不接受 mouse mutation；editable Document replacement 先取消旧 preview。
 - App/window resign、window close、detach、Interact mode、重复/孤立/右键事件均有自动化边界。
 
-Task 23C 的本地复审结果：pointer/session/controller 37/37，`MacosMouseInput.*` 11/11，重复 3 轮稳定通过，workflow contract 4/4，non-GUI 207/207，GUI/Metal 21/21；Hosted 历史证据见第 5.3 节。
+Task 23C 的本地复审结果：pointer/session/controller 37/37，`MacosMouseInput.*` 11/11，重复 3 轮稳定通过，workflow contract 4/4，non-GUI 207/207，GUI/Metal 21/21；Hosted 历史证据见第 5.2 节末尾。
 
 Task 23D commit `637ca6c`（`feat: add macOS tablet input seam`）已完成独立 review。初审发现 associated tablet point 可能遗留旧 ordinary-mouse preview 的跨 modality P1；修复为先 dispatch Mouse Cancel 再消费 tablet sample，并在 ordinary Mouse Down 前 reset tablet epoch。同一 reviewer 复审 PASS，无剩余 P0/P1/P2。该审查与 RED/GREEN 命令已持久化在 `docs/tdd/task-23d-macos-tablet-seam-green.txt`，不是虚构的 GitHub PR Review。
 
