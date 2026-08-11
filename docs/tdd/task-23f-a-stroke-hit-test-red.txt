@@ -1,0 +1,129 @@
+Task 23F-A allocation-free stroke sweep hit-test RED evidence
+Date: 2026-08-04 (Asia/Shanghai)
+Baseline commit: 4c49a823ab276856eb9297849e493496a54dff2e
+
+RED setup:
+  A public pure-C++ query contract and deliberately inert implementation were
+  registered with tests for layer/z-order priority, world capsule geometry,
+  current parent-normalized geometry, stable identity tokens, invalid input,
+  and explicit bounded work. The query result distinguishes Hit, NoHit,
+  InvalidQuery, and BudgetExhausted and never returns a NodeId copy.
+
+Commands and observed results:
+  cmake --preset macos-arm64
+    PASS: configure and test discovery completed.
+
+  cmake --build --preset macos-arm64-release \
+    --target canvas_stroke_hit_test --parallel 4
+    PASS: the inert seam and RED test executable compiled and linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^(StrokeHitTest\.|canvas_stroke_hit_test_source_contract$)' \
+    --output-on-failure
+    RED: 4/16 passed and 12/16 failed.
+
+  Expected failures proved the following production behavior was absent:
+    - Annotation-before-Base and reverse z-order hit selection;
+    - stable node-index/cache-identity/layer tokens;
+    - world segment sweep, single-point, true half-width capsule, and huge
+      finite-coordinate handling;
+    - current moved/anisotropic parent-normalized geometry and normalized
+      points outside parent bounds;
+    - explicit InvalidQuery and BudgetExhausted results;
+    - counted node traversal, parent lookup, and stroke primitive work;
+    - fail-closed discard when a candidate hit is only partially inspected;
+    - positive work accounting for an ample-budget NoHit.
+
+  Four safety controls passed while the implementation was inert:
+    - Embedded/Chrome layers and EmbeddedNode/Unknown payloads were not hits;
+    - invalid world geometry and a missing annotation parent were not hits;
+    - overflowing parent-normalized mapping did not throw or fabricate a hit;
+    - the source contract found no dynamic container, allocation, exception,
+      IPC/Electron, Skia, or platform dependency in the inert seam.
+
+Subsequent numerical-hardening RED:
+  After the initial implementation, the focused suite had reached 16/16.
+  TinyPerpendicularSegmentsDoNotBecomeFalselyParallel was then added and run
+  alone before its fix. It failed 0/1 because the scale-independent parallel
+  tolerance collapsed a very short perpendicular crossing into the parallel
+  path. The scale-relative tolerance fix made that regression pass, bringing
+  the focused suite plus source contract to 17/17.
+
+Independent-review RED after the apparent 17/17 GREEN:
+  The reviewer identified additional scale and coordinate-semantics gaps.
+  Five behavior regressions were added without changing production code, then
+  run with:
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -R '^StrokeHitTest\.(LongShallowCrossingSegmentsRemainAHit|ExtremeInteriorCrossingIsNotClampedToAnEndpoint|LargeGeneralSkewIntersectionRemainsAHit|ParentNormalizedLargeOriginMatchesRenderedFloatCoordinates|ZeroBudgetDistinguishesEmptyFromUninspectableDocument)$'
+    RED: 0/5 passed and 5/5 failed.
+
+  These failures proved the apparent GREEN still lacked:
+    - reliable intersection detection for long shallow, tiny interior-
+      parameter, and general large-scale crossing segments;
+    - ParentNormalized world coordinates rounded exactly as the float renderer
+      sees them at a large parent origin; and
+    - a NoHit result for an empty document whose zero budget is never spent.
+
+Same-reviewer degenerate-path RED:
+  During re-review, two more regressions were added before changing production
+  code and run with:
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -R '^StrokeHitTest\.(ExtremeSinglePointOnSweepHasExactlyZeroDistance|ExtremeDegenerateSweepOnStrokeHasZeroDistanceButOutsideDoesNot)$'
+    RED: 0/2 passed and 2/2 failed.
+
+  A finite float point strictly inside an extreme collinear segment has exact
+  distance zero, but projection-and-reconstruction lost roughly 1e22 world
+  units in both the single-point-stroke and degenerate-sweep paths. The second
+  regression also carries a collinear-outside control that must remain NoHit.
+
+  The reviewer then supplied a non-collinear boundary case, added and run
+  before the primitive was changed:
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -R '^StrokeHitTest\.ExtremeParallelCapsuleBoundaryRemainsInclusive$'
+    RED: 0/1 passed and 1/1 failed.
+
+  Its two sweep endpoints project inside an extreme horizontal stroke and are
+  exactly one world unit away, equal to the true half-width. Reconstructing a
+  closest point introduced a large tangential error and violated the inclusive
+  capsule boundary, proving exact point-on-segment alone would be insufficient.
+
+Same-reviewer renderer-float-boundary RED:
+  Formal re-review found that double real-value overflow prechecks could be
+  stricter than the renderer's actual binary32 expressions. Two public API
+  regressions were added before changing production code and run with:
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -R '^StrokeHitTest\.ParentNormalized(Width|Point)MatchesFiniteRendererFloatRoundingAtMaximum$'
+    RED: 0/2 passed and 2/2 failed.
+
+  Both cases use the finite float operands 1.0034993886947632F and
+  3.390957242646672e38F. Their exact real product is slightly greater than
+  FLT_MAX, while the renderer's float multiplication legally rounds to the
+  finite FLT_MAX value. One regression covers resolved stroke width and the
+  other covers a mapped point at the float maximum. The hit-test rejected both
+  before evaluating the renderer-equivalent float result.
+
+Same-reviewer renderer-hairline RED:
+  Re-review then covered the opposite rounding boundary. A positive finite
+  normalized width of 0.25F multiplied by a positive finite parent extent of
+  std::numeric_limits<float>::denorm_min() rounds to +0.0F. Skia defines a zero
+  stroke width as a visible hairline, but the hit-test discarded the stroke.
+  A public API regression with exact-center, eraser-radius boundary, and
+  outside-radius controls was added before changing production code and run:
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -R '^StrokeHitTest\.ParentNormalizedWidthUnderflowMatchesRendererHairlineCenterline$'
+    RED: 0/1 passed and 1/1 failed. The exact-center and inclusive-radius
+    assertions failed, while the outside-radius NoHit control remained correct.
+
+Evidence boundary:
+  This RED phase covers only a read-only platform-neutral query. It does not
+  delete or restore nodes, implement an eraser controller, dispatch AppKit
+  tablet events, provide undo/redo, establish a spatial index, or validate
+  physical eraser hardware or latency.
+
+Status: every behavior change above was covered by a failing public API test
+before its corresponding production fix.

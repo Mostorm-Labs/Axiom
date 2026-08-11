@@ -6,6 +6,10 @@ endif()
 
 project(canvas VERSION 0.1.0 LANGUAGES CXX)
 
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 if(WIN32)
     # Keep the Win32 min/max macros out of every first-party translation unit.
     # This directory-level policy also reaches app/windows and tests, including
@@ -27,6 +31,7 @@ include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
 add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp
+            src/document/stroke_hit_test.cpp
             src/app/embedded_load_batch.cpp
             src/app/embedded_load_completion_inbox.cpp
             src/app/embedded_document_open_coordinator.cpp
@@ -150,6 +155,41 @@ if(WIN32)
                 "$<TARGET_FILE_DIR:canvas_windows>/web"
         COMMENT "Synchronizing Canvas embedded web assets for this configuration"
         VERBATIM)
+endif()
+
+if(APPLE)
+    find_library(CANVAS_APPKIT_FRAMEWORK AppKit REQUIRED)
+    find_library(CANVAS_METAL_FRAMEWORK Metal REQUIRED)
+    find_library(CANVAS_QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+    find_library(CANVAS_WEBKIT_FRAMEWORK WebKit REQUIRED)
+
+    add_library(canvas_macos_platform STATIC
+                src/platform/macos/composition_view.mm
+                src/platform/macos/macos_mouse_session.cpp
+                src/platform/macos/macos_pointer_adapter.cpp
+                src/platform/macos/macos_tablet_input.cpp
+                src/platform/macos/macos_tablet_pointer_bridge.cpp
+                src/platform/macos/macos_whiteboard_input.cpp
+                src/platform/macos/metal_host.mm
+                src/platform/macos/metal_view.mm
+                src/platform/macos/wkwebview_surface.mm)
+    add_library(canvas::macos_platform ALIAS canvas_macos_platform)
+    target_include_directories(canvas_macos_platform PUBLIC
+                               ${PROJECT_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_platform PUBLIC
+                          ${CANVAS_APPKIT_FRAMEWORK}
+                          ${CANVAS_METAL_FRAMEWORK}
+                          ${CANVAS_QUARTZCORE_FRAMEWORK}
+                          ${CANVAS_WEBKIT_FRAMEWORK})
+    target_link_libraries(canvas_macos_platform PRIVATE
+                          canvas::core
+                          unofficial::skia::skia)
+    target_compile_options(canvas_macos_platform PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_platform)
+
+    # This target binds the shared C++/Skia renderer to CAMetalLayer. WebKit,
+    # network, input, and Electron control remain separate later increments.
+    add_subdirectory(app/macos)
 endif()
 
 if(BUILD_TESTING)

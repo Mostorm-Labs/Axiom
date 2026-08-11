@@ -9,8 +9,14 @@
     {
       "name": "skia",
       "default-features": false,
+      "features": ["metal", "png"],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "skia",
+      "default-features": false,
       "features": ["png"],
-      "platform": "!windows"
+      "platform": "!windows & !osx & !ios"
     },
     {
       "name": "skia",

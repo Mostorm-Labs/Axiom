@@ -1,0 +1,24 @@
+Task 23C macOS AppKit mouse drawing RED evidence
+Date: 2026-08-03 (Asia/Shanghai)
+
+Scope:
+  A new MacosMouseInput GUI suite, editable composition API, layer invalidation
+  API, CMake target, and fail-closed hosted GUI discovery were registered while
+  the editable setter and invalidation method were deliberately inert stubs.
+
+Commands:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_macos_mouse_input_test -j 4
+  node --test tests/contracts/macos_build_workflow.test.mjs
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^MacosMouseInput\.' --output-on-failure
+
+Observed result:
+  Compilation passed and the workflow contract passed 3/3. CTest exited 8:
+  five of seven GUI tests failed. No Base stroke or Embedded annotation was
+  created, so top-left coordinates, layer-specific Metal invalidation, window
+  resign cancellation, mode/detach cancellation, and editable replacement
+  cancellation were all demonstrably absent. Read-only input and orphan/right
+  mouse negative controls passed under the inert implementation.
+
+Status: RED confirmed.

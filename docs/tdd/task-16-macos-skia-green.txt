@@ -1,0 +1,71 @@
+macOS Skia/Metal vertical slice GREEN phase (2026-07-26)
+
+Historical scope note: this evidence records the Task 16 single-surface
+vertical slice. Task 19 supersedes that host architecture with fixed Base
+Metal -> embedded native-view container -> transparent Overlay Metal siblings;
+see `task-19-macos-layer-stack-green.txt` for the current verification.
+
+The arm64 macOS preset now builds the real AppKit/CAMetalLayer host against
+locked vcpkg Skia 148 with the Metal and PNG features. MetalHost creates one
+Ganesh Metal context, wraps each drawable texture as a backend render target,
+scales the shared canvas for Retina coordinates, draws Base, Annotation, and
+Chrome through SkiaRenderer, flushes/submits, and presents on the same Metal
+command queue. Rendering remains event-driven through AppKit invalidation.
+
+Authoritative local configure, build, and regression run:
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    cmake --preset macos-arm64
+
+  PATH=/opt/homebrew/bin:$PATH \
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+  VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+    cmake --build --preset macos-arm64-release --parallel
+
+  VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+    ctest --preset macos-arm64-release
+
+Result: configure, generation, and the warning-clean Release build exited 0.
+After the AppKit scheduling review correction, CTest passed 119/119 tests with
+0 failures. This includes all four Retina pixel-size/layer-plan cases, all
+eight FrameInvalidation cases, the real AppKit/CAMetalLayer scheduling and
+commit test, both macOS source contracts, and the existing renderer/document
+regression suites.
+
+The generated bundle and executable were checked with:
+
+  file out/build/macos-arm64/app/macos/canvas_macos.app/Contents/MacOS/canvas_macos
+  lipo -archs out/build/macos-arm64/app/macos/canvas_macos.app/Contents/MacOS/canvas_macos
+  plutil -p out/build/macos-arm64/app/macos/canvas_macos.app/Contents/Info.plist
+  otool -L out/build/macos-arm64/app/macos/canvas_macos.app/Contents/MacOS/canvas_macos
+
+Result: the executable is a Mach-O 64-bit arm64 binary in a valid APPL bundle
+with identifier com.mostorm.canvas; its runtime dependencies resolve to macOS
+system frameworks and libraries. A Metal-Validation launch plus window-only
+Retina screenshot verified the real first frame: a white Skia surface and the
+complete blue sample stroke. The dedicated AppKit scheduling GREEN evidence
+records the screenshot hash, pixel counts, and runtime callback/commit test.
+
+Local dependency-bootstrap qualification:
+
+Google's official CIPD host was unreachable from this workstation. The local
+configure therefore used a host-only vcpkg-tool-gn overlay packaging GN 2486,
+built and self-tested from the read-only ArthurSonzogni/gn GitHub mirror at
+commit 641ace93dd9560e75e7add0d08f77b446fbb3b78. Canvas source and CI were not
+changed to use that overlay. Direct GitHub full-index patch downloads for fmt
+and spdlog were also unreachable; their commit patches were recovered through
+the GitHub API, expanded with the exact parent/current blob ids, and accepted
+only after their SHA-512 values exactly matched the locked vcpkg portfiles.
+Skia's piex and wuffs external archives likewise came from commit-identical
+reachable GitHub mirrors and were hash-verified before the successful build.
+This proves the locked source inputs compile locally, but it is not a claim
+that the official CIPD artifact itself was exercised.
+
+The real initial Metal frame is now visually established on this Mac. Retina
+resize behavior on the macOS target remains pending macOS hardware/GUI
+validation. Separately, touch-to-visible-ink p95 below 50 ms on the Windows
+i5-1235U target display remains pending Windows hardware/GUI validation. Task
+19 has since implemented the fixed Base/container/Overlay split, but actual
+WKWebView content, input adaptation, and Electron control remain pending.

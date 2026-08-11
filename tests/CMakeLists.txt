@@ -21,6 +21,11 @@ add_test(NAME canvas_windows_atomic_open_contract
                  -DAPP_SOURCE=${CMAKE_SOURCE_DIR}/app/windows/whiteboard_app.cpp
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/windows_atomic_open_contract_test.cmake)
 
+add_test(NAME canvas_macos_pointer_seam_source_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_pointer_seam_source_contract_test.cmake)
+
 add_executable(canvas_version_test unit/version_test.cpp)
 target_link_libraries(canvas_version_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_version_test)
@@ -41,6 +46,17 @@ add_executable(canvas_document_test unit/document_test.cpp)
 target_link_libraries(canvas_document_test PRIVATE canvas::core GTest::gtest_main)
 canvas_enable_warnings(canvas_document_test)
 gtest_discover_tests(canvas_document_test)
+
+add_executable(canvas_stroke_hit_test unit/stroke_hit_test_test.cpp)
+target_link_libraries(canvas_stroke_hit_test PRIVATE canvas::core
+                      GTest::gtest_main)
+canvas_enable_warnings(canvas_stroke_hit_test)
+gtest_discover_tests(canvas_stroke_hit_test)
+
+add_test(NAME canvas_stroke_hit_test_source_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/stroke_hit_test_source_contract_test.cmake)
 
 add_executable(canvas_document_codec_test unit/document_codec_test.cpp)
 target_link_libraries(canvas_document_codec_test PRIVATE canvas::core
@@ -110,6 +126,182 @@ target_link_libraries(canvas_webview2_initial_load_seam_test
                       PRIVATE GTest::gtest_main)
 canvas_enable_warnings(canvas_webview2_initial_load_seam_test)
 gtest_discover_tests(canvas_webview2_initial_load_seam_test)
+
+add_executable(canvas_frame_invalidation_test
+               unit/frame_invalidation_test.cpp)
+target_include_directories(canvas_frame_invalidation_test
+                           PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(canvas_frame_invalidation_test PRIVATE GTest::gtest_main)
+canvas_enable_warnings(canvas_frame_invalidation_test)
+gtest_discover_tests(canvas_frame_invalidation_test)
+
+if(APPLE)
+    add_executable(canvas_macos_pointer_adapter_test
+                   unit/macos_pointer_adapter_test.cpp)
+    target_include_directories(canvas_macos_pointer_adapter_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_pointer_adapter_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_pointer_adapter_test)
+    gtest_discover_tests(canvas_macos_pointer_adapter_test)
+
+    add_executable(canvas_macos_mouse_session_test
+                   unit/macos_mouse_session_test.cpp)
+    target_include_directories(canvas_macos_mouse_session_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_mouse_session_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_mouse_session_test)
+    gtest_discover_tests(canvas_macos_mouse_session_test)
+
+    add_executable(canvas_macos_tablet_input_test
+                   unit/macos_tablet_input_test.cpp)
+    target_include_directories(canvas_macos_tablet_input_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_tablet_input_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_tablet_input_test)
+    gtest_discover_tests(canvas_macos_tablet_input_test)
+
+    add_executable(canvas_macos_tablet_pointer_bridge_test
+                   unit/macos_tablet_pointer_bridge_test.cpp
+                   integration/macos_tablet_whiteboard_input_test.cpp)
+    target_include_directories(canvas_macos_tablet_pointer_bridge_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_tablet_pointer_bridge_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_tablet_pointer_bridge_test)
+    gtest_discover_tests(canvas_macos_tablet_pointer_bridge_test)
+
+    add_executable(canvas_macos_whiteboard_input_test
+                   unit/macos_whiteboard_input_test.cpp)
+    target_include_directories(canvas_macos_whiteboard_input_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_whiteboard_input_test
+                          PRIVATE canvas::macos_platform GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_whiteboard_input_test)
+    gtest_discover_tests(canvas_macos_whiteboard_input_test)
+
+    add_executable(canvas_macos_wkwebview_navigation_seam_test
+                   unit/macos_wkwebview_navigation_seam_test.cpp)
+    target_include_directories(canvas_macos_wkwebview_navigation_seam_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_wkwebview_navigation_seam_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_wkwebview_navigation_seam_test)
+    gtest_discover_tests(canvas_macos_wkwebview_navigation_seam_test)
+
+    add_executable(canvas_macos_skia_frame_plan_test
+                   unit/macos_skia_frame_plan_test.cpp)
+    target_include_directories(canvas_macos_skia_frame_plan_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_skia_frame_plan_test
+                          PRIVATE GTest::gtest_main)
+    canvas_enable_warnings(canvas_macos_skia_frame_plan_test)
+    gtest_discover_tests(canvas_macos_skia_frame_plan_test)
+
+    add_executable(canvas_macos_appkit_frame_scheduling_test
+                   integration/macos_appkit_frame_scheduling_test.mm)
+    target_include_directories(canvas_macos_appkit_frame_scheduling_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_appkit_frame_scheduling_test
+                          PRIVATE canvas::macos_platform
+                                  canvas::core
+                                  GTest::gtest_main)
+    target_compile_options(canvas_macos_appkit_frame_scheduling_test
+                           PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_appkit_frame_scheduling_test)
+    gtest_discover_tests(
+        canvas_macos_appkit_frame_scheduling_test
+        PROPERTIES TIMEOUT 15 ENVIRONMENT "MTL_DEBUG_LAYER=1")
+
+    add_executable(canvas_macos_composition_layer_stack_test
+                   integration/macos_composition_layer_stack_test.mm)
+    target_include_directories(canvas_macos_composition_layer_stack_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_composition_layer_stack_test
+                          PRIVATE canvas::macos_platform
+                                  canvas::core
+                                  GTest::gtest_main)
+    target_compile_options(canvas_macos_composition_layer_stack_test
+                           PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_composition_layer_stack_test)
+    gtest_discover_tests(
+        canvas_macos_composition_layer_stack_test
+        PROPERTIES TIMEOUT 20 ENVIRONMENT "MTL_DEBUG_LAYER=1")
+
+    add_executable(canvas_macos_mouse_input_test
+                   integration/macos_mouse_input_test.mm)
+    target_include_directories(canvas_macos_mouse_input_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_mouse_input_test
+                          PRIVATE canvas::macos_platform
+                                  canvas::core
+                                  GTest::gtest_main)
+    target_compile_options(canvas_macos_mouse_input_test PRIVATE -fobjc-arc)
+    canvas_enable_warnings(canvas_macos_mouse_input_test)
+    gtest_discover_tests(
+        canvas_macos_mouse_input_test
+        PROPERTIES TIMEOUT 20 RUN_SERIAL TRUE
+                   ENVIRONMENT "MTL_DEBUG_LAYER=1")
+
+    add_executable(canvas_macos_wkwebview_surface_test
+                   integration/macos_wkwebview_surface_test.mm)
+    target_include_directories(canvas_macos_wkwebview_surface_test
+                               PRIVATE ${CMAKE_SOURCE_DIR}/include
+                                       ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(canvas_macos_wkwebview_surface_test
+                          PRIVATE canvas::macos_platform
+                                  canvas::core
+                                  GTest::gtest_main)
+    target_compile_options(canvas_macos_wkwebview_surface_test
+                           PRIVATE -fobjc-arc)
+    target_compile_definitions(canvas_macos_wkwebview_surface_test
+                               PRIVATE
+                               CANVAS_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    canvas_enable_warnings(canvas_macos_wkwebview_surface_test)
+    gtest_discover_tests(
+        canvas_macos_wkwebview_surface_test
+        PROPERTIES TIMEOUT 20 RUN_SERIAL TRUE
+                   ENVIRONMENT "MTL_DEBUG_LAYER=1")
+
+    # This source-level contract runs without a GPU. The runtime ownership
+    # violation deliberately terminates, so it is asserted structurally here.
+    add_test(NAME canvas_macos_metal_host_thread_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_metal_host_thread_contract_test.cmake)
+
+    add_test(NAME canvas_macos_skia_host_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_skia_host_contract_test.cmake)
+
+    add_test(NAME canvas_macos_composition_host_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_composition_host_contract_test.cmake)
+
+    add_test(NAME canvas_macos_tablet_input_source_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_tablet_input_source_contract_test.cmake)
+
+    add_test(NAME canvas_macos_wkwebview_surface_contract
+             COMMAND ${CMAKE_COMMAND}
+                     -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/macos_wkwebview_surface_contract_test.cmake)
+
+endif()
 
 add_executable(canvas_embedded_transform_test unit/embedded_transform_test.cpp)
 target_link_libraries(canvas_embedded_transform_test PRIVATE canvas::core GTest::gtest_main)

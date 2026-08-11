@@ -26,6 +26,7 @@ class InputRouter {
  public:
   void setMode(InputMode mode) { mode_ = mode; }
   void setFingerDrawEnabled(bool enabled) { fingerDrawEnabled_ = enabled; }
+  void setMouseDrawEnabled(bool enabled) { mouseDrawEnabled_ = enabled; }
   void setActiveEmbeddedNode(std::optional<document::NodeId> id) {
     activeEmbedded_ = std::move(id);
   }
@@ -37,6 +38,7 @@ class InputRouter {
  private:
   InputMode mode_ = InputMode::Draw;
   bool fingerDrawEnabled_ = false;
+  bool mouseDrawEnabled_ = false;
   std::optional<document::NodeId> activeEmbedded_;
 };
 

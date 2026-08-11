@@ -1,0 +1,96 @@
+Task 21 macOS WKWebView navigation — GREEN implementation checkpoint
+====================================================================
+
+Date: 2026-08-01 (Asia/Shanghai)
+Branch: codex/macos-platform
+
+This increment keeps the RED audit in `task-21-macos-wkwebview-navigation-red.txt`
+and adds the smallest native navigation lifecycle. `WKWebViewSurface` now has a
+private weak-delegate bridge, a fail-closed navigation policy, and a latest-wins
+initial-load tracker. Production URLs are restricted to absolute HTTPS and a
+canonical packaged `file:` root; bounded `data:text/html` is available only
+when `Options::allowTestDataUrls` is explicitly enabled. Both navigation action
+and response policy callbacks apply the same policy, including redirects and
+main-frame checks.
+
+Safety invariants
+-----------------
+
+* All public methods and delegate callbacks require the AppKit main thread.
+* A lifetime epoch invalidates callbacks on close; a separate navigation epoch
+  rejects stale re-entrant `loadRequest` returns.
+* Delegate closures hold only a `std::weak_ptr<Impl>` and the WebKit delegate
+  property remains weak; close clears the token and calls `stopLoading`.
+* At most one generation is issued. New requests replace the deferred URI and
+  stop the active load; only the latest terminal event can complete the initial
+  load, exactly once. Completion callbacks are moved before invocation and
+  exceptions are contained at the ObjC boundary.
+
+Files
+-----
+
+`src/platform/macos/wkwebview_surface.h`
+`src/platform/macos/wkwebview_surface.mm`
+`src/platform/macos/wkwebview_navigation_seam.h`
+`tests/unit/macos_wkwebview_navigation_seam_test.cpp`
+`tests/integration/macos_wkwebview_surface_test.mm`
+`tests/contracts/macos_wkwebview_surface_contract_test.cmake`
+`tests/fixtures/macos/wkwebview-ready.html`
+`tests/CMakeLists.txt`
+`README.md`
+
+Verification
+------------
+
+Configure and build verification was run from the repository root with the
+overlay ports enabled:
+
+    PATH=/opt/homebrew/bin:$PATH \
+      VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+      VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+      cmake --preset macos-arm64
+
+Configure exit: 0. The complete Release build was then run serially to avoid
+the host's gtest discovery timeout under high parallelism:
+
+    PATH=/opt/homebrew/bin:$PATH \
+      VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+      VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+      cmake --build --preset macos-arm64-release --parallel 1
+
+Full build exit: 0. An earlier parallel build encountered a five-second gtest
+discovery timeout caused by local host contention; the serial rerun completed
+successfully and is the authoritative build result.
+
+Focused build and runtime verification was also run with:
+
+    PATH=/opt/homebrew/bin:$PATH \
+      VCPKG_ROOT=/Users/qing/Documents/myself/projects/vcpkg \
+      VCPKG_OVERLAY_PORTS=/Users/qing/Documents/myself/projects/vcpkg-overlays \
+      cmake --build --preset macos-arm64-release \
+        --target canvas_macos_wkwebview_surface_test \
+                 canvas_macos_wkwebview_navigation_seam_test --parallel
+
+Build exit: 0. The changed Objective-C++ source, macOS platform static
+library, and both focused test executables linked successfully (one existing
+unused `NSError*` warning).
+
+    ctest --test-dir out/build/macos-arm64 \
+      -R 'MacosWKWebView(Surface|NavigationSeam)|canvas_macos_wkwebview_surface_contract' \
+      --output-on-failure
+
+Focused result: 12/12 passed in 1.42 s — four seam tests (#107–110), seven
+AppKit/WebKit runtime tests (#119–125), and the source contract (#165).
+
+Additional verification:
+
+* Full `ctest --test-dir out/build/macos-arm64 --output-on-failure`: 165/165
+  passed in 2.62 s after the fresh configure and serial build.
+* Objective-C++ syntax compile and `git diff --check`: passed.
+
+This is CI-style simulator/runtime evidence on the local macOS host; no real
+WKWebView GUI automation, hardware touch measurement, macOS GitHub Actions,
+or i5-1235U latency evidence is claimed.
+
+Known follow-ups remain WKWebView content synchronization, pointer/IME input,
+Electron control, macOS CI, and measured i5-1235U touch latency.

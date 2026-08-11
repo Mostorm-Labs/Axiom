@@ -15,6 +15,31 @@ Canvas is the Mostorm cross-platform collaborative whiteboard. The first milesto
 CMake restores the locked npm workspace, builds the rich-text/video assets,
 and copies them beside `canvas_windows.exe` under `web/`.
 
+## macOS prototype build
+
+The current Apple Silicon prototype hosts the shared C++ `Document` and
+`SkiaRenderer` in a fixed AppKit composition: opaque Base Metal, an embedded
+native-view container, then transparent Overlay Metal. Each `CAMetalDrawable`
+is wrapped as a Ganesh Metal render target and redraws only after an AppKit
+invalidation.
+
+1. Install Xcode and Ninja.
+2. Set `VCPKG_ROOT` to a vcpkg checkout.
+3. Run `cmake --preset macos-arm64`.
+4. Run `cmake --build --preset macos-arm64-release --parallel`.
+5. Run `ctest --preset macos-arm64-release`.
+
+The app bundle is generated under `out/build/macos-arm64/app/macos/`. Base
+draws only `Base`; Overlay draws only `Annotation` and `Chrome`; both retain
+one Metal/Skia resource group while presenting independently. The middle
+container hosts `WKWebViewSurface`, whose WebKit implementation is private and
+whose bounds are expressed in AppKit points. It supports
+attach/detach/reattach, visibility, a native hit-test gate, and a fail-closed
+latest-wins navigation lifecycle. Production navigation accepts absolute HTTPS
+and a canonical packaged `file:` root; bounded `data:text/html` is opt-in for
+deterministic tests. Input adaptation, IME, Electron control, and content
+synchronization remain later increments.
+
 ## Windows downloads
 
 Every successful pull-request or manually dispatched Windows workflow uploads

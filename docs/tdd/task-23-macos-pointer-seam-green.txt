@@ -1,0 +1,50 @@
+Task 23A macOS pointer seam GREEN evidence
+Date: 2026-08-03 (Asia/Shanghai)
+
+Implemented scope:
+  * RawMacMouseEvent is a pure C++ value type; no AppKit object is retained.
+  * MacosPointerAdapter converts flipped or unflipped view-local coordinates
+    with non-zero bounds into top-left Canvas logical points. backingScale is
+    deliberately not applied and out-of-bounds positions are not clamped.
+  * Seconds convert to microseconds with negative/NaN input mapped to zero and
+    positive overflow saturated at uint64 max.
+  * Missing or non-finite pressure defaults to 0.5; finite pressure is clamped
+    to [0, 1]. Mouse kind, zero tilt, non-predicted samples, and all four phases
+    are explicit.
+  * MacosMouseSession owns one left-button stroke at a time. IDs are non-zero
+    and monotonically increasing, Move/Up reuse the active ID, Up clears it,
+    and orphan events are ignored.
+  * Duplicate Down emits old Cancel followed by a new Down in a fixed two-slot
+    result (no per-event heap allocation). Lifecycle cancel reuses the last
+    valid sample exactly once. Raw Cancel is fail-safe and terminates an active
+    session even if its button metadata differs.
+  * The platform-neutral source contract rejects AppKit/NSEvent, IPC/JSON,
+    Electron/WebKit, named-pipe, and Windows-header dependencies and verifies
+    that Windows platform sources/target do not reference this seam.
+
+Commands and observed results:
+  cmake --preset macos-arm64
+    PASS
+
+  cmake --build --preset macos-arm64-release --parallel
+    PASS
+
+  ctest --preset macos-arm64-release \
+    -R 'Macos(PointerAdapter|MouseSession)Test|^canvas_macos_pointer_seam_source_contract$' \
+    --output-on-failure
+    PASS: 15/15 (14 behavior tests plus one source contract)
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosWKWebViewSurface)\.'
+    PASS: 184/184 non-GUI tests and source contracts
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 3/3
+
+  git diff --check
+    PASS
+
+Intentionally not covered by this increment:
+  NSView/NSEvent wiring, Document or StrokeBuilder mutation, Metal invalidation,
+  pen/touch/coalesced/predicted events, IME, Electron/native IPC, GUI/hardware
+  input validation, and end-to-end latency measurement remain pending.

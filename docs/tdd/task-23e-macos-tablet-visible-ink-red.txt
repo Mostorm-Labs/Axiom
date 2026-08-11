@@ -1,0 +1,52 @@
+Task 23E macOS tablet Pen-to-visible-ink RED evidence
+Date: 2026-08-04 (Asia/Shanghai)
+Baseline commit: 637ca6ccff5e3f8b83de1d75c6b97078aec9fdc1
+
+RED setup:
+  A deliberately inert MacosTabletPointerBridge was registered with five pure
+  conversion tests and five pure session -> bridge -> MacosWhiteboardInput ->
+  Document integration tests. The existing controller suite gained a Pen
+  acceptance and pointer-kind isolation test. The AppKit source contract was
+  extended to require synchronous tablet output dispatch and lifecycle
+  cancellation instead of Task 23D's deliberate output discard.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_macos_tablet_pointer_bridge_test \
+    canvas_macos_whiteboard_input_test -j 4
+    PASS: the inert bridge and all RED tests compiled and linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^(MacosTabletPointerBridgeTest|MacosTabletWhiteboardInputTest|MacosWhiteboardInputTest.AcceptsPen)' \
+    --output-on-failure
+    RED: 3/11 passed and 8/11 failed.
+
+  Expected failures proved the following production behavior was absent:
+    - eligible Pen conversion without inventing degree tilt;
+    - neutral 0.5 pressure when the device lacks Pressure capability;
+    - fixed-capacity filtering with eligible order preserved;
+    - one Base stroke across associated/native deduplication;
+    - parent-normalized embedded Annotation routing;
+    - proximity-leave and reset rollback of a live Pen preview;
+    - fail-closed additional Pen contact handling;
+    - MacosWhiteboardInput Pen acceptance with pointer-kind isolation.
+
+  Two safety controls already passed while the bridge was inert:
+    - Eraser/Cursor/Unknown and intent mismatches produced no pointer output;
+    - invalid supported-Pen values were rejected.
+
+  ctest --preset macos-arm64-release \
+    -R '^canvas_macos_(tablet_input_source_contract|pointer_seam_source_contract)$' \
+    --output-on-failure
+    RED: pointer purity/ownership passed; tablet integration failed because
+    the inert bridge had no Pen/Ink conversion and AppKit still discarded
+    tablet session output.
+
+Evidence boundary:
+  These are pure constructed records and source-contract checks. They do not
+  establish AppKit synthetic tablet-field fidelity, physical Pen/pressure
+  behavior, Interact-mode delivery through WKWebView hit testing, hardware
+  latency, or hosted macOS CI.
+
+Status: RED confirmed before production bridge, controller, or AppKit
+lifecycle implementation.

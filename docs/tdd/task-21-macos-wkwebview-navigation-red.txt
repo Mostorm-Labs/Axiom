@@ -1,0 +1,23 @@
+Task 21 macOS WKWebView navigation — RED checkpoint
+====================================================
+
+Date: 2026-08-01 (Asia/Shanghai)
+Branch: codex/macos-platform
+
+The next macOS increment is intentionally red before implementation. The
+current `WKWebViewSurface` only owns an attached WebKit view and geometry;
+there is no navigation policy, navigation delegate, or Ready/Failed terminal
+completion. The planned tests cover a package-root file URL, HTTPS, opt-in
+bounded `data:text/html`, and fail-closed rejection of every other scheme.
+They also cover latest-wins navigation, weak delegate ownership, close/reentry,
+and exactly-once initial-load completion. No document, manager, Electron,
+input, IME, or factory changes are part of this increment.
+
+Expected RED before implementation:
+
+    cmake --build --preset macos-arm64-release --parallel
+
+The navigation seam target and the runtime/contract targets are expected to be
+unavailable until the implementation is present. This file is retained as the
+TDD audit trail; the corresponding GREEN evidence will replace the expected
+failure with the real command output after implementation.

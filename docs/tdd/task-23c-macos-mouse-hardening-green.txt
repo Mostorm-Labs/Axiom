@@ -1,0 +1,63 @@
+Task 23C macOS mouse lifecycle hardening GREEN evidence
+Date: 2026-08-03 (Asia/Shanghai)
+Baseline commit: 5228d0293dc1778209ae9ff440cf1a2aeee71578
+
+Production fixes:
+  - MacosWhiteboardInputResult::fullRedraw now takes precedence over its
+    optional layer, so Base and Overlay are both invalidated before returning.
+  - CanvasPointerMetalView can atomically take its one cancellation output.
+    Composition teardown clears the weak delegate, takes that output, and
+    consumes it directly through the still-live controller. If session and
+    controller state are unexpectedly out of sync, setMode(Interact) rolls
+    back any remaining active controller preview. Teardown deliberately drops
+    redraw results: scheduling Metal work while the view is destructing has no
+    value and would add re-entrancy risk. Taking the session output also makes
+    later pointer-view teardown cancellation an idempotent no-op.
+  - Hosted macOS CI retains the aggregate GUI discovery check and additionally
+    discovers each of AppKit scheduling, composition, mouse input, and
+    WKWebView suites independently before running GUI tests.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --parallel 4
+    PASS: application and all test targets linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^((MacosPointerAdapterTest|MacosMouseSessionTest|MacosWhiteboardInputTest)\.|canvas_macos_pointer_seam_source_contract$)' \
+    --output-on-failure
+    PASS: 37/37.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^MacosMouseInput\.' --output-on-failure
+    PASS: 11/11.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    --repeat until-fail:3 -R '^MacosMouseInput\.' --output-on-failure
+    PASS: every one of the 11 tests passed three consecutive runs.
+
+  ctest --preset macos-arm64-release -Q --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 207/207 non-GUI tests and source contracts.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.' \
+    --output-on-failure
+    PASS: 21/21 GUI and Metal tests.
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 4/4.
+
+  Local execution of the workflow's per-suite discovery loop found:
+    MacosAppKitFrameScheduling=1
+    MacosCompositionLayerStack=2
+    MacosMouseInput=11
+    MacosWKWebViewSurface=7
+
+  git diff --check
+    PASS.
+
+Remaining validation boundary:
+  Hosted macOS CI, real mouse/touch hardware, physical latency, pen/touch,
+  coalesced/predicted input, and dirty-rectangle propagation remain separate
+  evidence or implementation work.
+
+Status: GREEN confirmed locally on Apple Silicon macOS with Metal validation.

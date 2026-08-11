@@ -1,0 +1,122 @@
+Task 23E macOS tablet Pen-to-visible-ink GREEN evidence
+Date: 2026-08-04 (Asia/Shanghai)
+Baseline commit: 637ca6ccff5e3f8b83de1d75c6b97078aec9fdc1
+
+Implemented scope:
+  - MacosTabletPointerBridge converts only a validated Pen sample whose intent
+    is Ink. EraserPending, Cursor, Unknown, intent mismatches, invalid device or
+    pointer identity, non-finite positions, and invalid supported-pressure
+    values fail closed without producing PointerSample output.
+  - The bridge uses fixed arrays and preserves the order of eligible session
+    outputs. It introduces no dynamic container, heap allocation, IPC, or
+    Electron call in the tablet hot path.
+  - A device that advertises Pressure must supply a finite normalized value.
+    A device without that capability always receives neutral pressure 0.5,
+    regardless of the raw field. Apple's scaled tilt remains in the original
+    MacosTabletSample; PointerSample degree tilt is explicitly zero/unknown
+    rather than mislabelling scaled values as degrees.
+  - MacosWhiteboardInput accepts only Mouse and Pen, continues to reject Touch,
+    unsupported kinds, and predicted input, and records the active pointer
+    kind so a same-id cross-modality sample cannot move or commit a stroke.
+    The shared InputRouter and Windows behavior are unchanged.
+  - Pen still takes the router's annotation-first path, but the macOS
+    controller explicitly permits Pen Down only in Draw mode. Pen in Select or
+    Interact fails closed before document mutation; ordinary Mouse behavior
+    remains opt-in and unchanged.
+  - CanvasPointerMetalView synchronously dispatches eligible associated and
+    native tablet point output, proximity-leave output, and reset output in
+    session order. Exact native/associated deduplication cannot create two
+    strokes, and the controller permits only one live pointer stroke.
+  - App/window resign, window close, detach, mode/document/read-only
+    replacement, ordinary-mouse switching, explicit cancellation, and
+    composition deallocation roll back an active Pen preview exactly once.
+    Composition teardown clears the weak delegate first and consumes the
+    cancellation directly without scheduling a Metal frame during destruction.
+  - Existing layer-specific invalidation remains in place, so accepted Pen
+    samples use the same PointerSample -> MacosWhiteboardInput -> Document ->
+    Metal presentation path as visible ordinary-mouse ink.
+
+Pure integration coverage:
+  - Associated/native exact deduplication commits one Base stroke with all
+    ordered pressure samples.
+  - Draw-mode Pen over an embedded surface commits parent-normalized
+    Annotation geometry.
+  - EraserPending, Cursor, and Unknown never mutate Document.
+  - Interact-mode Pen reaches the controller seam but is rejected without
+    changing Document; this is not a WKWebView runtime claim.
+  - Proximity leave and reset each cancel a live preview once, with repeated
+    cancellation idempotent.
+  - A second tablet contact is ignored and cannot cross-commit the first
+    active stroke.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --target \
+    canvas_macos_tablet_pointer_bridge_test \
+    canvas_macos_whiteboard_input_test -j 4
+    PASS: the focused bridge, integration, and controller targets linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^(MacosTabletInputTest|MacosTabletPointerBridgeTest|MacosTabletWhiteboardInputTest|MacosWhiteboardInputTest)\.' \
+    --output-on-failure
+    PASS: 45/45 tablet session, bridge, pure integration, and controller tests.
+
+  ctest --preset macos-arm64-release \
+    -R '^canvas_macos_(tablet_input_source_contract|pointer_seam_source_contract|composition_host_contract)$' \
+    --output-on-failure
+    PASS: 3/3 source-level ownership, AppKit dispatch, lifecycle, and
+    composition contracts.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^MacosMouseInput\.' --output-on-failure
+    PASS: 11/11 existing ordinary-mouse AppKit/Metal tests.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    --repeat until-fail:3 -R '^MacosMouseInput\.' --output-on-failure
+    PASS: all 11 ordinary-mouse tests passed three consecutive runs.
+
+  cmake --build --preset macos-arm64-release --parallel
+    PASS: the application and every registered test target linked.
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 231/231 non-GUI tests and source contracts.
+
+  Local execution of the hosted workflow's fail-closed discovery found:
+    MacosAppKitFrameScheduling=1
+    MacosCompositionLayerStack=2
+    MacosMouseInput=11
+    MacosWKWebViewSurface=7
+    Aggregate GUI/Metal total=21
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    --output-on-failure \
+    -R '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 21/21 GUI and Metal tests.
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 4/4 workflow contract tests.
+
+  git diff --check
+    PASS.
+
+Independent review:
+  The independent reviewer inspected the bridge, controller, AppKit dispatch,
+  lifecycle rollback, fixed-capacity behavior, pure integration tests, source
+  contracts, and this evidence boundary, then returned PASS with no P0, P1,
+  or P2 finding. The reviewer independently observed 38/38 narrow focused
+  tests, 45/45 aggregate tablet/controller tests, 11/11 Mouse GUI tests plus
+  three repeat rounds, 231/231 non-GUI tests, 21/21 GUI/Metal tests, 4/4
+  workflow contracts, and a clean diff check. No review fix was required.
+
+Evidence boundary and pending work:
+  The tablet behavior tests use constructed pure C++ records, while AppKit
+  extraction and dispatch are protected by source contracts plus successful
+  Objective-C++ compilation. This does not establish physical Apple Pen/tablet
+  field fidelity, real pressure or tilt accuracy, physical touch/Pen hardware,
+  Interact-mode delivery through WKWebView hit testing, hardware latency, or
+  hosted macOS CI. Eraser execution, coalesced/predicted Pen input, touch input,
+  and the i5-1235U touch-to-visible-ink p95 target below 50 ms remain separate
+  future work and evidence.
+
+Status: GREEN confirmed locally on Apple Silicon macOS after independent
+review.

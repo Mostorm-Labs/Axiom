@@ -1,0 +1,199 @@
+name: macOS Build
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+      GUI_TEST_REGEX: '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+      GUI_TEST_SUITES: 'MacosAppKitFrameScheduling MacosCompositionLayerStack MacosMouseInput MacosWKWebViewSurface'
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify arm64 runner
+        run: |
+          set -euo pipefail
+          architecture="$(uname -m)"
+          if [[ "$architecture" != "arm64" ]]; then
+            echo "macOS preset requires an arm64 runner; got $architecture" >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Validate macOS workflow contract
+        run: node --test tests/contracts/macos_build_workflow.test.mjs
+
+      - name: Test shared embedded web assets
+        working-directory: web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          npm run build
+
+      - name: Resolve vcpkg
+        id: vcpkg
+        run: |
+          set -euo pipefail
+          baseline="$(node -e 'const fs=require("fs"); const value=JSON.parse(fs.readFileSync("vcpkg.json", "utf8"))["builtin-baseline"]; if(typeof value !== "string") process.exit(2); process.stdout.write(value);')"
+          if [[ ! "$baseline" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "vcpkg.json has an invalid builtin-baseline: $baseline" >&2
+            exit 1
+          fi
+
+          root=""
+          for candidate in \
+            "/opt/homebrew/share/vcpkg" \
+            "/usr/local/share/vcpkg" \
+            "$HOME/vcpkg"; do
+            if [[ -x "$candidate/vcpkg" ]]; then
+              root="$candidate"
+              break
+            fi
+          done
+
+          if [[ -z "$root" ]]; then
+            root="$GITHUB_WORKSPACE/.vcpkg"
+            git clone --depth=1 https://github.com/microsoft/vcpkg "$root"
+            "$root/bootstrap-vcpkg.sh" -disableMetrics
+          fi
+
+          clone_baseline_vcpkg() {
+            local clone_root="$GITHUB_WORKSPACE/.vcpkg-baseline"
+            rm -rf "$clone_root"
+            git clone --filter=blob:none --no-checkout \
+              https://github.com/microsoft/vcpkg "$clone_root"
+            git -C "$clone_root" fetch --no-tags --depth=1 origin "$baseline"
+            git -C "$clone_root" checkout --detach "$baseline"
+            "$clone_root/bootstrap-vcpkg.sh" -disableMetrics
+            root="$clone_root"
+          }
+
+          baseline_lower="$(printf '%s' "$baseline" | tr '[:upper:]' '[:lower:]')"
+          exact_checkout=false
+          if git -C "$root" rev-parse --git-dir >/dev/null 2>&1 &&
+             [[ -x "$root/vcpkg" ]]; then
+            head="$(git -C "$root" rev-parse HEAD 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+            dirty="$(git -C "$root" status --porcelain --untracked-files=all 2>/dev/null || true)"
+            if [[ "$head" == "$baseline_lower" && -z "$dirty" ]]; then
+              exact_checkout=true
+            fi
+          fi
+
+          if [[ "$exact_checkout" != true ]]; then
+            clone_baseline_vcpkg
+          fi
+
+          final_head="$(git -C "$root" rev-parse HEAD 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+          final_dirty="$(git -C "$root" status --porcelain --untracked-files=all 2>/dev/null || true)"
+          if [[ "$final_head" != "$baseline_lower" || -n "$final_dirty" || ! -x "$root/vcpkg" ]]; then
+            echo "vcpkg checkout is not the clean builtin-baseline $baseline" >&2
+            echo "resolved root: $root" >&2
+            echo "resolved HEAD: ${final_head:-<missing>}" >&2
+            [[ -z "$final_dirty" ]] || echo "resolved checkout is dirty" >&2
+            [[ -x "$root/vcpkg" ]] || echo "resolved vcpkg executable is missing" >&2
+            exit 1
+          fi
+          if ! git -C "$root" cat-file -e "${baseline}^{commit}" >/dev/null 2>&1; then
+            echo "Unable to materialize vcpkg builtin-baseline $baseline" >&2
+            exit 1
+          fi
+
+          echo "VCPKG_ROOT=$root" >> "$GITHUB_ENV"
+          echo "root=$root" >> "$GITHUB_OUTPUT"
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+          "$root/vcpkg" version
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: canvas-vcpkg-${{ runner.os }}-${{ runner.arch }}-arm64-osx-${{ hashFiles('vcpkg.json', 'CMakePresets.json') }}
+
+      - name: Prepare vcpkg binary cache
+        run: mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+
+      - name: Install vcpkg dependencies
+        id: vcpkg-install
+        run: |
+          set -euo pipefail
+          "$VCPKG_ROOT/vcpkg" install \
+            --triplet arm64-osx \
+            "--x-manifest-root=$GITHUB_WORKSPACE" \
+            "--x-install-root=$GITHUB_WORKSPACE/out/build/macos-arm64/vcpkg_installed"
+
+      - name: Save vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-install.outcome == 'success' && steps.vcpkg-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Configure
+        run: cmake --preset macos-arm64
+
+      - name: Build
+        run: cmake --build --preset macos-arm64-release --parallel
+
+      - name: Test non-GUI targets and source contracts
+        run: |
+          set -euo pipefail
+          ctest --preset macos-arm64-release \
+            --output-on-failure \
+            -E "$GUI_TEST_REGEX"
+
+      - name: Verify GUI and Metal tests are present
+        run: |
+          set -euo pipefail
+          total="$(ctest --preset macos-arm64-release -N -R "$GUI_TEST_REGEX" \
+            | awk '/Total Tests:/ { print $3 }')"
+          if [[ -z "$total" || "$total" -eq 0 ]]; then
+            echo "No macOS GUI/Metal tests were discovered; refusing a false-green run." >&2
+            exit 1
+          fi
+          echo "Discovered $total macOS GUI/Metal tests."
+
+          for suite in $GUI_TEST_SUITES; do
+            suite_total="$(ctest --preset macos-arm64-release -N -R "^${suite}\." \
+              | awk '/Total Tests:/ { print $3 }')"
+            if [[ -z "$suite_total" || "$suite_total" -eq 0 ]]; then
+              echo "No required macOS GUI/Metal tests were discovered for $suite" >&2
+              exit 1
+            fi
+            echo "Discovered $suite_total tests for required suite $suite."
+          done
+
+      - name: Test GUI and Metal targets
+        env:
+          MTL_DEBUG_LAYER: "1"
+        run: |
+          set -euo pipefail
+          ctest --preset macos-arm64-release \
+            --output-on-failure \
+            -R "$GUI_TEST_REGEX"
+
+      - name: Whitespace check
+        run: git diff --check

@@ -1,0 +1,20 @@
+macOS frame-invalidations review RED phase (2026-07-25)
+
+The retry-state tests were added before the FrameInvalidation API. The manual
+syntax probe intentionally failed:
+
+$ xcrun --sdk macosx clang++ -std=c++17 -Isrc \
+    -I/Users/qing/Documents/android-ndk-r15c/sources/third_party/googletest/googletest/include \
+    -fsyntax-only tests/unit/frame_invalidation_test.cpp
+tests/unit/frame_invalidation_test.cpp:36:16: error: no member named
+'abandonFrame' in 'canvas::platform::FrameInvalidation'
+  invalidation.abandonFrame();
+  ~~~~~~~~~~~~ ^
+tests/unit/frame_invalidation_test.cpp:53:16: error: no member named
+'requeueFrame' in 'canvas::platform::FrameInvalidation'
+  invalidation.requeueFrame();
+  ~~~~~~~~~~~~ ^
+
+The missing APIs prove the tests exercised a capability that did not yet
+exist: a drawable failure must remain pending without a self-scheduled retry,
+and an encoding failure must be requeued for a later external invalidation.

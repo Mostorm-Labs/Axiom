@@ -1,0 +1,61 @@
+Task 23C macOS AppKit mouse drawing GREEN evidence
+Date: 2026-08-03 (Asia/Shanghai)
+
+Implemented scope:
+  The private overlay-only CanvasPointerMetalView now converts AppKit left-
+  mouse down/drag/up events synchronously into logical-point RawMacMouseEvent
+  values and owns one MacosMouseSession. Its weak delegate sends the fixed
+  session output to CanvasCompositionView on the AppKit main thread.
+
+  CanvasCompositionView keeps setCanvasDocument as the read-only path and adds
+  setEditableCanvasDocument for a mutable Document-backed
+  MacosWhiteboardInput. Accepted input mutates the Document through that
+  controller and invalidates only the Base Metal view for blank-canvas ink or
+  only the Overlay Metal view for parent-normalized embedded annotations. It
+  does not call setCanvasDocument per point.
+
+  Active input is cancelled through the idempotent session before interaction
+  gating, editable/read-only document replacement, view/window teardown, and
+  app/window loss of activity. Notification blocks capture the pointer view
+  weakly, the composition delegate is weak, and all integration entry points
+  enforce or inherit AppKit main-thread affinity. main.mm opts into the editable
+  setter.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release --parallel 4
+    PASS; all targets linked, including canvas_macos.app and the GUI tests.
+
+  ctest --preset macos-arm64-release \
+    -R '^((MacosPointerAdapterTest|MacosMouseSessionTest|MacosWhiteboardInputTest)\.|canvas_macos_pointer_seam_source_contract$)' \
+    --output-on-failure
+    PASS: 37/37.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    -R '^MacosMouseInput\.' --output-on-failure
+    PASS: 7/7. This covers one Base stroke in top-left logical coordinates,
+    embedded Annotation routing and parent normalization, layer-specific frame
+    requests, cancellation on window/mode/detach/document replacement,
+    read-only isolation, and orphan/right-mouse rejection.
+
+  ctest --preset macos-arm64-release -Q --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 207/207 non-GUI tests and source contracts.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release -Q \
+    --output-on-failure \
+    -R '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 17/17 GUI and Metal tests.
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 3/3; MacosMouseInput is part of the fail-closed hosted GUI gate.
+
+  git diff --check
+    PASS.
+
+Deliberate remaining scope:
+  This increment handles left-mouse drawing only. Pen/touch, coalesced and
+  predicted samples, dirty-rectangle propagation into MetalHost, physical
+  touch-display latency measurement, and hosted macOS CI evidence remain
+  separate work. The GUI tests use synthetic AppKit events, not hardware input.
+
+Status: GREEN confirmed locally on Apple Silicon macOS with Metal validation.

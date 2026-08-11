@@ -1,0 +1,30 @@
+macOS AppKit frame scheduling RED phase (2026-07-26)
+
+The production CanvasMetalView was first extracted without changing its
+drawRect-based behavior, then the real view/MetalHost pair was exercised in a
+borderless AppKit window. The test binds a Document before the view enters the
+window, clears the pre-window NSView display flag to model AppKit discarding
+that request, attaches the view, and runs the main run loop for at most five
+seconds with Metal API Validation enabled.
+
+  MTL_DEBUG_LAYER=1 ctest --test-dir out/build/macos-arm64 \
+    -R MacosAppKitFrameScheduling --output-on-failure
+
+Result before the scheduling fix: 0/1 passed. Metal reported
+"Metal API Validation Enabled", but after five seconds:
+
+  committed: false
+  view.updateLayerCalls: 0
+  view.committedFrameCount: 0
+
+The failure reproduces the reviewed P1 rather than a source-string omission:
+setNeedsDisplay on the custom layer-hosting view did not enter drawRect, and
+the pending frame created before window attachment never reached a Metal
+command-buffer commit.
+
+An initial wantsUpdateLayer/updateLayer-only correction was also exercised
+against the same real custom CAMetalLayer. Even while the probe explicitly
+pumped NSApplication updateWindows and NSWindow displayIfNeeded, the result
+remained 0/1 with updateLayerCalls=0 and committedFrameCount=0. This confirmed
+that this layer-hosting configuration required the permitted CALayer delegate
+path rather than relying on AppKit's layer-backed-view updateLayer behavior.

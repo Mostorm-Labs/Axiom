@@ -1,0 +1,26 @@
+Task 23A macOS pointer seam RED evidence
+Date: 2026-08-03 (Asia/Shanghai)
+
+Scope:
+  Pure C++ macOS mouse-event normalization and stateful session tests were
+  registered under APPLE before their behavior was implemented. The source
+  contract is platform-neutral and remains available to Windows CI.
+
+Commands:
+  cmake --preset macos-arm64
+  cmake --build --preset macos-arm64-release --target \
+    canvas_macos_pointer_adapter_test canvas_macos_mouse_session_test -j 4
+  ctest --preset macos-arm64-release \
+    -R 'Macos(PointerAdapter|MouseSession)Test' --output-on-failure
+
+Observed result:
+  Configure and compilation succeeded against deliberately inert adapter and
+  session stubs. CTest exited 8: 12 of 14 tests failed. The failures covered
+  flipped/unflipped non-zero bounds, out-of-bounds coordinates, timestamp
+  saturation, pressure policy, phase mapping, pointer-id lifetime, lifecycle
+  cancellation, changing event/device metadata, duplicate Down recovery,
+  non-left filtering, and raw Cancel handling.
+
+Status: RED confirmed. The two passing assertions were negative controls whose
+stub behavior was intentionally empty/equal; the required positive behavior
+remained demonstrably absent.
