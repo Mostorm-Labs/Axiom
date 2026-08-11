@@ -47,6 +47,17 @@ target_link_libraries(canvas_document_test PRIVATE canvas::core GTest::gtest_mai
 canvas_enable_warnings(canvas_document_test)
 gtest_discover_tests(canvas_document_test)
 
+add_executable(canvas_stroke_hit_test unit/stroke_hit_test_test.cpp)
+target_link_libraries(canvas_stroke_hit_test PRIVATE canvas::core
+                      GTest::gtest_main)
+canvas_enable_warnings(canvas_stroke_hit_test)
+gtest_discover_tests(canvas_stroke_hit_test)
+
+add_test(NAME canvas_stroke_hit_test_source_contract
+         COMMAND ${CMAKE_COMMAND}
+                 -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/contracts/stroke_hit_test_source_contract_test.cmake)
+
 add_executable(canvas_document_codec_test unit/document_codec_test.cpp)
 target_link_libraries(canvas_document_codec_test PRIVATE canvas::core
                       GTest::gtest_main)

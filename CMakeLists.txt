@@ -31,6 +31,7 @@ include(CTest)
 include(cmake/CompilerWarnings.cmake)
 
 add_library(canvas_core STATIC src/core/version.cpp src/document/document.cpp
+            src/document/stroke_hit_test.cpp
             src/app/embedded_load_batch.cpp
             src/app/embedded_load_completion_inbox.cpp
             src/app/embedded_document_open_coordinator.cpp

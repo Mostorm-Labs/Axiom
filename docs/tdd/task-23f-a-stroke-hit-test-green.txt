@@ -1,0 +1,134 @@
+Task 23F-A allocation-free stroke sweep hit-test GREEN evidence
+Implementation date: 2026-08-04 (Asia/Shanghai)
+Final local verification: 2026-08-11 (Asia/Shanghai)
+Baseline commit: 4c49a823ab276856eb9297849e493496a54dff2e
+
+Implemented scope:
+  - findTopmostStrokeHit is a read-only, noexcept, platform-neutral query in
+    world/top-left logical coordinates. Its result is Hit, NoHit,
+    InvalidQuery, or BudgetExhausted and carries no NodeId or Node copy.
+  - A Hit returns only the current node index, cache identity, and layer. The
+    caller must validate index plus cache identity again before any later
+    mutation.
+  - Visual priority is deterministic: Annotation nodes are scanned in reverse
+    document order before Base nodes are scanned in reverse document order.
+    Only a StrokeNode in the expected layer and coordinate space is eligible;
+    Embedded and Chrome layers plus EmbeddedNode and UnknownNode payloads are
+    never returned.
+  - Base/World strokes use a finite-bounds broad phase followed by capsule
+    distance against the eraser sweep. One-point strokes use point-to-sweep
+    distance. Multi-point strokes first use a fixed-capacity exact orientation
+    predicate for closed-segment intersection, then the four endpoint-to-
+    segment distances when disjoint. This avoids determinant cancellation and
+    tiny-interior-parameter clamping while covering degenerate sweeps and
+    duplicate-point segments. The threshold is eraser radius plus the stroke's
+    true half-width.
+  - Parent-normalized Annotation geometry is mapped point by point through the
+    current Embedded parent bounds, and relative width is resolved through the
+    current minimum parent extent. The world point and width use the renderer's
+    actual float expression order and validate the rounded float result before
+    distance math. This accepts finite FLT_MAX results even when the exact real
+    product lies just beyond FLT_MAX, while still rejecting float overflow. A
+    positive stored width that rounds to +0 after parent resolution matches
+    Skia's visible hairline semantics: it contributes zero half-width but its
+    centerline remains hittable by an exact or positive-radius eraser sweep.
+    No throwing embedded-transform helper and no stale child/parent-only broad
+    phase is used, so moved, anisotropic, large-origin, and out-of-parent
+    geometry remains correct.
+  - Query points and radii, node/parent bounds, stored widths, stroke points,
+    and mapped coordinates are validated fail-closed: inputs must be finite,
+    bounds and stored widths must be strictly positive, and resolved float
+    geometry must remain finite. Only the renderer-valid resolved hairline
+    width may be zero. Double distance intermediates keep valid extreme float
+    sweeps from overflowing distance math.
+  - One explicit WorkCounter covers every reverse document-node visit, every
+    parent lookup candidate, and every inspected point/segment primitive.
+    Parent lookup is implemented directly under that counter rather than via
+    an uncounted Document::find. Exhaustion at any point returns no token, even
+    when an earlier segment in the partially inspected candidate intersected.
+    A zero budget is NoHit for an empty document but BudgetExhausted as soon as
+    a non-empty document requires its first visit.
+  - The production source contains no dynamic container, heap construction,
+    exception, IPC/Electron, Skia, or platform dependency. The source contract
+    rejects common allocating containers, heap APIs/helpers, platform and IPC
+    tokens, and the unit test statically verifies the public query is noexcept;
+    manual line-by-line review covers the broader allocation-free claim.
+
+Commands and observed results:
+  cmake --build --preset macos-arm64-release \
+    --target canvas_stroke_hit_test --parallel 4
+    PASS: the pure query and test target compiled and linked.
+
+  ctest --preset macos-arm64-release \
+    -R '^(StrokeHitTest\.|canvas_stroke_hit_test_source_contract$)' \
+    --output-on-failure
+    PASS: 28/28 focused geometry, ordering, validation, budget, and source
+    contract gates.
+
+  Numerical-hardening TDD follow-up:
+    TinyPerpendicularSegmentsDoNotBecomeFalselyParallel was first run alone
+    and failed 0/1 because a scale-independent determinant tolerance treated
+    very short perpendicular segments as parallel. A first scale-relative fix
+    made the focused suite pass 17/17, but independent review then exposed
+    three more intersecting extreme-scale cases plus renderer-float and empty-
+    budget mismatches. Those five regressions first failed 0/5, then passed
+    after replacing the closest-parameter determinant path, aligning float
+    mapping/width, and removing unconditional zero-budget exhaustion. During
+    re-review, the single-point-on-long-sweep, degenerate-sweep-on-long-stroke,
+    and parallel-long-capsule-boundary regressions first failed 0/2 and 0/1,
+    respectively. Fixed-size exact orientation/dot/cross expansions plus
+    endpoint-projection and cross-distance evaluation corrected those paths.
+    Formal re-review then exposed two renderer-float-boundary mismatches that
+    failed 0/2 before the production change. Evaluating ParentNormalized point
+    and width expressions in float before validating their rounded results
+    fixed both. A subsequent underflow regression failed 0/1 when a positive
+    normalized width rounded to Skia's +0 hairline; accepting that finite
+    non-negative resolved width fixed exact-center and radius-boundary hits
+    while preserving the outside-radius NoHit control. The resulting focused
+    suite plus source contract passes 28/28.
+
+  cmake --build --preset macos-arm64-release --parallel
+    PASS: the application and every registered test target linked.
+
+  ctest --preset macos-arm64-release --output-on-failure \
+    -E '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 259/259 non-GUI tests and source contracts.
+
+  MTL_DEBUG_LAYER=1 ctest --preset macos-arm64-release \
+    --output-on-failure \
+    -R '^(MacosAppKitFrameScheduling|MacosCompositionLayerStack|MacosMouseInput|MacosWKWebViewSurface)\.'
+    PASS: 21/21 existing GUI and Metal tests.
+
+  node --test tests/contracts/macos_build_workflow.test.mjs
+    PASS: 4/4 workflow contract tests.
+
+  Explicit trailing-whitespace and EOF-newline scan over all six new files,
+  followed by git diff --check for tracked changes
+    PASS: all new and tracked Task 23F-A files are clean. A staged diff check
+    remains required immediately before commit so untracked additions are
+    covered by Git's own whitespace gate.
+
+Independent review:
+  Initial review returned NOT PASS with no P0, two P1 findings, and three P2
+  findings. The new RED regressions and current implementation address extreme
+  intersecting segments, renderer-float ParentNormalized geometry, empty zero-
+  budget semantics, parent-candidate budget protection, and source/whitespace
+  evidence strength. Formal re-review found one additional P1 at the finite
+  float maximum; the two public API RED regressions now cover its width and
+  point forms, and the premature double real-value checks were removed. The
+  next re-review found the corresponding finite +0 hairline P1; its public API
+  regression now covers exact-center, inclusive eraser-radius, and outside-
+  radius behavior. The same reviewer returned final PASS with no unresolved
+  P0, P1, or P2 finding and independently repeated the focused, full build,
+  non-GUI, GUI/Metal, workflow, whitespace/EOF, and diff-check gates. Hosted
+  Windows CI remains required for real MSVC evidence after commit and push.
+
+Evidence boundary and pending work:
+  This increment is only the allocation-free hit-test core. It does not mutate
+  Document, detach or restore a stroke, implement eraser preview/transactions,
+  bridge EraserPending AppKit samples, evict renderer cache entries, provide a
+  spatial index or undo/redo, or validate physical eraser hardware and
+  latency. Those remain Task 23F-B/23F-C or later work.
+
+Status: local GREEN verification and same-reviewer final PASS complete; ready
+for a scoped commit, with hosted Windows CI still pending.
