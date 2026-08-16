@@ -100,8 +100,7 @@ jobs:
         with:
           name: poc01-web
           path: |
-            pocs/shared_engine/platform/web/test-results/web-result.json
-            pocs/shared_engine/platform/web/test-results/web-actual.rgba
+            pocs/shared_engine/platform/web/test-results
             out/results/web-visual
 
   windows:

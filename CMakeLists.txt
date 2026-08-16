@@ -16,7 +16,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # runtime. Keep every CMake target (including tests) on the same CRT so static
 # archive link contracts remain consistent under clang-cl.
 if(MSVC)
-  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  if(CANVAS_POC01_ENABLE_SANITIZERS)
+    # Clang's Windows AddressSanitizer runtime cannot link against the debug
+    # static CRT. Retain a Debug build with symbols, but use /MT so the
+    # sanitizer check matches the release Skia archive's CRT contract.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+  else()
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  endif()
 endif()
 
 include(CTest)

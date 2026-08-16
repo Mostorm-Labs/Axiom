@@ -18,5 +18,5 @@ target_link_options(canvas_poc01_web PRIVATE
   "-sMAX_WEBGL_VERSION=2"
   "-sGL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=0"
   "-sEXPORTED_FUNCTIONS=['_malloc','_free','_canvas_poc_web_reset','_canvas_poc_web_load_assets','_canvas_poc_web_replay','_canvas_poc_web_digest','_canvas_poc_web_surface_create','_canvas_poc_web_render','_canvas_poc_web_readback','_canvas_poc_web_compare_golden','_canvas_poc_web_backend','_canvas_poc_last_error']"
-  "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString']"
+  "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','HEAPU8','HEAPU32','HEAPF64']"
 )
