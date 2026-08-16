@@ -208,6 +208,9 @@ int wmain() {
       auto internal = canvas::poc01::ResolveDocumentForPlatform(session.document);
       canvas::poc01::WindowsD3d12Adapter adapter;
       Check(adapter.Initialize(nullptr, !options.hardware, 800, 600), "smoke init");
+      for (int warmup = 0; warmup < 60; ++warmup) {
+        Check(adapter.Render(*internal, &pixels), "smoke warmup");
+      }
       const auto deadline = std::chrono::steady_clock::now() +
                             std::chrono::seconds(options.smoke_seconds);
       while (std::chrono::steady_clock::now() < deadline) {
@@ -219,7 +222,10 @@ int wmain() {
         max_frame_ms = (std::max)(max_frame_ms, frame_ms);
         ++smoke_frames;
       }
-      if (max_frame_ms > 100.0) throw std::runtime_error("frame >100ms");
+      if (max_frame_ms > 100.0) {
+        throw std::runtime_error("frame >100ms: " +
+                                 std::to_string(max_frame_ms));
+      }
     }
     std::ostringstream result;
     result << "{\"platform\":\"windows\",\"backend\":\"ganesh-d3d12\","

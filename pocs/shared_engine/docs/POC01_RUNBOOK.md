@@ -71,6 +71,9 @@ Every platform uploads a result JSON containing that exact digest. The final
 acceptance job refuses missing or duplicate platform records, a single byte of
 digest drift, anything other than 100 lifecycle iterations and a 60-second
 smoke, an empty smoke, or a reported frame above 100 ms.
+GPU-backed smoke runs render 60 unmeasured warmup frames before the 60-second
+window so shader and pipeline creation are not misreported as steady-state
+frame time; every measured frame remains subject to the 100 ms ceiling.
 
 ## 4. Host-core development
 

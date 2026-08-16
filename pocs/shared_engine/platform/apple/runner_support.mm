@@ -182,6 +182,9 @@ std::string RunAppleAcceptance(
         ResolveDocumentForPlatform(smoke->document);
     AppleMetalAdapter adapter;
     Check(adapter.Initialize(800, 600), "Metal smoke initialize");
+    for (int warmup = 0; warmup < 60; ++warmup) {
+      Check(adapter.Render(*document, &pixels), "Metal smoke warmup");
+    }
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(smoke_seconds);
     while (std::chrono::steady_clock::now() < deadline) {
@@ -194,7 +197,8 @@ std::string RunAppleAcceptance(
       ++smoke_frames;
     }
     if (max_frame_ms > 100.0) {
-      throw std::runtime_error("Apple Metal smoke frame exceeded 100 ms");
+      throw std::runtime_error("Apple Metal smoke frame exceeded 100 ms: " +
+                               std::to_string(max_frame_ms));
     }
   }
   std::ostringstream result;

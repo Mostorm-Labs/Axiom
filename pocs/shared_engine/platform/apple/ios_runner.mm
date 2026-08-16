@@ -29,15 +29,15 @@
   [self.window makeKeyAndVisible];
 
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSURL* documents = [[NSFileManager defaultManager]
+        URLForDirectory:NSDocumentDirectory
+               inDomain:NSUserDomainMask
+      appropriateForURL:nil
+                 create:YES
+                  error:nil];
     try {
       NSBundle* bundle = NSBundle.mainBundle;
       const std::filesystem::path resources([bundle.resourcePath UTF8String]);
-      NSURL* documents = [[NSFileManager defaultManager]
-          URLForDirectory:NSDocumentDirectory
-                 inDomain:NSUserDomainMask
-        appropriateForURL:nil
-                   create:YES
-                    error:nil];
       const std::filesystem::path documentsPath([documents.path UTF8String]);
       const std::string platform =
           UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad
@@ -59,6 +59,13 @@
       });
     } catch (const std::exception& error) {
       const std::string message(error.what());
+      NSURL* failure =
+          [documents URLByAppendingPathComponent:@"poc01-failure.txt"];
+      [[NSString stringWithUTF8String:message.c_str()]
+          writeToURL:failure
+          atomically:YES
+          encoding:NSUTF8StringEncoding
+          error:nil];
       NSLog(@"CANVAS_POC01_FAILURE %s", message.c_str());
       dispatch_async(dispatch_get_main_queue(), ^{
         label.text = [NSString stringWithUTF8String:message.c_str()];

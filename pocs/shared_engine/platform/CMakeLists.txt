@@ -2,7 +2,7 @@ set(CANVAS_POC01_SKIA_ROOT "${PROJECT_SOURCE_DIR}/.deps/skia" CACHE PATH
     "Pinned Skia source directory")
 
 if(EMSCRIPTEN)
-  set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-web/libskia.a")
+  set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-web/libskia.wasm.a")
 elseif(WIN32)
   set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-windows/skia.lib")
 elseif(ANDROID)
@@ -35,8 +35,14 @@ if(WIN32)
   set(_poc01_skia_transitive
     "${_poc01_skia_output_dir}/skcms.lib"
     "${_poc01_skia_output_dir}/freetype2.lib"
-    "${_poc01_skia_output_dir}/png.lib"
     "${_poc01_skia_output_dir}/zlib.lib"
+  )
+elseif(EMSCRIPTEN)
+  set(_poc01_skia_transitive
+    "${_poc01_skia_output_dir}/libskcms.wasm.a"
+    "${_poc01_skia_output_dir}/libfreetype2.wasm.a"
+    "${_poc01_skia_output_dir}/libpng.wasm.a"
+    "${_poc01_skia_output_dir}/libzlib.wasm.a"
   )
 else()
   set(_poc01_skia_transitive

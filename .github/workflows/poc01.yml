@@ -245,7 +245,7 @@ jobs:
         with: { gradle-version: "8.11.1" }
       - name: Install locked Android SDK components
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.30.5" "ndk;27.2.12479018" "emulator" "platform-tools" "system-images;android-35;google_apis;x86_64"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - name: Bootstrap locked dependencies
         run: |

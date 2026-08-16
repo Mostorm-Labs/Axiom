@@ -260,6 +260,12 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
     }
     const std::shared_ptr<canvas::poc01::Document> document =
         canvas::poc01::ResolveDocumentForPlatform(g_document);
+    for (int warmup = 0; warmup < 60; ++warmup) {
+      status = adapter.Render(*document, &pixels);
+      if (status != CANVAS_POC_STATUS_OK) {
+        return Failure(env, "smoke warmup", status);
+      }
+    }
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(smoke_seconds);
     while (std::chrono::steady_clock::now() < deadline) {
@@ -276,7 +282,8 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
     }
     if (max_frame_ms > 100.0) {
       canvas::poc01::SetLastError(
-          "Android GLES smoke frame exceeded 100 ms");
+          "Android GLES smoke frame exceeded 100 ms: " +
+          std::to_string(max_frame_ms));
       return Failure(env, "smoke budget", CANVAS_POC_STATUS_RENDER_ERROR);
     }
   }

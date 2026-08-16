@@ -62,6 +62,12 @@ def execute(device: dict, app: Path, output: Path, platform: str) -> None:
                 )
                 result = Path(container) / "Documents" / "poc01-result.json"
                 rgba = Path(container) / "Documents" / "apple-actual.rgba"
+                failure = Path(container) / "Documents" / "poc01-failure.txt"
+                if failure.exists():
+                    raise RuntimeError(
+                        f"{platform} runner failed: "
+                        f"{failure.read_text(encoding='utf-8')}"
+                    )
                 if result.exists() and rgba.exists():
                     output.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(result, output / f"{platform}-result.json")
