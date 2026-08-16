@@ -261,7 +261,7 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
     const std::shared_ptr<canvas::poc01::Document> document =
         canvas::poc01::ResolveDocumentForPlatform(g_document);
     for (int warmup = 0; warmup < 60; ++warmup) {
-      status = adapter.Render(*document, &pixels);
+      status = adapter.Render(*document, nullptr);
       if (status != CANVAS_POC_STATUS_OK) {
         return Failure(env, "smoke warmup", status);
       }
@@ -270,7 +270,7 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
                           std::chrono::seconds(smoke_seconds);
     while (std::chrono::steady_clock::now() < deadline) {
       const auto start = std::chrono::steady_clock::now();
-      status = adapter.Render(*document, &pixels);
+      status = adapter.Render(*document, nullptr);
       if (status != CANVAS_POC_STATUS_OK) {
         return Failure(env, "smoke render", status);
       }

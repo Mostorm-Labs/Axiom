@@ -24,7 +24,7 @@ class AppleMetalAdapter {
 
   canvas_poc_status_t Initialize(uint32_t width, uint32_t height);
   canvas_poc_status_t Render(const Document& document,
-                             std::vector<uint8_t>* readback);
+                             std::vector<uint8_t>* readback = nullptr);
   const std::string& device_name() const;
 
  private:

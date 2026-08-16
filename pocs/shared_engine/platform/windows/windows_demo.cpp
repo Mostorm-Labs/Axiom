@@ -209,13 +209,13 @@ int wmain() {
       canvas::poc01::WindowsD3d12Adapter adapter;
       Check(adapter.Initialize(nullptr, !options.hardware, 800, 600), "smoke init");
       for (int warmup = 0; warmup < 60; ++warmup) {
-        Check(adapter.Render(*internal, &pixels), "smoke warmup");
+        Check(adapter.Render(*internal), "smoke warmup");
       }
       const auto deadline = std::chrono::steady_clock::now() +
                             std::chrono::seconds(options.smoke_seconds);
       while (std::chrono::steady_clock::now() < deadline) {
         const auto start = std::chrono::steady_clock::now();
-        Check(adapter.Render(*internal, &pixels), "smoke render");
+        Check(adapter.Render(*internal), "smoke render");
         const double frame_ms = std::chrono::duration<double, std::milli>(
                                     std::chrono::steady_clock::now() - start)
                                     .count();

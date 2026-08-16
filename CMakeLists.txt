@@ -12,5 +12,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Skia's Windows GN toolchain is intentionally built against the static MSVC
+# runtime. Keep every CMake target (including tests) on the same CRT so static
+# archive link contracts remain consistent under clang-cl.
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 include(CTest)
 add_subdirectory(pocs/shared_engine)

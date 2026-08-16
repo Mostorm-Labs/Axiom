@@ -26,6 +26,8 @@ def main() -> int:
          WEB / "wasm" / "canvas_poc01_web.js")
     copy(REPO / "out" / "web-release" / "pocs" / "shared_engine" / "platform" / "web" / "canvas_poc01_web.wasm",
          WEB / "wasm" / "canvas_poc01_web.wasm")
+    copy(ROOT / "platform" / "web" / "static" / "canvas_poc_loader.js",
+         WEB / "wasm" / "canvas_poc_loader.js")
     copy(ROOT / "goldens" / "reference.rgba", WEB / "goldens" / "reference.rgba")
     return 0
 

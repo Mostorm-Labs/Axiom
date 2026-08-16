@@ -21,6 +21,8 @@ struct AppleMetalAdapter::Impl {
   id<MTLCommandQueue> queue = nil;
   sk_sp<GrDirectContext> context;
   sk_sp<SkSurface> surface;
+  RuntimeScene scene;
+  const Document* scene_document = nullptr;
   uint32_t width = 0;
   uint32_t height = 0;
   std::string device_name;
@@ -42,6 +44,8 @@ canvas_poc_status_t AppleMetalAdapter::Initialize(uint32_t width,
   }
   @autoreleasepool {
     impl_->surface.reset();
+    impl_->scene = {};
+    impl_->scene_document = nullptr;
     if (impl_->context != nullptr) {
       impl_->context->abandonContext();
       impl_->context.reset();
@@ -85,25 +89,28 @@ canvas_poc_status_t AppleMetalAdapter::Initialize(uint32_t width,
 
 canvas_poc_status_t AppleMetalAdapter::Render(
     const Document& document, std::vector<uint8_t>* readback) {
-  if (readback == nullptr) {
-    SetLastError("Apple Metal readback must not be null");
-    return CANVAS_POC_STATUS_INVALID_ARGUMENT;
-  }
   if (impl_->surface == nullptr || impl_->context == nullptr) {
     SetLastError("Apple Metal adapter is not initialized");
     return CANVAS_POC_STATUS_PLATFORM_ERROR;
   }
   @autoreleasepool {
-    const RuntimeScene scene = SceneCompiler().Compile(document);
+    if (impl_->scene_document != &document ||
+        impl_->scene.source_revision != document.state().revision) {
+      impl_->scene = SceneCompiler().Compile(document);
+      impl_->scene_document = &document;
+    }
     SkiaSceneRenderer renderer;
     canvas_poc_status_t status =
-        renderer.Draw(*impl_->surface->getCanvas(), scene, document.assets());
+        renderer.Draw(*impl_->surface->getCanvas(), impl_->scene,
+                      document.assets());
     if (status != CANVAS_POC_STATUS_OK) {
       return status;
     }
     impl_->context->flushAndSubmit(impl_->surface.get(), GrSyncCpu::kYes);
-    return renderer.Readback(*impl_->surface, impl_->width, impl_->height,
-                             readback);
+    return readback == nullptr
+               ? CANVAS_POC_STATUS_OK
+               : renderer.Readback(*impl_->surface, impl_->width,
+                                   impl_->height, readback);
   }
 }
 

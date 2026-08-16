@@ -30,7 +30,7 @@ class WindowsD3d12Adapter {
   canvas_poc_status_t Initialize(HWND window, bool use_warp, uint32_t width,
                                  uint32_t height);
   canvas_poc_status_t Render(const Document& document,
-                             std::vector<uint8_t>* rgba);
+                             std::vector<uint8_t>* rgba = nullptr);
   canvas_poc_status_t PresentToWindow(std::span<const uint8_t> rgba);
   [[nodiscard]] const WindowsAdapterInfo& info() const;
 

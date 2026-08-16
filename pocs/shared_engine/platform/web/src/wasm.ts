@@ -17,15 +17,18 @@ export interface CanvasModule {
 }
 
 declare global {
-  interface Window { __canvasPocModule?: CanvasModule; }
+  interface Window {
+    __canvasPocFactory?: ModuleFactory;
+    __canvasPocModule?: CanvasModule;
+  }
 }
 
 type ModuleFactory = (options?: Record<string, unknown>) => Promise<CanvasModule>;
 
 export async function createModule(): Promise<CanvasModule> {
-  const moduleUrl = "/wasm/canvas_poc01_web.js";
-  const source = await import(/* @vite-ignore */ moduleUrl);
-  return (source.default as ModuleFactory)({
+  const factory = window.__canvasPocFactory;
+  if (!factory) throw new Error("Canvas POC WASM factory was not loaded");
+  return factory({
     locateFile: (name: string) => `/wasm/${name}`,
   });
 }

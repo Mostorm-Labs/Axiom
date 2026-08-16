@@ -47,6 +47,8 @@ struct WindowsD3d12Adapter::Impl {
   ComPtr<ID3D12CommandQueue> queue;
   sk_sp<GrDirectContext> context;
   sk_sp<SkSurface> surface;
+  RuntimeScene scene;
+  const Document* scene_document = nullptr;
 };
 
 WindowsD3d12Adapter::WindowsD3d12Adapter()
@@ -146,6 +148,8 @@ canvas_poc_status_t WindowsD3d12Adapter::Initialize(
   impl_->info.driver_version = static_cast<uint64_t>(driver.QuadPart);
   impl_->info.warp = use_warp;
   impl_->window = window;
+  impl_->scene = {};
+  impl_->scene_document = nullptr;
   impl_->width = width;
   impl_->height = height;
   return CANVAS_POC_STATUS_OK;
@@ -153,17 +157,25 @@ canvas_poc_status_t WindowsD3d12Adapter::Initialize(
 
 canvas_poc_status_t WindowsD3d12Adapter::Render(
     const Document& document, std::vector<uint8_t>* rgba) {
-  if (impl_->surface == nullptr || rgba == nullptr) {
+  if (impl_->surface == nullptr) {
     SetLastError("D3D12 adapter is not initialized");
     return CANVAS_POC_STATUS_INVALID_ARGUMENT;
   }
-  const RuntimeScene scene = SceneCompiler().Compile(document);
+  if (impl_->scene_document != &document ||
+      impl_->scene.source_revision != document.state().revision) {
+    impl_->scene = SceneCompiler().Compile(document);
+    impl_->scene_document = &document;
+  }
   SkiaSceneRenderer renderer;
   canvas_poc_status_t status =
-      renderer.Draw(*impl_->surface->getCanvas(), scene, document.assets());
+      renderer.Draw(*impl_->surface->getCanvas(), impl_->scene,
+                    document.assets());
   if (status != CANVAS_POC_STATUS_OK) return status;
   impl_->context->flushAndSubmit(impl_->surface.get(), GrSyncCpu::kYes);
-  return renderer.Readback(*impl_->surface, impl_->width, impl_->height, rgba);
+  return rgba == nullptr
+             ? CANVAS_POC_STATUS_OK
+             : renderer.Readback(*impl_->surface, impl_->width, impl_->height,
+                                 rgba);
 }
 
 canvas_poc_status_t WindowsD3d12Adapter::PresentToWindow(

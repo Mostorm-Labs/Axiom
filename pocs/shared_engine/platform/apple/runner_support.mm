@@ -183,13 +183,13 @@ std::string RunAppleAcceptance(
     AppleMetalAdapter adapter;
     Check(adapter.Initialize(800, 600), "Metal smoke initialize");
     for (int warmup = 0; warmup < 60; ++warmup) {
-      Check(adapter.Render(*document, &pixels), "Metal smoke warmup");
+      Check(adapter.Render(*document), "Metal smoke warmup");
     }
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(smoke_seconds);
     while (std::chrono::steady_clock::now() < deadline) {
       const auto start = std::chrono::steady_clock::now();
-      Check(adapter.Render(*document, &pixels), "Metal smoke render");
+      Check(adapter.Render(*document), "Metal smoke render");
       const double frame_ms = std::chrono::duration<double, std::milli>(
                                   std::chrono::steady_clock::now() - start)
                                   .count();

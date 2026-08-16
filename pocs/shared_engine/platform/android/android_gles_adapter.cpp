@@ -27,6 +27,8 @@ struct AndroidGlesAdapter::Impl {
   uint32_t height = 0;
   sk_sp<GrDirectContext> gr_context;
   sk_sp<SkSurface> sk_surface;
+  RuntimeScene scene;
+  const Document* scene_document = nullptr;
 };
 
 AndroidGlesAdapter::AndroidGlesAdapter() : impl_(std::make_unique<Impl>()) {}
@@ -100,6 +102,8 @@ canvas_poc_status_t AndroidGlesAdapter::Attach(ANativeWindow* window,
     return CANVAS_POC_STATUS_RENDER_ERROR;
   }
   impl_->window = window;
+  impl_->scene = {};
+  impl_->scene_document = nullptr;
   ANativeWindow_acquire(window);
   impl_->width = width;
   impl_->height = height;
@@ -114,10 +118,14 @@ canvas_poc_status_t AndroidGlesAdapter::Render(
     SetLastError("Android surface is not attached");
     return CANVAS_POC_STATUS_PLATFORM_ERROR;
   }
-  const RuntimeScene scene = SceneCompiler().Compile(document);
+  if (impl_->scene_document != &document ||
+      impl_->scene.source_revision != document.state().revision) {
+    impl_->scene = SceneCompiler().Compile(document);
+    impl_->scene_document = &document;
+  }
   SkiaSceneRenderer renderer;
   canvas_poc_status_t status = renderer.Draw(
-      *impl_->sk_surface->getCanvas(), scene, document.assets());
+      *impl_->sk_surface->getCanvas(), impl_->scene, document.assets());
   if (status != CANVAS_POC_STATUS_OK) {
     return status;
   }
@@ -163,6 +171,8 @@ void AndroidGlesAdapter::Detach() {
   impl_->egl_context = EGL_NO_CONTEXT;
   impl_->egl_surface = EGL_NO_SURFACE;
   impl_->window = nullptr;
+  impl_->scene = {};
+  impl_->scene_document = nullptr;
   impl_->width = 0;
   impl_->height = 0;
 }

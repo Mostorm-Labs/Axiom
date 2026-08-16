@@ -73,7 +73,10 @@ digest drift, anything other than 100 lifecycle iterations and a 60-second
 smoke, an empty smoke, or a reported frame above 100 ms.
 GPU-backed smoke runs render 60 unmeasured warmup frames before the 60-second
 window so shader and pipeline creation are not misreported as steady-state
-frame time; every measured frame remains subject to the 100 ms ceiling.
+frame time. RuntimeScene is rebuilt only when the Document revision changes.
+The measured loop covers draw plus a synchronous GPU submit but excludes the
+RGBA artifact readback, which runs once before the smoke; every measured frame
+remains subject to the 100 ms ceiling.
 
 ## 4. Host-core development
 
