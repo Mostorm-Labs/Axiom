@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "generated_for": "POC-01 Shared Engine",
+  "dependencies": {
+    "skia": {
+      "url": "https://github.com/google/skia.git",
+      "branch": "chrome/m152",
+      "commit": "b6d106297ff9ef2ff8094033695d045e87775581"
+    },
+    "emscripten": {
+      "url": "https://github.com/emscripten-core/emsdk.git",
+      "version": "6.0.6",
+      "llvm_version": "22.1.8"
+    },
+    "windows_llvm": {
+      "version": "22.1.8",
+      "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe",
+      "sha256": "16e5709785fef73c854646241c4a92c5cd574318d1b33c63330dd7721903e55c"
+    },
+    "node": {
+      "version": "24.18.0",
+      "release_line": "LTS",
+      "archives": {
+        "darwin-arm64": { "extension": "tar.gz", "sha256": "e1a97e14c99c803e96c7339403282ea05a499c32f8d83defe9ef5ec66f979ed1" },
+        "darwin-x64": { "extension": "tar.gz", "sha256": "dfd0dbd3e721503434df7b7205e719f61b3a3a31b2bcf9729b8b91fea240f080" },
+        "linux-x64": { "extension": "tar.gz", "sha256": "783130984963db7ba9cbd01089eaf2c2efb055c7c1693c943174b967b3050cb8" },
+        "windows-x64": { "extension": "zip", "sha256": "0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821" }
+      }
+    },
+    "android_ndk": {
+      "version": "27.2.12479018",
+      "release": "r27c",
+      "api_level": 26
+    },
+    "web": {
+      "react": "19.2.8",
+      "react_dom": "19.2.8",
+      "vite": "8.2.1",
+      "typescript": "7.0.2",
+      "playwright": "1.62.1",
+      "types_node": "24.13.3"
+    },
+    "googletest": {
+      "url": "https://github.com/google/googletest.git",
+      "version": "1.18.0",
+      "commit": "063de7e9578f82b369302001269680b4b1553359"
+    },
+    "nlohmann_json": {
+      "url": "https://github.com/nlohmann/json.git",
+      "version": "3.12.0",
+      "commit": "55f93686c01528224f448c19128836e7df245f72"
+    },
+    "xxhash": {
+      "url": "https://github.com/Cyan4973/xxHash.git",
+      "version": "0.8.3",
+      "commit": "e626a72bc2321cd320e953a0ccf1584cad60f363"
+    },
+    "roboto_regular": {
+      "source": "skia/resources/fonts/Roboto-Regular.ttf",
+      "sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f"
+    }
+  },
+  "skia_builds": {
+    "windows_d3d12": {
+      "target_cpu": "x64",
+      "is_official_build": true,
+      "skia_enable_ganesh": true,
+      "skia_enable_graphite": false,
+      "skia_use_direct3d": true,
+      "skia_use_gl": false,
+      "skia_use_angle": false,
+      "skia_use_vulkan": false,
+      "skia_use_dawn": false
+    },
+    "web_webgl2": {
+      "target_cpu": "wasm",
+      "is_official_build": true,
+      "skia_enable_ganesh": true,
+      "skia_enable_graphite": false,
+      "skia_use_webgl": true,
+      "skia_use_dawn": false,
+      "skia_use_pthread": false
+    },
+    "apple_metal": {
+      "skia_enable_ganesh": true,
+      "skia_enable_graphite": false,
+      "skia_use_metal": true,
+      "skia_use_gl": false,
+      "skia_use_dawn": false
+    },
+    "android_gles3": {
+      "target_cpus": ["arm64", "x64"],
+      "skia_enable_ganesh": true,
+      "skia_enable_graphite": false,
+      "skia_use_gl": true,
+      "skia_use_vulkan": false,
+      "skia_use_dawn": false
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Canvas v2 项目总体框架
 
-> 状态：Architecture Baseline v1.0；当前阶段：POC-01 Shared Engine 设计；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
+> 状态：Architecture Baseline v1.0；当前阶段：POC-01 Shared Engine / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
 
 Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯的白板应用、Skia Renderer 或跨平台 UI 框架，而是整个产品体系共享的语义文档、编辑、笔迹、文本、场景、渲染、持久化与协作运行时。
 
@@ -14,7 +14,7 @@ Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯
 
 ## 1. 产品定义
 
-Canvas v2 为 Web、Windows、Android 和复用 Web Shell 的 ChromiumOS 产品提供同一套文档与画布语义。平台 UI 可以替换，核心数据与行为不能分叉。
+Canvas v2 为 Web、Windows、macOS、iOS、iPadOS、Android 和复用 Web Shell 的 ChromiumOS 环境提供同一套文档与画布语义。首批产品 Shell 仍是 Web、Windows、Android；Apple 平台在 POC-01 先验证共享 Runtime 与 Ganesh/Metal，产品 Shell 另行 ADR。平台 UI 可以替换，核心数据与行为不能分叉。
 
 长期能力边界包括：
 
@@ -67,6 +67,8 @@ V1 包含 Collaboration MVP：
 | Web | React + TypeScript | WASM API | Skia Ganesh/WebGL；DOM 只负责产品 UI |
 | Windows | React + Tauri | C ABI | Native Canvas Region；产品 UI 与画布保持固定 z-order 边界 |
 | Android | React Native | Native `CanvasView` + JNI | MotionEvent/历史点直接进入 C++ InputRouter，不经过 RN JS |
+| macOS | POC native harness；产品 Shell 待 ADR | C ABI / ObjC++ adapter | Skia Ganesh/Metal；验证共享 Runtime，不冻结产品 UI |
+| iOS / iPadOS | POC universal native runner；产品 Shell 待 ADR | C ABI / ObjC++ adapter | Skia Ganesh/Metal；iPhone 与 iPad 模拟器分别验收 |
 | ChromiumOS | 复用 Web Shell | WASM API | 平台 FastInk 能力通过独立 backend 注入 |
 
 跨平台共享的是 Runtime，不是 UI 框架。Toolbar、Inspector、Dialog、Share、Account 和 Navigation 留在 Shell；Document、Operations、Ink、Text、Scene、HitTest、Renderer 与 Serialization 留在 C++ Runtime。
@@ -79,6 +81,7 @@ flowchart TB
     Web["React Web"]
     Win["React / Tauri Windows"]
     Android["React Native Android"]
+    Apple["Apple Native POC Harness"]
   end
 
   API["Canvas Application API<br/>WASM / C ABI / JNI"]
@@ -105,6 +108,7 @@ flowchart TB
   Web --> API
   Win --> API
   Android --> API
+  Apple --> API
   API --> Editor
   Editor --> Ops
   Ops --> Doc
@@ -262,7 +266,7 @@ canvas/
 
 | 阶段 | 主题 | 阻断结果 |
 | --- | --- | --- |
-| POC-01 | Shared Engine | Windows Native 与 Web WASM 共享同一 C++ Runtime |
+| POC-01 | Shared Engine | Web、Windows、macOS、iOS、iPadOS、Android 共享同一 C++ Runtime |
 | POC-02 | Ink Engine | Pointer batch、Vector/Dab、Preview/Canonical 双路径成立 |
 | POC-03 | 100K Scene | SceneCompiler、空间索引、FrameGraph、Tile 接口满足规模目标 |
 | POC-04 | RichText / IME | Web/Windows/Android 文本编辑语义成立 |

@@ -1,6 +1,6 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Designing；原则：先验证五个高风险边界，再产品化，FastInk 作为第六个独立验证
+> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Validating；原则：先验证五个高风险边界，再产品化，FastInk 作为第六个独立验证
 
 路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。阶段按顺序验收；准备工作可以并行，但依赖未通过 POC 的产品实现不能提前固化。
 
@@ -21,7 +21,7 @@
 
 ### 目标
 
-证明同一份单线程 C++20 Runtime 能在 Windows Native 与 Web WASM 上运行，并用 Skia Ganesh 绘制一致的最小语义场景。
+证明同一份单线程 C++20 Runtime 能在 Web/WASM、Windows、macOS、iOS、iPadOS 与 Android 上运行，并用 Skia Ganesh 绘制一致的最小语义场景。Apple 和 Android 的加入用于验证 Runtime 可移植性，不在 POC-01 冻结新的产品 Shell。
 
 ### 设计
 
@@ -30,35 +30,37 @@
 - 定义最小场景：Page、Rect/Shape、Image、VectorPath、只读 Text。
 - 定义固定坐标、颜色空间、DPI、资源、字体和逻辑摘要格式。
 - 定义单线程 event loop：command → document → scene → frame。
-- 选择并登记 Windows/Web 基准设备与浏览器，作为 POC-01～03 性能基线。
+- 定义 WebGL2、D3D12、Metal 和 Android GLES3 surface adapter；平台句柄不得进入通用 Runtime。
+- 选择并登记 Windows/Web 基准设备与浏览器，作为 POC-01～03 性能基线；Apple/Android 记录验证设备但不替代该性能基线。
 
 ### 验证
 
-- 同一 scene fixture 在 Windows 与 Web 加载后，Document digest 必须逐字节一致。
+- 同一 scene fixture 在 Web、Windows、macOS、iOS、iPadOS、Android 加载后，Document digest 必须逐字节一致。
 - 使用同一打包字体、图片和 viewport 生成黄金图；至少 99.9% 像素的每通道差值 ≤ 2，其余差异必须有 diff 产物。
 - create/move/delete 操作回放 10 次，digest 和 operation sequence 全部一致。
 - 连续创建/销毁 runtime、document、view 100 次，sanitizer/浏览器控制台无泄漏错误或 use-after-free。
 - Release 构建连续渲染 1,000 节点 60 秒，不出现崩溃、无限增长和单帧 > 100 ms。
 - Web 构建不得要求 SharedArrayBuffer、COOP/COEP 或 pthread。
+- Apple runner 必须在 macOS、iPhone simulator 和 iPad simulator 分别完成 Metal render/readback；Android 必须通过 Native CanvasView/JNI 完成 render/readback，数据面不经过 JS。
 
 ### 实现
 
 - 建立可丢弃的 C++20/Skia Ganesh POC target。
 - 实现最小 Document、Operations、SceneCompiler 和 Renderer 直通链。
-- 实现 Windows native surface 与 WebGL/WASM surface。
+- 实现 Windows/D3D12、Web/WASM/WebGL2、macOS/iOS/iPadOS/Metal 与 Android Native CanvasView/JNI/GLES3 surface。
 - 实现最小 C ABI、WASM exports、host callback 和结构化错误。
 - 实现场景 fixture、逻辑 digest、操作回放和黄金图导出工具。
 
 ### 交付物
 
-- Windows demo、Web demo 和相同场景资源。
+- Windows demo、Web demo、macOS runner、iOS/iPadOS universal runner、Android Native CanvasView demo 和相同场景资源。
 - ABI/WASM 契约说明、运行脚本、构建环境锁定信息。
 - Document digest、黄金图 diff、生命周期和 smoke 性能报告。
 - POC-02 可复用的输入和 view/surface 边界。
 
 ### 退出条件
 
-- [ ] Windows 与 Web 从干净环境构建成功。
+- [ ] Web、Windows、macOS、iOS、iPadOS 与 Android 从干净环境构建成功。
 - [ ] 跨平台 Document digest 100% 一致。
 - [ ] 黄金图达到 99.9%/通道差值 2 门禁。
 - [ ] 100 次生命周期测试和 60 秒 smoke 测试通过。
