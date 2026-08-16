@@ -80,6 +80,10 @@ The measured loop covers draw plus GPU command submission but excludes both a
 CPU wait and the RGBA artifact readback; the reviewed readback runs once before
 the smoke and synchronizes the backend. Every measured submission remains
 subject to the 100 ms ceiling.
+Web uses `requestAnimationFrame`, and Apple Metal uses an equivalent 60 Hz
+submission cadence after the warmup drain. This prevents an asynchronous
+software/simulator queue from being saturated while keeping scheduling delay
+outside the measured Runtime draw/submit interval.
 
 ## 4. Host-core development
 
@@ -130,8 +134,11 @@ Build Skia/WASM with the `web-release` preset, copy assets with
 The generated JS/WASM is scanned for pthread, `SharedArrayBuffer`, and
 COOP/COEP requirements. The browser suite recreates Runtime, Document, and
 WebGL surface 100 times, then measures the 1,000-node scene for 60 seconds.
-After a 60-frame warmup, the WASM heap must remain the same size for the entire
-measured smoke.
+The warmup and measured smoke are paced by `requestAnimationFrame` so the test
+models a browser frame loop instead of saturating an unbounded SwiftShader
+submission queue. After 60 warmup frames and an untimed synchronization, the
+WASM heap must remain the same size for the entire measured smoke; each Runtime
+draw/submit call is still independently subject to the 100 ms ceiling.
 
 ### Windows
 

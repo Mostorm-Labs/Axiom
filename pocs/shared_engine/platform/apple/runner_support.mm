@@ -7,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -185,16 +186,24 @@ std::string RunAppleAcceptance(
     for (int warmup = 0; warmup < 60; ++warmup) {
       Check(adapter.Render(*document), "Metal smoke warmup");
     }
+    std::vector<uint8_t> warmup_drain;
+    Check(adapter.Render(*document, &warmup_drain),
+          "Metal smoke warmup drain");
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(smoke_seconds);
+    const auto frame_interval = std::chrono::microseconds(16667);
+    auto next_frame = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_until(next_frame);
+      if (std::chrono::steady_clock::now() >= deadline) break;
       const auto start = std::chrono::steady_clock::now();
       Check(adapter.Render(*document), "Metal smoke render");
-      const double frame_ms = std::chrono::duration<double, std::milli>(
-                                  std::chrono::steady_clock::now() - start)
-                                  .count();
+      const auto completed = std::chrono::steady_clock::now();
+      const double frame_ms =
+          std::chrono::duration<double, std::milli>(completed - start).count();
       max_frame_ms = std::max(max_frame_ms, frame_ms);
       ++smoke_frames;
+      next_frame = std::max(next_frame + frame_interval, completed);
     }
     std::vector<uint8_t> smoke_drain;
     Check(adapter.Render(*document, &smoke_drain), "Metal smoke drain");

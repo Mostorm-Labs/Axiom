@@ -121,13 +121,24 @@ test("loads, replays, renders, and passes the visual gate", async ({ page }) => 
     }
     replay(generated);
     for (let warmup = 0; warmup < 60; ++warmup) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       checkStatus(module._canvas_poc_web_render(), "smoke warmup");
+    }
+    const warmupDrainSize = module._malloc(4);
+    try {
+      module._canvas_poc_web_readback(0, 0, warmupDrainSize);
+      if (module.HEAPU32[warmupDrainSize / 4] !== 800 * 600 * 4) {
+        throw new Error("Web smoke warmup drain returned an invalid readback size");
+      }
+    } finally {
+      module._free(warmupDrainSize);
     }
     const smokeHeapBefore = module.HEAPU8.buffer.byteLength;
     const deadline = performance.now() + 60_000;
     let smokeFrames = 0;
     let maxFrameMs = 0;
     while (performance.now() < deadline) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       const start = performance.now();
       checkStatus(module._canvas_poc_web_render(), "smoke render");
       maxFrameMs = Math.max(maxFrameMs, performance.now() - start);

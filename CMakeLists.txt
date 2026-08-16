@@ -21,6 +21,33 @@ if(MSVC)
     # static CRT. Retain a Debug build with symbols, but use /MT so the
     # sanitizer check matches the release Skia archive's CRT contract.
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      message(FATAL_ERROR "POC-01 Windows sanitizers require the pinned clang-cl toolchain")
+    endif()
+    execute_process(
+      COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
+      RESULT_VARIABLE CANVAS_POC01_CLANG_RESOURCE_STATUS
+      OUTPUT_VARIABLE CANVAS_POC01_CLANG_RESOURCE_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    file(TO_CMAKE_PATH "${CANVAS_POC01_CLANG_RESOURCE_DIR}"
+         CANVAS_POC01_CLANG_RESOURCE_DIR)
+    set(CANVAS_POC01_ASAN_RUNTIME
+        "${CANVAS_POC01_CLANG_RESOURCE_DIR}/lib/windows/clang_rt.asan-x86_64.lib")
+    if(NOT CANVAS_POC01_CLANG_RESOURCE_STATUS EQUAL 0 OR
+       NOT EXISTS "${CANVAS_POC01_ASAN_RUNTIME}")
+      message(FATAL_ERROR
+        "clang-cl AddressSanitizer runtime was not found: ${CANVAS_POC01_ASAN_RUNTIME}")
+    endif()
+    # Apply instrumentation to the Runtime, tests, GoogleTest and C helpers.
+    # Mixing annotated and unannotated MSVC STL objects is a link-time error.
+    add_compile_options(/fsanitize=address)
+    # CMake drives lld-link directly for the MSVC ABI, so supply the static-CRT
+    # ASan runtime explicitly instead of forwarding a compiler-driver flag.
+    add_link_options(
+      /INCREMENTAL:NO
+      "/wholearchive:${CANVAS_POC01_ASAN_RUNTIME}"
+    )
   else()
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   endif()

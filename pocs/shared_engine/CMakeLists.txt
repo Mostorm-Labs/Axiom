@@ -47,8 +47,8 @@ if(CANVAS_POC01_ENABLE_SANITIZERS)
     target_compile_options(canvas_poc01_core PRIVATE -fsanitize=undefined -fno-omit-frame-pointer)
     target_link_options(canvas_poc01_core PUBLIC -fsanitize=undefined)
   elseif(MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(canvas_poc01_core PRIVATE /fsanitize=address)
-    target_link_options(canvas_poc01_core PUBLIC /fsanitize=address)
+    # The top-level project instruments every target and links compiler-rt so
+    # MSVC STL annotation metadata remains consistent across test libraries.
   elseif(NOT MSVC)
     target_compile_options(canvas_poc01_core PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_link_options(canvas_poc01_core PUBLIC -fsanitize=address,undefined)
