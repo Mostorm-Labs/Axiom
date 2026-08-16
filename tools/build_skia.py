@@ -121,7 +121,8 @@ def main() -> int:
     parser.add_argument("--print-args", action="store_true")
     args = parser.parse_args()
 
-    gn = Path(args.gn).resolve() if args.gn else SKIA / "bin" / "gn"
+    host_gn = "gn.exe" if os.name == "nt" else "gn"
+    gn = Path(args.gn).resolve() if args.gn else SKIA / "bin" / host_gn
     if not gn.exists():
         raise RuntimeError(
             "missing GN binary; sync Skia dependencies or pass --gn"
