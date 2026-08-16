@@ -31,6 +31,10 @@ EMSCRIPTEN_WEBGL_CONTEXT_HANDLE g_webgl = 0;
 sk_sp<GrDirectContext> g_context;
 sk_sp<SkSurface> g_surface;
 std::vector<uint8_t> g_readback;
+canvas::poc01::SkiaSceneRenderer g_renderer;
+canvas::poc01::RuntimeScene g_scene;
+const canvas::poc01::Document* g_scene_document = nullptr;
+bool g_readback_dirty = false;
 
 void DestroySurface() {
   g_surface.reset();
@@ -43,6 +47,22 @@ void DestroySurface() {
     g_webgl = 0;
   }
   g_readback.clear();
+  g_scene = {};
+  g_scene_document = nullptr;
+  g_readback_dirty = false;
+}
+
+canvas_poc_status_t EnsureReadback() {
+  if (!g_readback_dirty) return CANVAS_POC_STATUS_OK;
+  if (g_surface == nullptr || g_context == nullptr) {
+    canvas::poc01::SetLastError("Web surface is not ready for readback");
+    return CANVAS_POC_STATUS_PLATFORM_ERROR;
+  }
+  g_context->flushAndSubmit(g_surface.get(), GrSyncCpu::kYes);
+  const canvas_poc_status_t status =
+      g_renderer.Readback(*g_surface, 800, 600, &g_readback);
+  if (status == CANVAS_POC_STATUS_OK) g_readback_dirty = false;
+  return status;
 }
 
 }  // namespace
@@ -161,15 +181,17 @@ EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_render() {
     canvas::poc01::SetLastError("Web document or surface is not ready");
     return CANVAS_POC_STATUS_INVALID_HANDLE;
   }
-  const canvas::poc01::RuntimeScene scene =
-      canvas::poc01::SceneCompiler().Compile(*document);
-  canvas::poc01::SkiaSceneRenderer renderer;
+  if (g_scene_document != document.get() ||
+      g_scene.source_revision != document->state().revision) {
+    g_scene = canvas::poc01::SceneCompiler().Compile(*document);
+    g_scene_document = document.get();
+  }
   canvas_poc_status_t status =
-      renderer.Draw(*g_surface->getCanvas(), scene, document->assets());
+      g_renderer.Draw(*g_surface->getCanvas(), g_scene, document->assets());
   if (status != CANVAS_POC_STATUS_OK) return status;
-  g_context->flushAndSubmit(g_surface.get(), GrSyncCpu::kYes);
-  status = renderer.Readback(*g_surface, 800, 600, &g_readback);
-  return status;
+  g_context->flushAndSubmit(g_surface.get(), GrSyncCpu::kNo);
+  g_readback_dirty = true;
+  return CANVAS_POC_STATUS_OK;
 }
 
 EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_compare_golden(
@@ -179,6 +201,8 @@ EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_compare_golden(
       maximum_channel_delta == nullptr) {
     return CANVAS_POC_STATUS_INVALID_ARGUMENT;
   }
+  const canvas_poc_status_t readback_status = EnsureReadback();
+  if (readback_status != CANVAS_POC_STATUS_OK) return readback_status;
   const canvas::poc01::VisualMetrics metrics = canvas::poc01::CompareRgba(
       std::span<const uint8_t>(expected, expected_size), g_readback, 2);
   if (metrics.total_pixels == 0) {
@@ -193,6 +217,8 @@ EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_compare_golden(
 
 EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_readback(
     uint8_t* buffer, size_t buffer_size, size_t* required) {
+  const canvas_poc_status_t readback_status = EnsureReadback();
+  if (readback_status != CANVAS_POC_STATUS_OK) return readback_status;
   return canvas::poc01::CopyToCaller(g_readback, buffer, buffer_size, required);
 }
 

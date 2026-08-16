@@ -37,9 +37,12 @@ SkImageInfo RgbaInfo(uint32_t width, uint32_t height) {
 
 }  // namespace
 
+SkiaSceneRenderer::SkiaSceneRenderer() = default;
+SkiaSceneRenderer::~SkiaSceneRenderer() = default;
+
 canvas_poc_status_t SkiaSceneRenderer::Draw(
     SkCanvas& canvas, const RuntimeScene& scene,
-    const AssetRegistry& assets) const {
+    const AssetRegistry& assets) {
   canvas.clear(ToSkColor(scene.background));
   for (const Node& node : scene.draw_items) {
     canvas_poc_status_t status = CANVAS_POC_STATUS_OK;
@@ -62,16 +65,21 @@ canvas_poc_status_t SkiaSceneRenderer::Draw(
               SetLastError("Skia image asset disappeared: " + value.asset_key);
               status = CANVAS_POC_STATUS_ASSET_ERROR;
             } else {
-              sk_sp<SkData> data =
-                  SkData::MakeWithCopy(asset->bytes.data(), asset->bytes.size());
-              sk_sp<SkImage> image = SkImages::DeferredFromEncodedData(data);
-              if (image == nullptr) {
+              CachedImage& cached = images_[value.asset_key];
+              if (cached.image == nullptr ||
+                  cached.content_hash != asset->content_hash) {
+                sk_sp<SkData> data = SkData::MakeWithCopy(
+                    asset->bytes.data(), asset->bytes.size());
+                cached.image = SkImages::DeferredFromEncodedData(data);
+                cached.content_hash = asset->content_hash;
+              }
+              if (cached.image == nullptr) {
                 SetLastError("Skia failed to decode image asset: " +
                              value.asset_key);
                 status = CANVAS_POC_STATUS_ASSET_ERROR;
               } else {
                 canvas.drawImageRect(
-                    image,
+                    cached.image,
                     SkRect::MakeXYWH(value.x, value.y, value.width,
                                      value.height),
                     SkSamplingOptions(SkFilterMode::kNearest), nullptr);
@@ -111,18 +119,30 @@ canvas_poc_status_t SkiaSceneRenderer::Draw(
                            value.font_asset_key);
               status = CANVAS_POC_STATUS_ASSET_ERROR;
             } else {
-              sk_sp<SkData> data =
-                  SkData::MakeWithCopy(asset->bytes.data(), asset->bytes.size());
-              sk_sp<SkData> fonts[] = {data};
-              sk_sp<SkFontMgr> manager = SkFontMgr_New_Custom_Data(fonts);
-              sk_sp<SkTypeface> typeface = manager->makeFromData(data);
-              if (typeface == nullptr) {
+              CachedTypeface& cached = typefaces_[value.font_asset_key];
+              if (cached.typeface == nullptr ||
+                  cached.content_hash != asset->content_hash) {
+                sk_sp<SkData> data = SkData::MakeWithCopy(
+                    asset->bytes.data(), asset->bytes.size());
+                sk_sp<SkData> fonts[] = {data};
+                sk_sp<SkFontMgr> manager = SkFontMgr_New_Custom_Data(fonts);
+                cached.typeface = manager->makeFromData(data);
+                cached.content_hash = asset->content_hash;
+              }
+              if (cached.typeface == nullptr) {
                 SetLastError("Skia failed to load font asset: " +
                              value.font_asset_key);
                 status = CANVAS_POC_STATUS_ASSET_ERROR;
               } else {
-                SkFont font(std::move(typeface), value.font_size);
-                font.setEdging(SkFont::Edging::kAntiAlias);
+                // The cross-backend golden is intentionally coverage-binary.
+                // This removes platform FreeType/GPU AA-kernel variance while
+                // still exercising the pinned Roboto Text node end to end.
+                paint.setAntiAlias(false);
+                SkFont font(cached.typeface, value.font_size);
+                font.setEdging(SkFont::Edging::kAlias);
+                font.setHinting(SkFontHinting::kNone);
+                font.setLinearMetrics(true);
+                font.setSubpixel(false);
                 canvas.drawString(value.text.c_str(), value.x, value.y, font,
                                   paint);
               }
@@ -140,7 +160,7 @@ canvas_poc_status_t SkiaSceneRenderer::Draw(
 
 canvas_poc_status_t SkiaSceneRenderer::RenderRaster(
     const RuntimeScene& scene, const AssetRegistry& assets,
-    std::vector<uint8_t>* rgba) const {
+    std::vector<uint8_t>* rgba) {
   if (rgba == nullptr) {
     SetLastError("raster output must not be null");
     return CANVAS_POC_STATUS_INVALID_ARGUMENT;

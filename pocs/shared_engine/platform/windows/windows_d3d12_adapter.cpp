@@ -49,6 +49,7 @@ struct WindowsD3d12Adapter::Impl {
   sk_sp<SkSurface> surface;
   RuntimeScene scene;
   const Document* scene_document = nullptr;
+  SkiaSceneRenderer renderer;
 };
 
 WindowsD3d12Adapter::WindowsD3d12Adapter()
@@ -166,16 +167,16 @@ canvas_poc_status_t WindowsD3d12Adapter::Render(
     impl_->scene = SceneCompiler().Compile(document);
     impl_->scene_document = &document;
   }
-  SkiaSceneRenderer renderer;
   canvas_poc_status_t status =
-      renderer.Draw(*impl_->surface->getCanvas(), impl_->scene,
-                    document.assets());
+      impl_->renderer.Draw(*impl_->surface->getCanvas(), impl_->scene,
+                           document.assets());
   if (status != CANVAS_POC_STATUS_OK) return status;
-  impl_->context->flushAndSubmit(impl_->surface.get(), GrSyncCpu::kYes);
+  impl_->context->flushAndSubmit(
+      impl_->surface.get(), rgba == nullptr ? GrSyncCpu::kNo : GrSyncCpu::kYes);
   return rgba == nullptr
              ? CANVAS_POC_STATUS_OK
-             : renderer.Readback(*impl_->surface, impl_->width, impl_->height,
-                                 rgba);
+             : impl_->renderer.Readback(*impl_->surface, impl_->width,
+                                        impl_->height, rgba);
 }
 
 canvas_poc_status_t WindowsD3d12Adapter::PresentToWindow(

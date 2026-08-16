@@ -19,6 +19,7 @@ export interface CanvasModule {
 declare global {
   interface Window {
     __canvasPocFactory?: ModuleFactory;
+    __canvasPocFactoryReady?: Promise<ModuleFactory>;
     __canvasPocModule?: CanvasModule;
   }
 }
@@ -26,7 +27,7 @@ declare global {
 type ModuleFactory = (options?: Record<string, unknown>) => Promise<CanvasModule>;
 
 export async function createModule(): Promise<CanvasModule> {
-  const factory = window.__canvasPocFactory;
+  const factory = window.__canvasPocFactory ?? await window.__canvasPocFactoryReady;
   if (!factory) throw new Error("Canvas POC WASM factory was not loaded");
   return factory({
     locateFile: (name: string) => `/wasm/${name}`,

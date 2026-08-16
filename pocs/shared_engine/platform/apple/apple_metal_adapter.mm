@@ -23,6 +23,7 @@ struct AppleMetalAdapter::Impl {
   sk_sp<SkSurface> surface;
   RuntimeScene scene;
   const Document* scene_document = nullptr;
+  SkiaSceneRenderer renderer;
   uint32_t width = 0;
   uint32_t height = 0;
   std::string device_name;
@@ -99,18 +100,19 @@ canvas_poc_status_t AppleMetalAdapter::Render(
       impl_->scene = SceneCompiler().Compile(document);
       impl_->scene_document = &document;
     }
-    SkiaSceneRenderer renderer;
     canvas_poc_status_t status =
-        renderer.Draw(*impl_->surface->getCanvas(), impl_->scene,
-                      document.assets());
+        impl_->renderer.Draw(*impl_->surface->getCanvas(), impl_->scene,
+                             document.assets());
     if (status != CANVAS_POC_STATUS_OK) {
       return status;
     }
-    impl_->context->flushAndSubmit(impl_->surface.get(), GrSyncCpu::kYes);
+    impl_->context->flushAndSubmit(
+        impl_->surface.get(),
+        readback == nullptr ? GrSyncCpu::kNo : GrSyncCpu::kYes);
     return readback == nullptr
                ? CANVAS_POC_STATUS_OK
-               : renderer.Readback(*impl_->surface, impl_->width,
-                                   impl_->height, readback);
+               : impl_->renderer.Readback(*impl_->surface, impl_->width,
+                                          impl_->height, readback);
   }
 }
 

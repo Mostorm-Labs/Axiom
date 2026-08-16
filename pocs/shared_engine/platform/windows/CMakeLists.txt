@@ -7,7 +7,7 @@ target_compile_definitions(canvas_poc01_windows_adapter PRIVATE
   NOMINMAX WIN32_LEAN_AND_MEAN
 )
 target_link_libraries(canvas_poc01_windows_adapter PUBLIC
-  canvas_poc01_skia d3d12 dxgi dxguid
+  canvas_poc01_skia d3d12 d3dcompiler dxgi dxguid
 )
 
 add_executable(canvas_poc01_windows windows_demo.cpp)

@@ -57,9 +57,11 @@ The reviewed fixture is fixed at 800×600, DPR 1, sRGB, single-sample, with a
 light gray background. It contains a blue Rect, a generated 64×64 two-color
 checker PNG, a cubic VectorPath, and `Canvas v2` using the locked Roboto file.
 The seven-record replay also moves the Rect and creates/deletes a temporary
-Rect. The fixed VectorPath uses binary (non-AA) coverage in this POC so D3D12,
-WebGL2, Metal, GLES3, and CPU raster do not spend the visual tolerance budget
-on backend-specific edge kernels; this is not a V1 rendering-quality policy.
+Rect. The fixed VectorPath and pinned-Roboto Text use binary (non-AA) coverage
+with disabled font hinting in this POC so D3D12, WebGL2, Metal, GLES3, and CPU
+raster do not spend the visual tolerance budget on backend-specific edge
+kernels; this is a fixture determinism rule, not the V1 RichText rendering
+policy.
 
 The reviewed semantic digest is:
 
@@ -74,9 +76,10 @@ smoke, an empty smoke, or a reported frame above 100 ms.
 GPU-backed smoke runs render 60 unmeasured warmup frames before the 60-second
 window so shader and pipeline creation are not misreported as steady-state
 frame time. RuntimeScene is rebuilt only when the Document revision changes.
-The measured loop covers draw plus a synchronous GPU submit but excludes the
-RGBA artifact readback, which runs once before the smoke; every measured frame
-remains subject to the 100 ms ceiling.
+The measured loop covers draw plus GPU command submission but excludes both a
+CPU wait and the RGBA artifact readback; the reviewed readback runs once before
+the smoke and synchronizes the backend. Every measured submission remains
+subject to the 100 ms ceiling.
 
 ## 4. Host-core development
 

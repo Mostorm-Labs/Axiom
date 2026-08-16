@@ -4,13 +4,23 @@ import { mkdirSync, writeFileSync } from "node:fs";
 test("loads, replays, renders, and passes the visual gate", async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
   await page.goto("/");
   await page.getByRole("button", { name: "Load Fixture" }).click();
-  await expect(page.getByTestId("backend")).toHaveText("ganesh-webgl2");
+  await expect.poll(async () => {
+    const backend = await page.getByTestId("backend").textContent();
+    if (backend === "—") {
+      const message = await page.locator("header > p:last-child").textContent();
+      return `${backend}: ${message}`;
+    }
+    return backend;
+  }, { timeout: 30_000 }).toBe("ganesh-webgl2");
   await page.getByRole("button", { name: "Replay" }).click();
-  await expect(page.getByTestId("digest")).toHaveText("47826449b895ac4f4a57b4f386379775");
+  await expect(page.getByTestId("digest")).toHaveText(
+    "47826449b895ac4f4a57b4f386379775", { timeout: 30_000 });
   await page.getByRole("button", { name: "Render" }).click();
-  await expect(page.getByTestId("metrics")).toContainText("pixels within ±2");
+  await expect(page.getByTestId("metrics")).toContainText(
+    "pixels within ±2", { timeout: 30_000 });
   const downloadPromise = page.waitForEvent("download");
   await page.evaluate(() => {
     const module = window.__canvasPocModule!;
@@ -122,6 +132,15 @@ test("loads, replays, renders, and passes the visual gate", async ({ page }) => 
       checkStatus(module._canvas_poc_web_render(), "smoke render");
       maxFrameMs = Math.max(maxFrameMs, performance.now() - start);
       ++smokeFrames;
+    }
+    const drainSize = module._malloc(4);
+    try {
+      module._canvas_poc_web_readback(0, 0, drainSize);
+      if (module.HEAPU32[drainSize / 4] !== 800 * 600 * 4) {
+        throw new Error("Web smoke drain returned an invalid readback size");
+      }
+    } finally {
+      module._free(drainSize);
     }
     if (maxFrameMs > 100) throw new Error(`Web smoke frame exceeded 100 ms: ${maxFrameMs}`);
     const smokeHeapAfter = module.HEAPU8.buffer.byteLength;

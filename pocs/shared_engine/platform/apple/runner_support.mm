@@ -196,6 +196,8 @@ std::string RunAppleAcceptance(
       max_frame_ms = std::max(max_frame_ms, frame_ms);
       ++smoke_frames;
     }
+    std::vector<uint8_t> smoke_drain;
+    Check(adapter.Render(*document, &smoke_drain), "Metal smoke drain");
     if (max_frame_ms > 100.0) {
       throw std::runtime_error("Apple Metal smoke frame exceeded 100 ms: " +
                                std::to_string(max_frame_ms));

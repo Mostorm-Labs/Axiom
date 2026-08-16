@@ -29,6 +29,7 @@ struct AndroidGlesAdapter::Impl {
   sk_sp<SkSurface> sk_surface;
   RuntimeScene scene;
   const Document* scene_document = nullptr;
+  SkiaSceneRenderer renderer;
 };
 
 AndroidGlesAdapter::AndroidGlesAdapter() : impl_(std::make_unique<Impl>()) {}
@@ -123,16 +124,15 @@ canvas_poc_status_t AndroidGlesAdapter::Render(
     impl_->scene = SceneCompiler().Compile(document);
     impl_->scene_document = &document;
   }
-  SkiaSceneRenderer renderer;
-  canvas_poc_status_t status = renderer.Draw(
+  canvas_poc_status_t status = impl_->renderer.Draw(
       *impl_->sk_surface->getCanvas(), impl_->scene, document.assets());
   if (status != CANVAS_POC_STATUS_OK) {
     return status;
   }
   impl_->gr_context->flushAndSubmit(impl_->sk_surface.get(), GrSyncCpu::kYes);
   if (readback != nullptr) {
-    status = renderer.Readback(*impl_->sk_surface, impl_->width, impl_->height,
-                               readback);
+    status = impl_->renderer.Readback(*impl_->sk_surface, impl_->width,
+                                      impl_->height, readback);
     if (status != CANVAS_POC_STATUS_OK) {
       return status;
     }

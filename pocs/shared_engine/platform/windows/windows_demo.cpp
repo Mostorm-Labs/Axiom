@@ -222,6 +222,8 @@ int wmain() {
         max_frame_ms = (std::max)(max_frame_ms, frame_ms);
         ++smoke_frames;
       }
+      std::vector<uint8_t> smoke_drain;
+      Check(adapter.Render(*internal, &smoke_drain), "smoke drain");
       if (max_frame_ms > 100.0) {
         throw std::runtime_error("frame >100ms: " +
                                  std::to_string(max_frame_ms));

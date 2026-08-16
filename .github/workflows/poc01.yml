@@ -96,6 +96,7 @@ jobs:
           --backend ganesh-webgl2
           --skia-commit "$SKIA_COMMIT"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poc01-web
           path: |
@@ -153,6 +154,7 @@ jobs:
           --backend ganesh-d3d12-warp
           --skia-commit "$env:SKIA_COMMIT"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poc01-windows
           path: out/results
@@ -192,6 +194,7 @@ jobs:
           --backend ganesh-metal
           --skia-commit "$SKIA_COMMIT"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poc01-macos
           path: out/results
@@ -229,6 +232,7 @@ jobs:
           python3 pocs/shared_engine/tools/visual_compare.py --expected pocs/shared_engine/goldens/reference.rgba --actual out/results/ios-actual.rgba --artifacts out/results/ios-visual --backend ganesh-metal-ios-simulator --skia-commit "$SKIA_COMMIT"
           python3 pocs/shared_engine/tools/visual_compare.py --expected pocs/shared_engine/goldens/reference.rgba --actual out/results/ipados-actual.rgba --artifacts out/results/ipados-visual --backend ganesh-metal-ipados-simulator --skia-commit "$SKIA_COMMIT"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poc01-apple-mobile
           path: out/results
@@ -292,6 +296,7 @@ jobs:
           --backend ganesh-gles3-swiftshader
           --skia-commit "$SKIA_COMMIT"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: poc01-android
           path: out/results

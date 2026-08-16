@@ -40,13 +40,19 @@ TEST(SkiaRendererTest, DecodesPngLoadsRobotoAndRendersRgba) {
                 ReadText(std::filesystem::path(CANVAS_POC01_FIXTURE_DIR) /
                          "scene.ndjson")),
             CANVAS_POC_STATUS_OK);
+  SkiaSceneRenderer renderer;
   std::vector<uint8_t> rgba;
-  ASSERT_EQ(SkiaSceneRenderer().RenderRaster(
-                SceneCompiler().Compile(document), document.assets(), &rgba),
+  const RuntimeScene scene = SceneCompiler().Compile(document);
+  ASSERT_EQ(renderer.RenderRaster(scene, document.assets(), &rgba),
             CANVAS_POC_STATUS_OK)
       << GetLastError();
   EXPECT_EQ(rgba.size(), 800U * 600U * 4U);
   EXPECT_NE(HashHex(HashBytes(rgba)), "00000000000000000000000000000000");
+  std::vector<uint8_t> cached_rgba;
+  ASSERT_EQ(renderer.RenderRaster(scene, document.assets(), &cached_rgba),
+            CANVAS_POC_STATUS_OK)
+      << GetLastError();
+  EXPECT_EQ(cached_rgba, rgba);
 }
 
 TEST(SkiaRendererTest, InvalidImageBytesReportAssetError) {
