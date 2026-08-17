@@ -55,6 +55,12 @@ def archive_architectures(data: bytes) -> set[str]:
             result.add({183: "arm64-v8a", 62: "x86_64"}.get(machine, f"elf-{machine}"))
         elif len(body) >= 2:
             machine = int.from_bytes(body[:2], "little")
+            # COFF bigobj and import-library members begin with the anonymous
+            # object signature 0x0000, 0xffff and store Machine at offset 6.
+            # Skia's Windows release archives predominantly use bigobj, while
+            # smaller dependencies can still contain ordinary COFF objects.
+            if body[:4] == b"\x00\x00\xff\xff" and len(body) >= 8:
+                machine = int.from_bytes(body[6:8], "little")
             if machine == 0x8664:
                 result.add("x64")
         offset += 60 + size + (size & 1)

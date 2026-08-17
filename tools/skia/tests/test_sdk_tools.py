@@ -126,12 +126,18 @@ class SdkMetadataTest(unittest.TestCase):
 
     def test_archive_architecture_detection(self) -> None:
         wasm = b"\x00asm" + b"\0" * 8
-        header = (
-            b"object.o/       " + b"0           " + b"0     " + b"0     "
-            + b"100644  " + f"{len(wasm):<10}".encode("ascii") + b"`\n"
-        )
-        self.assertEqual(len(header), 60)
-        self.assertEqual(archive_architectures(b"!<arch>\n" + header + wasm), {"wasm32"})
+        coff_bigobj = b"\x00\x00\xff\xff\x02\x00\x64\x86" + b"\0" * 8
+
+        def member(name: bytes, body: bytes) -> bytes:
+            header = (
+                name.ljust(16) + b"0           " + b"0     " + b"0     "
+                + b"100644  " + f"{len(body):<10}".encode("ascii") + b"`\n"
+            )
+            self.assertEqual(len(header), 60)
+            return header + body + (b"\n" if len(body) & 1 else b"")
+
+        archive = b"!<arch>\n" + member(b"wasm.o/", wasm) + member(b"coff.obj/", coff_bigobj)
+        self.assertEqual(archive_architectures(archive), {"wasm32", "x64"})
 
 
 if __name__ == "__main__":
