@@ -13,6 +13,7 @@
 
 #include "apple_metal_adapter.h"
 #include "canvas_poc/canvas_poc.h"
+#include "conformance.h"
 #include "foundation.h"
 #include "platform_bridge_internal.h"
 
@@ -212,6 +213,7 @@ std::string RunAppleAcceptance(
                                std::to_string(max_frame_ms));
     }
   }
+  const CoreConformanceResult conformance = RunCoreConformance();
   std::ostringstream result;
   result << "{\"platform\":\"" << platform
          << "\",\"backend\":\"ganesh-metal\","
@@ -221,7 +223,8 @@ std::string RunAppleAcceptance(
          << "\",\"lifecycle\":" << lifecycle_iterations
          << ",\"smoke_seconds\":" << smoke_seconds
          << ",\"smoke_frames\":" << smoke_frames
-         << ",\"max_frame_ms\":" << max_frame_ms << "}";
+         << ",\"max_frame_ms\":" << max_frame_ms << ","
+         << CoreConformanceJsonFields(conformance) << "}";
   return result.str();
 }
 

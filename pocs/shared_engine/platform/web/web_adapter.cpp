@@ -5,11 +5,13 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "canvas_poc/canvas_poc.h"
+#include "conformance.h"
 #include "foundation.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkSurface.h"
@@ -118,6 +120,19 @@ EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_replay(
 EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_digest(
     char* buffer, size_t buffer_size, size_t* required) {
   return canvas_poc_document_digest(g_document, buffer, buffer_size, required);
+}
+
+EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_core_conformance(
+    char* buffer, size_t buffer_size, size_t* required) {
+  try {
+    const std::string value = canvas::poc01::CoreConformanceJsonFields(
+        canvas::poc01::RunCoreConformance());
+    return canvas::poc01::CopyToCaller(value, buffer, buffer_size, required,
+                                       true);
+  } catch (const std::exception& error) {
+    canvas::poc01::SetLastError(error.what());
+    return CANVAS_POC_STATUS_PARSE_ERROR;
+  }
 }
 
 EMSCRIPTEN_KEEPALIVE canvas_poc_status_t canvas_poc_web_surface_create(

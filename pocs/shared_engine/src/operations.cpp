@@ -92,7 +92,7 @@ float Float32(const Json& value, std::string_view name,
                       (require_positive ? " must be positive" :
                                           " must be finite"));
   }
-  return result;
+  return CanonicalizeF32(result);
 }
 
 std::string String(const Json& value, std::string_view name) {
@@ -291,8 +291,8 @@ canvas_poc_status_t ApplyOne(DocumentState& state, const AssetRegistry& assets,
     if (!IsFinite(next_x) || !IsFinite(next_y)) {
       throw SchemaError("move result must remain finite float32");
     }
-    header.translation_x = next_x;
-    header.translation_y = next_y;
+    header.translation_x = CanonicalizeF32(next_x);
+    header.translation_y = CanonicalizeF32(next_y);
   } else if (op == "delete") {
     RequireKeys(operation, {"v", "seq", "op", "id"}, "delete operation");
     const uint64_t id = Unsigned64(operation.at("id"), "delete.id");

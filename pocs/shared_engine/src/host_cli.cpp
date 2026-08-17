@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "canvas_poc/canvas_poc.h"
+#include "conformance.h"
 
 namespace {
 
@@ -277,11 +278,15 @@ int main(int argc, char** argv) {
       }
     }
 
+    const canvas::poc01::CoreConformanceResult conformance =
+        canvas::poc01::RunCoreConformance();
     std::cout << "{\"backend\":\"software-probe\",\"digest\":\""
               << expected_digest << "\",\"lifecycle\":" << options.lifecycle
               << ",\"smoke_seconds\":" << options.smoke_seconds
               << ",\"smoke_frames\":" << frame_count
-              << ",\"max_frame_ms\":" << maximum_ms << "}\n";
+              << ",\"max_frame_ms\":" << maximum_ms << ","
+              << canvas::poc01::CoreConformanceJsonFields(conformance)
+              << "}\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "canvas_poc01_cli: " << error.what() << '\n';

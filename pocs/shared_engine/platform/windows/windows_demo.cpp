@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "canvas_poc/canvas_poc.h"
+#include "conformance.h"
 #include "foundation.h"
 #include "platform_bridge_internal.h"
 #include "windows_d3d12_adapter.h"
@@ -229,6 +230,8 @@ int wmain() {
                                  std::to_string(max_frame_ms));
       }
     }
+    const canvas::poc01::CoreConformanceResult conformance =
+        canvas::poc01::RunCoreConformance();
     std::ostringstream result;
     result << "{\"platform\":\"windows\",\"backend\":\"ganesh-d3d12\","
               "\"digest\":\""
@@ -239,7 +242,8 @@ int wmain() {
            << ",\"lifecycle\":" << options.lifecycle
            << ",\"smoke_seconds\":" << options.smoke_seconds
            << ",\"smoke_frames\":" << smoke_frames
-           << ",\"max_frame_ms\":" << max_frame_ms << "}";
+           << ",\"max_frame_ms\":" << max_frame_ms << ","
+           << canvas::poc01::CoreConformanceJsonFields(conformance) << "}";
     std::cout << result.str() << '\n';
     if (window != nullptr) {
       MSG message{};

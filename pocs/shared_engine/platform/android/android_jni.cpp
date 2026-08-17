@@ -14,6 +14,7 @@
 
 #include "android_gles_adapter.h"
 #include "canvas_poc/canvas_poc.h"
+#include "conformance.h"
 #include "foundation.h"
 #include "platform_bridge_internal.h"
 
@@ -288,6 +289,8 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
     }
   }
 
+  const canvas::poc01::CoreConformanceResult conformance =
+      canvas::poc01::RunCoreConformance();
   std::ostringstream result;
   result << "{\"platform\":\"android\",\"backend\":\"ganesh-gles3\","
             "\"digest\":\""
@@ -295,7 +298,8 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
          << "\",\"lifecycle\":" << lifecycle_iterations
          << ",\"smoke_seconds\":" << smoke_seconds
          << ",\"smoke_frames\":" << smoke_frames
-         << ",\"max_frame_ms\":" << max_frame_ms << "}";
+         << ",\"max_frame_ms\":" << max_frame_ms << ","
+         << canvas::poc01::CoreConformanceJsonFields(conformance) << "}";
   Reset();
   const std::string serialized = result.str();
   __android_log_print(ANDROID_LOG_INFO, "CanvasPOC01",

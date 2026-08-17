@@ -37,6 +37,13 @@ std::string_view GetLastError() { return g_last_error; }
 
 bool IsFinite(float value) { return std::isfinite(value); }
 
+float CanonicalizeF32(float value) {
+  if (!IsFinite(value)) {
+    throw std::invalid_argument("canonical float32 rejects non-finite value");
+  }
+  return value == 0.0F ? 0.0F : value;
+}
+
 void CanonicalEncoder::U8(uint8_t value) { bytes_.push_back(value); }
 
 void CanonicalEncoder::U32(uint32_t value) {
@@ -52,10 +59,7 @@ void CanonicalEncoder::U64(uint64_t value) {
 }
 
 void CanonicalEncoder::F32(float value) {
-  if (!IsFinite(value)) {
-    throw std::invalid_argument("canonical encoding rejects non-finite float");
-  }
-  U32(std::bit_cast<uint32_t>(value));
+  U32(std::bit_cast<uint32_t>(CanonicalizeF32(value)));
 }
 
 void CanonicalEncoder::Bytes(std::span<const uint8_t> value) {

@@ -8,6 +8,7 @@ export interface CanvasModule {
   _canvas_poc_web_load_assets(checker: number, checkerSize: number, font: number, fontSize: number): number;
   _canvas_poc_web_replay(ndjson: number, size: number): number;
   _canvas_poc_web_digest(buffer: number, size: number, required: number): number;
+  _canvas_poc_web_core_conformance(buffer: number, size: number, required: number): number;
   _canvas_poc_web_surface_create(selector: number): number;
   _canvas_poc_web_render(): number;
   _canvas_poc_web_readback(buffer: number, size: number, required: number): number;

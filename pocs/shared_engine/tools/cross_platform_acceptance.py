@@ -9,6 +9,16 @@ from pathlib import Path
 
 
 EXPECTED_DIGEST = "47826449b895ac4f4a57b4f386379775"
+EXPECTED_CORE_CONFORMANCE = {
+    "version": 1,
+    "case_count": 10,
+    "corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4,
+    "passed": True,
+    "failure": "",
+}
 
 
 def main() -> int:
@@ -37,6 +47,12 @@ def main() -> int:
             failures.append(
                 f"{platform}: expected {EXPECTED_DIGEST}, got {value['digest']}"
             )
+        conformance = value.get("core_conformance")
+        if conformance != EXPECTED_CORE_CONFORMANCE:
+            failures.append(
+                f"{platform}: core conformance differs from reviewed oracle: "
+                f"{conformance!r}"
+            )
         if value.get("lifecycle") != 100:
             failures.append(
                 f"{platform}: expected 100 lifecycle iterations, "
@@ -60,6 +76,7 @@ def main() -> int:
         failures.append("missing platform results: " + ", ".join(missing))
     report = {
         "expected_digest": EXPECTED_DIGEST,
+        "expected_core_conformance": EXPECTED_CORE_CONFORMANCE,
         "required": args.required,
         "observed": sorted(records),
         "passed": not failures,

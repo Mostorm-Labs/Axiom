@@ -28,6 +28,7 @@ void ClearLastError();
 std::string_view GetLastError();
 
 bool IsFinite(float value);
+float CanonicalizeF32(float value);
 
 class CanonicalEncoder {
  public:

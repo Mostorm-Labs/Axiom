@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <string>
 
 #include "foundation.h"
@@ -68,6 +69,35 @@ TEST(OperationsTest, NonFiniteAndOverflowFloatsAreRejected) {
   const std::string huge =
       "{\"v\":1,\"seq\":1,\"op\":\"create\",\"node\":{\"id\":1,\"type\":\"rect\",\"order\":1,\"x\":1e400,\"y\":0,\"width\":10,\"height\":10,\"color\":[0,0,0,255]}}\n";
   EXPECT_EQ(ApplyOperations(*document, huge), CANVAS_POC_STATUS_PARSE_ERROR);
+  EXPECT_TRUE(document->state().nodes.empty());
+}
+
+TEST(OperationsTest, NegativeZeroIsCanonicalizedAtDocumentBoundary) {
+  auto document = MakeDocument();
+  const std::string replay =
+      "{\"v\":1,\"seq\":1,\"op\":\"create\",\"node\":{\"id\":1,\"type\":\"rect\",\"order\":1,\"x\":-0.0,\"y\":0,\"width\":10,\"height\":10,\"color\":[0,0,0,255]}}\n";
+  ASSERT_EQ(ApplyOperations(*document, replay), CANVAS_POC_STATUS_OK);
+  const RectNode& rect = std::get<RectNode>(document->state().nodes.at(1));
+  EXPECT_EQ(std::bit_cast<uint32_t>(rect.x), 0U);
+}
+
+TEST(OperationsTest, Uint64NodeIdsAreNotNarrowedThroughFloat) {
+  auto document = MakeDocument();
+  const std::string replay =
+      "{\"v\":1,\"seq\":1,\"op\":\"create\",\"node\":{\"id\":9007199254740993,\"type\":\"rect\",\"order\":1,\"x\":0,\"y\":0,\"width\":10,\"height\":10,\"color\":[0,0,0,255]}}\n";
+  ASSERT_EQ(ApplyOperations(*document, replay), CANVAS_POC_STATUS_OK);
+  EXPECT_TRUE(document->state().nodes.contains(9007199254740993ULL));
+}
+
+TEST(OperationsTest, MoveOverflowRejectsWholeBatch) {
+  auto document = MakeDocument();
+  const std::string replay =
+      "{\"v\":1,\"seq\":1,\"op\":\"create\",\"node\":{\"id\":1,\"type\":\"rect\",\"order\":1,\"x\":0,\"y\":0,\"width\":10,\"height\":10,\"color\":[0,0,0,255]}}\n"
+      "{\"v\":1,\"seq\":2,\"op\":\"move\",\"id\":1,\"dx\":3.40282346638528859811704183484516925440e38,\"dy\":0}\n"
+      "{\"v\":1,\"seq\":3,\"op\":\"move\",\"id\":1,\"dx\":3.40282346638528859811704183484516925440e38,\"dy\":0}\n";
+  EXPECT_EQ(ApplyOperations(*document, replay), CANVAS_POC_STATUS_PARSE_ERROR);
+  EXPECT_EQ(document->state().revision, 0U);
+  EXPECT_EQ(document->state().last_sequence, 0U);
   EXPECT_TRUE(document->state().nodes.empty());
 }
 
