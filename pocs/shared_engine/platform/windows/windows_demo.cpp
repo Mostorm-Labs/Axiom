@@ -1,7 +1,10 @@
 #include <windows.h>
+#include <psapi.h>
 #include <shellapi.h>
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -176,6 +179,26 @@ std::string Digest(canvas_poc_handle_t document) {
   return digest;
 }
 
+double Percentile(const std::vector<double>& sorted_samples, double percentile) {
+  if (sorted_samples.empty()) return 0.0;
+  const size_t rank = static_cast<size_t>(
+      std::ceil(percentile * static_cast<double>(sorted_samples.size())));
+  return sorted_samples[(std::min)(sorted_samples.size() - 1,
+                                   rank == 0 ? size_t{0} : rank - 1)];
+}
+
+uint64_t PeakWorkingSetBytes() {
+  PROCESS_MEMORY_COUNTERS_EX counters{};
+  counters.cb = sizeof(counters);
+  if (!GetProcessMemoryInfo(
+          GetCurrentProcess(),
+          reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters),
+          sizeof(counters))) {
+    throw std::runtime_error("GetProcessMemoryInfo failed");
+  }
+  return static_cast<uint64_t>(counters.PeakWorkingSetSize);
+}
+
 }  // namespace
 
 int wmain() {
@@ -203,6 +226,9 @@ int wmain() {
                    static_cast<std::streamsize>(pixels.size()));
     }
     uint64_t smoke_frames = 0;
+    double p50_frame_ms = 0;
+    double p95_frame_ms = 0;
+    double p99_frame_ms = 0;
     double max_frame_ms = 0;
     if (options.smoke_seconds > 0) {
       Session session = LoadFixture(true);
@@ -212,6 +238,7 @@ int wmain() {
       for (int warmup = 0; warmup < 60; ++warmup) {
         Check(adapter.Render(*internal), "smoke warmup");
       }
+      std::vector<double> frame_times;
       const auto deadline = std::chrono::steady_clock::now() +
                             std::chrono::seconds(options.smoke_seconds);
       while (std::chrono::steady_clock::now() < deadline) {
@@ -220,16 +247,22 @@ int wmain() {
         const double frame_ms = std::chrono::duration<double, std::milli>(
                                     std::chrono::steady_clock::now() - start)
                                     .count();
-        max_frame_ms = (std::max)(max_frame_ms, frame_ms);
+        frame_times.push_back(frame_ms);
         ++smoke_frames;
       }
       std::vector<uint8_t> smoke_drain;
       Check(adapter.Render(*internal, &smoke_drain), "smoke drain");
+      std::sort(frame_times.begin(), frame_times.end());
+      p50_frame_ms = Percentile(frame_times, 0.50);
+      p95_frame_ms = Percentile(frame_times, 0.95);
+      p99_frame_ms = Percentile(frame_times, 0.99);
+      max_frame_ms = frame_times.empty() ? 0.0 : frame_times.back();
       if (max_frame_ms > 100.0) {
         throw std::runtime_error("frame >100ms: " +
                                  std::to_string(max_frame_ms));
       }
     }
+    const uint64_t peak_memory_bytes = PeakWorkingSetBytes();
     const canvas::poc01::CoreConformanceResult conformance =
         canvas::poc01::RunCoreConformance();
     std::ostringstream result;
@@ -242,7 +275,13 @@ int wmain() {
            << ",\"lifecycle\":" << options.lifecycle
            << ",\"smoke_seconds\":" << options.smoke_seconds
            << ",\"smoke_frames\":" << smoke_frames
-           << ",\"max_frame_ms\":" << max_frame_ms << ","
+           << ",\"p50_ms\":" << p50_frame_ms
+           << ",\"p95_ms\":" << p95_frame_ms
+           << ",\"p99_ms\":" << p99_frame_ms
+           << ",\"max_ms\":" << max_frame_ms
+           << ",\"max_frame_ms\":" << max_frame_ms
+           << ",\"peak_memory_bytes\":" << peak_memory_bytes
+           << ",\"memory_scope\":\"process-peak-working-set\","
            << canvas::poc01::CoreConformanceJsonFields(conformance) << "}";
     std::cout << result.str() << '\n';
     if (window != nullptr) {

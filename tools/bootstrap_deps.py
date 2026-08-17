@@ -246,8 +246,9 @@ def bootstrap_web(lock: dict) -> None:
         run("git", "clone", "--depth=1", "--branch", tag, dependency["url"], str(emsdk))
     run("git", "fetch", "--tags", "origin", cwd=emsdk)
     run("git", "checkout", "--detach", tag, cwd=emsdk)
-    run(str(emsdk / "emsdk"), "install", tag, cwd=emsdk)
-    run(str(emsdk / "emsdk"), "activate", tag, cwd=emsdk)
+    launcher = emsdk / ("emsdk.bat" if platform.system() == "Windows" else "emsdk")
+    run(str(launcher), "install", tag, cwd=emsdk)
+    run(str(launcher), "activate", tag, cwd=emsdk)
 
 
 def bootstrap_node(lock: dict) -> None:

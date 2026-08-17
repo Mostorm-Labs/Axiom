@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "report_id": "poc01-windows-web-physical-20260817-6a2bac2",
+  "status": "passed",
+  "poc_status_after_report": "Validating",
+  "runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+  "harness_commit": "6a2bac2b6b8c43747c1c1b113495615e4c368866",
+  "runtime_core_diff_count": 0,
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "hashes": {
+    "skia_sdk_lock_sha256": "847284704af4bcc0fea113c4046bd4832d52a07cfc00ead26b7f3d3b8ffd5361",
+    "fixture_manifest_sha256": "77d4dacd86e174effa51347f65401a4a605e3222ece6de203e026461e338af26",
+    "fixture_replay_sha256": "110a9572d54864ae913e28d91a5e392135e22c1dbedc06a88db6d7b425d25724",
+    "fixture_checker_sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59",
+    "fixture_font_sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f",
+    "golden_sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041"
+  },
+  "test_time": {
+    "timezone": "Asia/Shanghai",
+    "started_local": "2026-08-17T23:00:57+08:00",
+    "physical_started_utc": "2026-08-17T15:03:14.8834687Z",
+    "physical_completed_utc": "2026-08-17T15:05:41.9343735Z"
+  },
+  "environment": {
+    "os": "Windows 10 Pro 10.0.19045 build 19045",
+    "cpu": "Intel Core i5-10400",
+    "gpu": "Intel UHD Graphics 630",
+    "gpu_device_id": "0x9BC8",
+    "gpu_driver": "31.0.101.2111",
+    "chrome": "151.0.7922.138",
+    "llvm": "22.1.8",
+    "msvc_toolset": "14.51.36231",
+    "windows_sdk": "10.0.26100.0",
+    "emscripten": "6.0.6",
+    "node": "24.18.0"
+  },
+  "results": {
+    "windows": {
+      "backend": "ganesh-d3d12",
+      "hardware": true,
+      "warp": false,
+      "digest": "47826449b895ac4f4a57b4f386379775",
+      "lifecycle": 100,
+      "smoke_seconds": 60,
+      "smoke_frames": 47606,
+      "p50_ms": 1.1297,
+      "p95_ms": 1.8789,
+      "p99_ms": 2.1919,
+      "max_ms": 12.3209,
+      "peak_memory_bytes": 128311296,
+      "memory_scope": "process-peak-working-set",
+      "visual_matching_pixels": 479917,
+      "visual_total_pixels": 480000,
+      "visual_matching_ratio": 0.9998270833333334,
+      "visual_passed": true,
+      "core_conformance_passed": true
+    },
+    "web": {
+      "backend": "ganesh-webgl2-hardware",
+      "hardware": true,
+      "webgl_vendor": "Google Inc. (Intel)",
+      "webgl_renderer": "ANGLE (Intel, Intel UHD Graphics 630, D3D11)",
+      "digest": "47826449b895ac4f4a57b4f386379775",
+      "lifecycle": 100,
+      "smoke_seconds": 60,
+      "smoke_frames": 3597,
+      "p50_ms": 1.4000000953674316,
+      "p95_ms": 2.0999999046325684,
+      "p99_ms": 2.3000001907348633,
+      "max_ms": 3.8000001907348633,
+      "peak_memory_bytes": 14909534,
+      "memory_scope": "renderer-js-heap",
+      "wasm_heap_before": 17170432,
+      "wasm_heap_after": 17170432,
+      "visual_matching_pixels": 479952,
+      "visual_total_pixels": 480000,
+      "visual_matching_ratio": 0.9999,
+      "visual_passed": true,
+      "core_conformance_passed": true,
+      "single_threaded_artifact_scan_passed": true
+    }
+  },
+  "release": {
+    "tag": "poc01-windows-web-physical-20260817-6a2bac2",
+    "url": "https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-physical-20260817-6a2bac2",
+    "asset": "poc01-windows-web-physical-20260817-6a2bac2.zip",
+    "asset_bytes": 49195,
+    "asset_sha256": "de3c8347fbe5af8e656ed3918fbbf2cf5d1ac4dc346017600725d12f38612225"
+  }
+}
