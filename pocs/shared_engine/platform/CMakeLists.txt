@@ -65,7 +65,8 @@ if(_canvas_skia_manifest_error OR _canvas_skia_target_error OR
     "${CANVAS_POC01_SDK_TARGET}; run tools/skia/fetch.py again")
 endif()
 find_package(CanvasSkia CONFIG REQUIRED
-  PATHS "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia" NO_DEFAULT_PATH)
+  PATHS "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia"
+  NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
 if(NOT TARGET CanvasSkia::Skia)
   message(FATAL_ERROR "Canvas Skia SDK did not define CanvasSkia::Skia")
 endif()
