@@ -77,6 +77,16 @@ class SdkMetadataTest(unittest.TestCase):
         with self.assertRaisesRegex(SchemaError, "unknown fields"):
             validate_manifest(unknown)
 
+    def test_locked_manifest_does_not_depend_on_current_recipe(self) -> None:
+        historical = self.manifest()
+        historical["identity"]["recipe_hash"] = "1" * 64
+        historical["sdk_id"] = canonical_sha256(historical["identity"])
+        validate_manifest(historical, expected_target="macos-arm64-metal")
+        with self.assertRaisesRegex(SchemaError, "selected profile"):
+            validate_manifest(
+                historical, self.profile, "macos-arm64-metal", DEFAULT_PROFILE,
+            )
+
     def test_target_and_toolchain_identity_are_enforced(self) -> None:
         with self.assertRaisesRegex(SchemaError, "target mismatch"):
             validate_manifest(self.manifest(), expected_target="ios-arm64-metal")

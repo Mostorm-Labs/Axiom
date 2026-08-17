@@ -69,7 +69,7 @@ def archive_architectures(data: bytes) -> set[str]:
 
 def verify_archive(
     archive_path: Path, profile_path: Path, expected_target: str,
-    extract_to: Path | None = None,
+    extract_to: Path | None = None, *, enforce_current_recipe: bool = True,
 ) -> dict:
     profile = load_profile(profile_path)
     target = target_definition(profile, expected_target)
@@ -90,7 +90,8 @@ def verify_archive(
         if "manifest.json" not in names:
             raise RuntimeError("SDK ZIP has no manifest.json")
         manifest = validate_manifest(
-            json.loads(archive.read("manifest.json")), profile, expected_target,
+            json.loads(archive.read("manifest.json")),
+            profile if enforce_current_recipe else None, expected_target,
             profile_path,
         )
         listed = {entry["path"]: entry for entry in manifest["files"]}
