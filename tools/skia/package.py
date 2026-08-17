@@ -179,12 +179,11 @@ def package(
             )
         config = stage / "lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake"
         config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_text(
-            cmake_config(target["libraries"], target["platform"]),
-            encoding="utf-8",
+        config.write_bytes(
+            cmake_config(target["libraries"], target["platform"]).encode("utf-8")
         )
-        (stage / "args.gn").write_text(
-            normalized_args_text(profile, target_name), encoding="utf-8",
+        (stage / "args.gn").write_bytes(
+            normalized_args_text(profile, target_name).encode("utf-8")
         )
 
         files = []
@@ -204,9 +203,8 @@ def package(
             "identity": identity,
             "files": files,
         }
-        (stage / "manifest.json").write_text(
-            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+        (stage / "manifest.json").write_bytes(
+            (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
         )
         asset = output_dir / f"skia-sdk-{target_name}.zip"
         write_zip(stage, asset)

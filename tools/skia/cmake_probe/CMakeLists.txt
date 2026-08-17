@@ -14,3 +14,9 @@ endif()
 
 add_executable(canvas_skia_sdk_probe main.cpp)
 target_link_libraries(canvas_skia_sdk_probe PRIVATE CanvasSkia::Skia)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  set_target_properties(canvas_skia_sdk_probe PROPERTIES
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "dev.mostorm.canvas.skiasdkprobe"
+  )
+endif()
