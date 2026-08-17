@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "audit_id": "poc01-final-gate-audit-2026-08-18",
+  "audit_timezone": "Asia/Shanghai",
+  "decision": "validating",
+  "accepted": false,
+  "common_runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+  "reviewed_digest": "47826449b895ac4f4a57b4f386379775",
+  "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+  "independent_replay": {
+    "digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "revision": 1,
+    "sequence": 4
+  },
+  "ci": {
+    "pull_request": 9,
+    "run_id": 32042915468,
+    "accepted_attempt": 2,
+    "result": "passed",
+    "required_platforms": ["web", "windows", "macos", "ios", "ipados", "android"],
+    "attempt_1_observations": [
+      "android action download failed with GitHub codeload HTTP 429 before tests",
+      "hosted iPad simulator reported one 123.233167 ms frame"
+    ],
+    "integrated_main": {
+      "commit": "95b92375fed00fc17fd4b806073926061e7c0fcd",
+      "run_id": 32043748623,
+      "accepted_attempt": null,
+      "result": "infrastructure-blocked",
+      "attempt_1_observations": [
+        "android gradle action download failed with GitHub codeload HTTP 429 before tests",
+        "hosted Windows WARP reported one 1127.365600 ms frame"
+      ],
+      "attempt_2_observations": [
+        "windows passed without a code or threshold change",
+        "android setup-java action download failed with GitHub codeload HTTP 429 before tests",
+        "aggregate acceptance failed because the Android artifact was absent"
+      ]
+    }
+  },
+  "evidence": {
+    "mobile": {
+      "pull_request": 7,
+      "report": "mobile-physical-2026-08-17/manifest.json",
+      "release_tag": "poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd",
+      "asset": "poc01-mobile-physical-2026-08-17.zip",
+      "asset_sha256": "62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7",
+      "result": "correctness-subset-passed"
+    },
+    "windows_web": {
+      "pull_request": 8,
+      "report": "../../../../docs/quality/evidence/poc01/windows-web-physical-20260817.json",
+      "harness_commit": "6a2bac2b6b8c43747c1c1b113495615e4c368866",
+      "release_tag": "poc01-windows-web-physical-20260817-6a2bac2",
+      "asset": "poc01-windows-web-physical-20260817-6a2bac2.zip",
+      "asset_sha256": "de3c8347fbe5af8e656ed3918fbbf2cf5d1ac4dc346017600725d12f38612225",
+      "result": "hardware-subset-passed"
+    }
+  },
+  "gates": {
+    "locked_clean_builds": "passed",
+    "cross_platform_digest": "passed",
+    "numeric_and_replay_conformance": "passed",
+    "visual": "passed",
+    "lifecycle_100": "passed",
+    "smoke_frame_threshold": "incomplete",
+    "no_sustained_memory_growth": "incomplete",
+    "performance_environment_metadata": "incomplete",
+    "web_single_threaded": "passed",
+    "runtime_platform_type_isolation": "passed"
+  },
+  "blocking_evidence": [
+    {
+      "id": "android-release-physical",
+      "reason": "the physical Android performance run used a Debug acceptance APK"
+    },
+    {
+      "id": "memory-time-series",
+      "reason": "Windows and Apple evidence does not quantify memory throughout the smoke"
+    },
+    {
+      "id": "performance-environment-metadata",
+      "reason": "thermal, power, refresh/frame interval, VRR, and throttling metadata is incomplete"
+    },
+    {
+      "id": "integrated-main-ci",
+      "reason": "GitHub codeload HTTP 429 prevented the integrated main Android job from starting in two attempts"
+    }
+  ]
+}
