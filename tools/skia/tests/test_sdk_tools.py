@@ -18,7 +18,7 @@ from sdk import (  # noqa: E402
     canonical_sha256, load_profile, make_identity, validate_manifest,
     validate_toolchain,
 )
-from package import copy_file  # noqa: E402
+from package import cmake_config, copy_file  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
 
 
@@ -98,6 +98,17 @@ class SdkMetadataTest(unittest.TestCase):
             root = Path(temporary)
             with self.assertRaisesRegex(RuntimeError, "required SDK input is missing"):
                 copy_file(root / "missing.a", root / "sdk/lib/missing.a")
+
+    def test_cmake_target_owns_platform_link_dependencies(self) -> None:
+        android = cmake_config(["libskia.a"], "android")
+        self.assertIn(
+            'INTERFACE_LINK_LIBRARIES "CanvasSkia::Archive0;android;EGL;GLESv2;log;dl"',
+            android,
+        )
+        apple = cmake_config(["libskia.a"], "ios")
+        self.assertIn("find_library(_CANVAS_SKIA_CORETEXT CoreText REQUIRED)", apple)
+        windows = cmake_config(["skia.lib"], "windows")
+        self.assertIn("d3d12;dxgi;d3dcompiler;ole32", windows)
 
     def test_checksum_drift_is_rejected_before_extraction(self) -> None:
         manifest = self.manifest()
