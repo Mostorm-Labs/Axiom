@@ -14,6 +14,7 @@ set_target_properties(canvas_poc01_xxhash PROPERTIES POSITION_INDEPENDENT_CODE O
 
 add_library(canvas_poc01_core STATIC
   src/c_bridge.cpp
+  src/conformance.cpp
   src/document.cpp
   src/foundation.cpp
   src/operations.cpp
@@ -27,6 +28,11 @@ target_include_directories(canvas_poc01_core
 )
 target_link_libraries(canvas_poc01_core PRIVATE canvas_poc01_xxhash)
 set_target_properties(canvas_poc01_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(EMSCRIPTEN)
+  # Operation parsing converts schema/JSON exceptions into ABI status codes.
+  # Keep catching enabled inside the Runtime; exceptions never cross the ABI.
+  target_compile_options(canvas_poc01_core PRIVATE -fexceptions)
+endif()
 
 if(MSVC)
   target_compile_options(canvas_poc01_core PRIVATE /W4 /permissive- /EHsc)

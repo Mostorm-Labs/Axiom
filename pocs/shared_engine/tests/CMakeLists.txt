@@ -2,6 +2,7 @@ include(GoogleTest)
 
 add_executable(canvas_poc01_tests
   c_api_test.cpp
+  conformance_test.cpp
   document_test.cpp
   operations_test.cpp
   scene_compiler_test.cpp

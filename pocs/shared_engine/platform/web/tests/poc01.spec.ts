@@ -82,6 +82,24 @@ test("loads, replays, renders, and passes the visual gate", async ({ page }) => 
         module._free(buffer);
       }
     };
+    const coreConformance = () => {
+      const required = module._malloc(4);
+      try {
+        const probe = module._canvas_poc_web_core_conformance(0, 0, required);
+        if (probe !== 6) throw new Error(`conformance size query failed with status ${probe}`);
+        const size = module.HEAPU32[required / 4];
+        const buffer = module._malloc(size);
+        try {
+          checkStatus(module._canvas_poc_web_core_conformance(buffer, size, required), "conformance");
+          const fields = module.UTF8ToString(buffer);
+          return JSON.parse(`{${fields}}`).core_conformance;
+        } finally {
+          module._free(buffer);
+        }
+      } finally {
+        module._free(required);
+      }
+    };
     const createSurface = () => {
       const selector = new TextEncoder().encode("#canvas\0");
       withBytes(selector, (pointer) =>
@@ -162,6 +180,7 @@ test("loads, replays, renders, and passes the visual gate", async ({ page }) => 
     }
     return {
       digest: observedDigest,
+      core_conformance: coreConformance(),
       lifecycle: 100,
       smoke_seconds: 60,
       smoke_frames: smokeFrames,

@@ -4,8 +4,11 @@ target_include_directories(canvas_poc01_web PRIVATE
   ${POC01_ROOT}/platform/skia
 )
 target_link_libraries(canvas_poc01_web PRIVATE canvas_poc01_skia)
+target_compile_options(canvas_poc01_web PRIVATE -fexceptions)
 set_target_properties(canvas_poc01_web PROPERTIES SUFFIX ".js")
 target_link_options(canvas_poc01_web PRIVATE
+  "-fexceptions"
+  "-sDISABLE_EXCEPTION_CATCHING=0"
   "--no-entry"
   "-sALLOW_MEMORY_GROWTH=1"
   "-sENVIRONMENT=web"
@@ -17,6 +20,6 @@ target_link_options(canvas_poc01_web PRIVATE
   "-sMIN_WEBGL_VERSION=2"
   "-sMAX_WEBGL_VERSION=2"
   "-sGL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=0"
-  "-sEXPORTED_FUNCTIONS=['_malloc','_free','_canvas_poc_web_reset','_canvas_poc_web_load_assets','_canvas_poc_web_replay','_canvas_poc_web_digest','_canvas_poc_web_surface_create','_canvas_poc_web_render','_canvas_poc_web_readback','_canvas_poc_web_compare_golden','_canvas_poc_web_backend','_canvas_poc_last_error']"
+  "-sEXPORTED_FUNCTIONS=['_malloc','_free','_canvas_poc_web_reset','_canvas_poc_web_load_assets','_canvas_poc_web_replay','_canvas_poc_web_digest','_canvas_poc_web_core_conformance','_canvas_poc_web_surface_create','_canvas_poc_web_render','_canvas_poc_web_readback','_canvas_poc_web_compare_golden','_canvas_poc_web_backend','_canvas_poc_last_error']"
   "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','HEAPU8','HEAPU32','HEAPF64']"
 )

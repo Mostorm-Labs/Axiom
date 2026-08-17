@@ -78,6 +78,13 @@ Every platform uploads a result JSON containing that exact digest. The final
 acceptance job refuses missing or duplicate platform records, a single byte of
 digest drift, anything other than 100 lifecycle iterations and a 60-second
 smoke, an empty smoke, or a reported frame above 100 ms.
+The same result contains the versioned `core_conformance` oracle. It covers
+canonical signed zero, subnormal and rounding boundaries, maximum finite input,
+non-finite/overflow rejection with transaction atomicity, and equivalent replay
+into two independent empty Documents. The final job compares the complete
+object, including result/error digest, revision, and operation sequence, across
+native x64, native arm64, and WASM; visual tolerance never applies to this
+semantic oracle.
 GPU-backed smoke runs render 60 unmeasured warmup frames before the 60-second
 window so shader and pipeline creation are not misreported as steady-state
 frame time. RuntimeScene is rebuilt only when the Document revision changes.
