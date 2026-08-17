@@ -36,6 +36,16 @@
         "android setup-java action download failed with GitHub codeload HTTP 429 before tests",
         "aggregate acceptance failed because the Android artifact was absent"
       ]
+    },
+    "post_incident_integrated_regression": {
+      "commit": "77583fce67ed73d47979d147e25862f2939f0dec",
+      "run_id": 32044717916,
+      "accepted_attempt": 2,
+      "result": "passed",
+      "runtime_code_changed_from_integrated_main": false,
+      "attempt_1_observations": [
+        "macOS xxHash clone failed with GitHub HTTP 500 before build"
+      ]
     }
   },
   "evidence": {
@@ -81,10 +91,6 @@
     {
       "id": "performance-environment-metadata",
       "reason": "thermal, power, refresh/frame interval, VRR, and throttling metadata is incomplete"
-    },
-    {
-      "id": "integrated-main-ci",
-      "reason": "GitHub codeload HTTP 429 prevented the integrated main Android job from starting in two attempts"
     }
   ]
 }

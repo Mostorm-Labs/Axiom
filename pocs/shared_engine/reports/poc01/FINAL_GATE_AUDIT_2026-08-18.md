@@ -14,6 +14,7 @@ separate changes:
 | Shared Runtime and deterministic corpus | commit `5ab8b16bdac8f982a9d221d1f48d3867dda7b43c`, merged by [PR #9](https://github.com/Mostorm-Labs/canvas/pull/9) | Accepted as the common Runtime under test |
 | Six-platform CI | [run `32042915468`](https://github.com/Mostorm-Labs/canvas/actions/runs/32042915468), attempt 2 | All platform jobs and aggregate acceptance passed |
 | Integrated `main` regression | commit `95b92375fed00fc17fd4b806073926061e7c0fcd`, [run `32043748623`](https://github.com/Mostorm-Labs/canvas/actions/runs/32043748623) | Infrastructure-blocked: all executable jobs except Android passed; Android never started because GitHub codeload returned HTTP 429 twice, so aggregate acceptance lacked its artifact |
+| Post-incident integrated regression | audit commit `77583fce67ed73d47979d147e25862f2939f0dec`, [run `32044717916`](https://github.com/Mostorm-Labs/canvas/actions/runs/32044717916), attempt 2 | Same executable code as integrated `main`; all six platforms and aggregate acceptance passed |
 | Mobile physical devices | [report](mobile-physical-2026-08-17/README.md), [PR #7](https://github.com/Mostorm-Labs/canvas/pull/7), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd) | iPhone, iPadOS, and Android correctness subset passed |
 | Same-machine Windows/Web | [report](../../../../docs/quality/evidence/poc01/windows-web-physical-20260817.md), [PR #8](https://github.com/Mostorm-Labs/canvas/pull/8), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-physical-20260817-6a2bac2) | Native D3D12 and Chrome WebGL2 hardware subset passed |
 
@@ -58,6 +59,12 @@ tests on a GitHub codeload 429 for `actions/setup-java`; aggregate acceptance
 therefore failed only because no Android artifact existed. This audit does not
 label the integrated run green and does not perform a third blind rerun.
 
+The subsequent audit-branch run `32044717916` contains no Runtime, harness,
+fixture, threshold, or baseline changes relative to integrated `main`. Its
+first attempt saw a GitHub HTTP 500 while cloning xxHash for macOS; all other
+platform jobs passed. macOS and aggregate acceptance passed on the single
+failed-job rerun, so the post-incident integrated regression is complete.
+
 ## Evidence required for `Accepted`
 
 1. Build a non-debuggable Android Release acceptance APK from the same locked
@@ -73,9 +80,6 @@ label the integrated run green and does not perform a third blind rerun.
    method instead of silently omitting it.
 4. Publish the supplemental raw evidence as content-addressed retained assets,
    update the aggregate machine-readable audit, and rerun the unchanged gate.
-5. Rerun the integrated `main` Android and aggregate CI after the GitHub
-   codeload incident clears; the run must execute tests rather than fail while
-   downloading an action.
 
 No CRDT, Snapshot codec, Ink, RichText, collaboration, product ABI, or product
 shell work is part of this remaining POC-01 evidence task.
