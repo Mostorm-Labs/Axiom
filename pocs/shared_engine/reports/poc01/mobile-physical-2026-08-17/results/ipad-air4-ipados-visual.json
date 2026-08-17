@@ -1,0 +1,12 @@
+{
+  "backend": "ipad-air4-a14-metal",
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "width": 800,
+  "height": 600,
+  "tolerance": 2,
+  "matching_pixels": 479917,
+  "total_pixels": 480000,
+  "matching_ratio": 0.9998270833333334,
+  "maximum_channel_delta": 184,
+  "passed": true
+}

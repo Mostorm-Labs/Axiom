@@ -1,0 +1,21 @@
+{
+  "platform": "ipados",
+  "backend": "ganesh-metal",
+  "digest": "47826449b895ac4f4a57b4f386379775",
+  "pixel_hash": "32186d8e0c941ec118342f811a0a555e",
+  "device": "Apple A14 GPU",
+  "lifecycle": 100,
+  "smoke_seconds": 60,
+  "smoke_frames": 3600,
+  "max_frame_ms": 9.51679,
+  "core_conformance": {
+    "version": 1,
+    "case_count": 10,
+    "corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4,
+    "passed": true,
+    "failure": ""
+  }
+}
