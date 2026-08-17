@@ -14,6 +14,7 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | [0006](0006-richtext-first-class.md) | Accepted | RichText/IME 是一级 Runtime 子系统 |
 | [0007](0007-cache-interfaces-from-v1.md) | Accepted | Raster/Tile/TileStore 接口从 V1 存在 |
 | [0008](0008-single-thread-poc-baseline.md) | Accepted | POC 先单线程，线程拓扑由数据决定 |
+| [0009](0009-prebuilt-skia-sdk-supply-chain.md) | Accepted | Skia 以不可变、可验证的预编译 SDK 供普通构建消费 |
 
 ## 必须后续建立的实验型 ADR
 

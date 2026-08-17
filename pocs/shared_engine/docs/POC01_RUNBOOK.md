@@ -51,6 +51,14 @@ python3 tools/build_skia.py android --cpu arm64 --ndk "$ANDROID_NDK_ROOT"
 python3 tools/build_skia.py android --cpu x64 --ndk "$ANDROID_NDK_ROOT"
 ```
 
+The source-build commands above remain the active consumer path until the
+separate SDK-lock cutover lands. The producer path is defined by
+[`poc01-minimal-v1`](../../../tools/skia/profiles/poc01-minimal-v1.json) and
+[`SKIA_SDK_SUPPLY_CHAIN.md`](../../../docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md).
+It builds seven immutable SDK targets on PRs without publish permission. A
+manual run from `main` is the only publication path. Merging this producer does
+not change POC-01 from `Validating` or waive either physical-device report.
+
 ## 3. Fixture and semantic acceptance
 
 The reviewed fixture is fixed at 800×600, DPR 1, sRGB, single-sample, with a

@@ -8,7 +8,9 @@ on:
       - "deps.lock.json"
       - "cmake/**"
       - "pocs/shared_engine/**"
-      - "tools/**"
+      - "tools/bootstrap_deps.py"
+      - "tools/build_skia.py"
+      - "tools/check_docs.py"
       - ".github/workflows/poc01.yml"
   push:
     branches: [main]

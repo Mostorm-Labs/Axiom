@@ -1,0 +1,45 @@
+# ADR-0009: 使用不可变的预编译 Skia SDK
+
+- Status: Accepted
+- Date: 2026-08-17
+- Related stages: POC-01, R1, R3
+
+## Context
+
+POC-01 的六端 CI 即使命中编译缓存，仍会重复同步 Skia 源码并执行 GN/Ninja。
+这既消耗 runner 时间，也让 Canvas 的普通构建直接依赖 Skia 的内部输出目录和传递库名称。
+Actions artifact 适合作为同一 workflow 内的短期传递介质，但其保留期不能承担长期、可回滚的依赖锁定。
+
+## Decision
+
+建立 `poc01-minimal-v1` 生产 profile，为 Windows、Web、macOS、iOS、iOS
+Simulator 和两个 Android ABI 生成七个自包含、确定性的 Release ZIP。每个 ZIP
+包含 headers、实际静态库、固定字体、许可证、规范化 GN 参数、manifest 和只公开
+`CanvasSkia::Skia` 的 CMake package。
+
+SDK 集合由 `sdk_id`/`set_id` 和 SHA-256 标识，发布到本仓库的不可变 GitHub
+prerelease。PR 只读构建与验证全部 target；只有从 `main` 人工触发的独立 publish
+job 拥有写权限和 provenance attestation 权限。已存在 tag 只能逐字节验证通过，不能覆盖。
+
+Canvas consumer 只接受提交到仓库的 SDK lock。普通构建下载并严格验证 Release 或
+同布局镜像，不允许隐式回退到源码构建，也不感知 Skia source tree、GN、Ninja 或
+传递 archive 路径。
+
+## Consequences
+
+- Skia 升级、profile 或 toolchain 变化先产生新 SDK ID，再显式更新 consumer lock。
+- 普通 Canvas CI 不再承担 Skia source checkout、sync、GN 和 Ninja 成本。
+- Release 资产成为供应链的一部分；被任何 lock 引用的 prerelease 必须永久保留。
+- 第一版仅发布 Apple arm64、官方 Release 静态库，不包含 Debug、符号包或新增 Skia 功能。
+- POC-01 合并和 SDK 预编译都不替代物理 Windows GPU 与移动真机报告；状态保持
+  `Validating`。
+
+## Validation
+
+Producer 必须验证 schema、canonical hash、target/toolchain identity、包内容、许可证、
+路径安全、损坏输入和连续两次打包的字节一致性。打包后隐藏 Skia source checkout，
+仅从解压 SDK clean-build 当前 Canvas target。
+
+Consumer 切换后，六端原有 digest、黄金图、100 次生命周期、60 秒 smoke、sanitizer、
+模拟器和跨平台接受门禁全部保留；普通 POC workflow 还必须通过静态检查证明没有源码
+bootstrap、`skia/out` cache 或 producer builder 引用。
