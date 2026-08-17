@@ -15,6 +15,8 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | [0007](0007-cache-interfaces-from-v1.md) | Accepted | Raster/Tile/TileStore 接口从 V1 存在 |
 | [0008](0008-single-thread-poc-baseline.md) | Accepted | POC 先单线程，线程拓扑由数据决定 |
 | [0009](0009-prebuilt-skia-sdk-supply-chain.md) | Accepted | Skia 以不可变、可验证的预编译 SDK 供普通构建消费 |
+| [0010](0010-renderer-platform-surface-ownership.md) | Accepted | RendererBackend 与 Platform Surface 生命周期分离 |
+| [0011](0011-shared-preview-model-fastink-sinks.md) | Accepted | Default/FastInk sink 消费共享 Preview Model |
 
 ## 必须后续建立的实验型 ADR
 
@@ -26,12 +28,13 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | 产品线程拓扑与 WASM pthread | 引入 worker 前 | profiling、所有权、revision 失效和回归语料 |
 | 复杂 RichText 并发语义 | V1 MVP 后 | 字符级冲突、IME、undo intention 与收敛测试 |
 | 系统级 FastInk target | 设备产品化前 | 硬件/BSP、权限、光电延迟、plane/fallback 测试 |
+| DocumentRoot、单 Page/多 Page schema | R2 | 产品模型、导出/坐标语义、迁移与兼容测试 |
 
 ## ADR 格式
 
 每份 ADR 使用以下字段：
 
-- Status、Date、Related stages。
+- Status、Date、Related stages，以及适用时的 `Clarifies`/`Supersedes`。
 - Context：要解决的问题与硬约束。
 - Decision：可执行且边界明确的决定。
 - Consequences：代价、限制和后续工作。

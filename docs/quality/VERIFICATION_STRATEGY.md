@@ -14,6 +14,9 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
 6. Shell/Bridge 差异不改变 Document、Stroke 和 RichText 语义。
 7. Collaboration Presence 的丢失不影响 Document convergence。
 8. 性能结论必须绑定设备、场景、构建和采样方法。
+9. RuntimeScene 的共享内容与各 View/Frame 查询结果独立；同一 Scene 上不同 Viewport 不得互相污染 visible set 或 screen damage。
+10. FastInk backend 只消费共享 Preview Model；Default/FastInk sink 不得形成不同的 Stroke 算法。
+11. Platform surface/context/device 丢失不得泄漏 native handle 到 Runtime Core，也不得改变 Document。
 
 ## 2. 结果 Oracle
 
@@ -59,6 +62,12 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
 - 性能分布记录 p50/p95/p99/max、样本数、warm-up 和异常值规则。
 - 若具备光电设备，device FastInk 额外记录 raw input→scanout；不得与软件 timestamp 混为同一指标。
 
+### 2.7 Human Performance Gate
+
+人工体验是量化门禁的补充，不是替代。POC-02 的 Canvas Ink Playground 与 POC-03 的 Integrated Performance Playground 使用固定动作 rubric：慢写、快速长划、急转、画圈、压力渐变、连续书写，以及在 1K/10K/50K/100K objects 下 pan、zoom、write、select、drag。
+
+每次评审记录平台、设备、笔、显示刷新率、构建/commit、场景、持续时间、评审人和主观结论，并关联 input→preview trace、frame pacing、prediction correction、handoff 帧序列和内存数据。`可接受/有条件接受/阻断` 必须有结构化理由；不能只提交视频或“感觉流畅”的结论。
+
 ## 3. 验证资产
 
 ```text
@@ -74,7 +83,8 @@ tests/
 ├── bridge/            # WASM/C ABI/JNI contract tests
 ├── lifecycle/         # Surface、IME、ExternalSurface、FastInk
 ├── fuzz/              # 文件、operation、geometry、migration
-└── performance/       # 固定场景与结果 schema
+├── performance/       # 固定场景与结果 schema
+└── experience/        # Human gate rubric、设备记录、trace/录屏索引与签署
 ```
 
 资产必须包含版本、随机 seed、能力需求、资源 hash 和预期 oracle。大文件存储方式由 R1 工程决策确定，但 clean environment 必须可确定性获得固定版本。
@@ -84,7 +94,8 @@ tests/
 ### 4.1 静态与编译期
 
 - format/lint、警告、公开头文件自包含、ABI export 检查。
-- module dependency test：Document 不能依赖 Skia/platform/network；Renderer 无 Document 写入口。
+- module dependency test：Document 不能依赖 Skia/platform/network/ResourceManager/Persistence；Renderer 无 Document 写入口且不包含 native window/view/surface 类型。
+- Platform surface adapter、Application API、PointerAdapter 和 TextInputAdapter 边界检查；禁止 Shell API 全部汇入 InputRouter。
 - Web/Windows/Android 编译器和 target matrix。
 - third-party lock、license 和构建 flag 检查。
 
@@ -94,7 +105,8 @@ tests/
 - command validation、transaction、ordering、undo grouping。
 - Pointer batch、resample、prediction rollback 和 StrokeSession 状态。
 - Text selection、composition、logical positions 和 layout mapping。
-- Scene dirty、cache key、spatial query、FrameGraph dependencies。
+- Scene world invalidation、per-view visible/screen damage、cache key、spatial query、FrameBuilder/FrameGraph dependencies。
+- PreviewStrokeUpdate revision、confirmed/predicted replacement、buffer ownership 和 Default/FastInk sink 等价性。
 - operation envelope、去重和 Presence expiry。
 
 ### 4.3 属性测试
@@ -128,6 +140,8 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 - Input → Editor/Ink/Text → Operation → Document → Scene → frame。
 - Save → restart → recovery → digest。
 - FastInk Preview → Canonical visible → Preview cleanup。
+- RuntimeScene + 两个 Viewport → 两个独立 FrameState/FrameGraph，无跨 view 污染。
+- PlatformSurfaceAdapter acquire/resize/present/context loss → 新 generation RenderTarget → Canonical redraw。
 - ExternalSurface placement → focus/lifecycle → fallback placeholder。
 - Local Operation → network faults → remote replicas → convergence。
 - Shell/Bridge → surface/IME/clipboard/file → shared Runtime behavior。
@@ -137,11 +151,11 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 | POC | 正确性门禁 | 性能/资源门禁 | 故障门禁 |
 | --- | --- | --- | --- |
 | POC-01 | Web/Windows/macOS/iOS/iPadOS/Android digest 一致；黄金图 99.9%/差值 2 | 各平台 1K 节点连续 60 秒；无单帧 >100 ms | 各平台 100 次 runtime/view 生命周期 |
-| POC-02 | Canonical Stroke digest 一致；预测点不入文档 | Preview p95/p99 ≤16.7/33.3 ms | cancel、prediction rollback、handoff 无空白 |
-| POC-03 | full/incremental scene 等价 | 100K scene；Web ≤512 MiB、Windows ≤768 MiB | cache clear、resize、device loss 恢复 |
+| POC-02 | Canonical Stroke digest 一致；预测点不入文档；Preview Model 跨 sink 一致 | Preview p95/p99 ≤16.7/33.3 ms；三平台 Human Ink Gate | cancel、prediction rollback、handoff 无空白 |
+| POC-03 | full/incremental scene 等价；多 viewport FrameState 隔离 | 100K scene；Web ≤512 MiB、Windows ≤768 MiB；Android 真机集成报告 | cache clear、resize、device loss 恢复 |
 | POC-04 | 三平台 text digest/行为一致 | 10K 字符输入/layout p95 ≤16.7/33.3 ms | 100 次 focus/composition lifecycle |
 | POC-05 | placement 误差 ≤1 px | overlay 同步 ≤2 帧；100 次后内存增长 <5% | surface/focus/load failure fallback |
-| POC-06 | FastInk/Canonical 最终 digest 一致 | Preview p95/p99 ≤16.7/33.3 ms；handoff ≤2 帧 | backend/device/surface failure 不丢 Stroke |
+| POC-06 | FastInk/Canonical 最终 digest 一致；Default/FastInk sink 消费同一 Preview revision | Preview p95/p99 ≤16.7/33.3 ms；handoff ≤2 帧 | backend/device/surface failure 不丢 Stroke |
 
 POC 报告必须同时附原始结果、环境和复现命令；只给结论截图不算通过。
 
@@ -163,6 +177,7 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 - 产品 target 保持 POC-02～06 的延迟、规模、视觉和生命周期门禁。
 - 三平台混合编辑 2 小时无 crash，稳定期内存增长 <5%。
 - device/cache/surface 丢失恢复不改变 Document digest。
+- 三平台 Human Ink/Integrated Performance Gate 使用正式产品 target 完成签署，主观问题均有关联 trace 和处置结论。
 
 ### R4
 
@@ -196,6 +211,7 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 - 长时间 fuzz、扩大 property seeds 和 100K scene matrix。
 - Collaboration random convergence/network fault/soak。
 - 专用基准设备运行输入延迟、FrameGraph、内存和 device recovery。
+- 代表性真实笔/移动设备运行 Human Ink 与 Integrated Performance Gate，并归档结构化体验报告。
 - 依赖、许可证、可复现构建和旧文件/协议矩阵。
 
 ### 发布候选
@@ -212,6 +228,7 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 - 设备热状态、电源模式、刷新率和浏览器 throttling 必须记录。
 - CI 噪声较大时只提示趋势；硬门禁运行在固定设备/runner。
 - 修改阈值需要重复基准、原因和 ADR/阶段文档更新，不能以当前实现达不到为理由。
+- 人工体验问题不因量化指标通过而自动关闭；同样，主观“流畅”也不能豁免 digest、延迟、帧时间或内存门禁。
 
 ## 9. 失败处理
 

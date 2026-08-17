@@ -19,12 +19,15 @@ should bypass their documented exit gates.
   rendering never pass through React Native JS.
 - Apple runtime validation: native macOS/iOS/iPadOS harnesses + C ABI + Ganesh
   Metal. A product-shell choice for Apple platforms is intentionally deferred.
-- Runtime: C++20 modules for Document, Operations, EditorSession, RichText,
-  InkEngine, SceneCompiler, RuntimeScene, FrameGraph, Compositor, TileCache,
-  Resources, and Persistence.
+- Runtime: C++20 modules for RuntimeFacade, InputRouter, Document, Operations,
+  EditorSession, RichText, InkEngine, SceneCompiler, shared RuntimeScene,
+  per-view FrameState, FrameBuilder, FrameGraph, Compositor, RendererBackend,
+  TileCache, Resources, and Persistence.
 - Renderer: Skia Ganesh for v1; Graphite/WebGPU is a future backend.
+- Surfaces: platform adapters own native window/surface/context lifecycles and
+  provide generation-bound RenderTargets; RendererBackend does not own them.
 - Ink: canonical document rendering and low-latency preview are separate paths
-  connected through `FastInkBridge`.
+  connected through one shared Preview Model and `FastInkBridge`.
 
 ## Documents
 

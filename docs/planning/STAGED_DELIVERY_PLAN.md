@@ -30,7 +30,7 @@
 - 定义最小场景：Page、Rect/Shape、Image、VectorPath、只读 Text。
 - 定义固定坐标、颜色空间、DPI、资源、字体和逻辑摘要格式。
 - 定义单线程 event loop：command → document → scene → frame。
-- 定义 WebGL2、D3D12、Metal 和 Android GLES3 surface adapter；平台句柄不得进入通用 Runtime。
+- 定义 WebGL2、D3D12、Metal 和 Android GLES3 `PlatformSurfaceAdapter`；adapter 拥有 native surface/context 的 acquire/resize/present/recover，平台句柄不得进入通用 Runtime 或 `RenderTarget` 公共契约。
 - 选择并登记 Windows/Web 基准设备与浏览器，作为 POC-01～03 性能基线；Apple/Android 记录验证设备但不替代该性能基线。
 
 ### 验证
@@ -79,6 +79,8 @@
 - 定义 `StrokeSession` 的 begin/push/end/cancel、Stroke ID 和 brush descriptor。
 - 定义 VectorStroke 的语义中心线与 DabStroke 的 dab/纹理参数。
 - 定义 Preview/Canonical 共享数据、差异容差、抬笔交接和失败 fallback。
+- 定义版本化 `PreviewStrokeUpdate`：confirmed/predicted 表示、revision、坐标空间和 replace/truncate 语义；平台 Preview sink 不重新解释 raw samples。
+- 定义 `DefaultPreviewSink`，使用普通 Skia Canvas overlay 验证 Preview Model，不依赖 POC-06 平台低延迟 surface。
 - 定义输入录制格式和设备无关回放语料。
 
 ### 验证
@@ -90,20 +92,23 @@
 - 基准设备上 input sample 到 Preview 可见的 p95 ≤ 16.7 ms、p99 ≤ 33.3 ms。
 - Pointer up 到 Canonical 接管不超过 2 帧，期间没有空白帧或重复深色叠加。
 - prediction 错误时 Preview 能回退，Canonical 不包含未确认预测点。
+- 在 Windows/Web/Android 代表性实机输入环境运行 Human Ink Gate：慢写、快速长划、急转、画圈、压力渐变和连续书写；主观评分必须关联同次 trace、frame pacing、prediction correction 与 handoff 证据，不能替代量化门禁。
 
 ### 实现
 
 - 实现平台 batch 适配、InputRouter 和输入录制/回放。
 - 实现独立 InkEngine、StrokeSession、resampler、smoother 和 predictor。
 - 实现 Vector Brush 与 Dab Brush 的最小语义和渲染。
-- 实现 Active/Preview overlay、Canonical operation 和 handoff 状态机。
+- 实现 `PreviewStrokeUpdate`、`DefaultPreviewSink`、Active/Preview overlay、Canonical operation 和 handoff 状态机。
 - 输出 input/processing/render 分段耗时、sample 数和 prediction 诊断。
+- 实现可加载录制语料并支持真实笔连续书写的 Canvas Ink Playground。
 
 ### 交付物
 
 - Pointer/Stroke 接口规范和行为状态图。
 - 输入语料、Vector/Dab 黄金图与 digest 工具。
 - 延迟追踪、handoff 录屏/帧序列和压力曲线报告。
+- Windows/Web/Android Human Ink Gate 报告，包含固定动作 rubric、设备/笔/刷新率、体验结论和关联 trace。
 - POC-06 使用的 FastInkBridge 上游契约。
 
 ### 退出条件
@@ -112,6 +117,7 @@
 - [ ] Canonical Stroke digest 跨平台完全一致。
 - [ ] Preview p95/p99 延迟达到 16.7/33.3 ms。
 - [ ] 所有 handoff/cancel/prediction 语料无空白和 Document 污染。
+- [ ] 三平台 Human Ink Gate 已在代表性设备完成，无未分类的书写中断、明显抖动或 handoff 缺陷；所有主观问题均能关联 trace/录屏。
 - [ ] Stroke 模型没有退化为只保存 `SkPath` 或 bitmap。
 
 ## POC-03 — 100K Scene
@@ -125,7 +131,8 @@
 - 定义 100K 可重复场景生成器：混合 Shape、Image、VectorPath、Text 和 Stroke。
 - 定义 Document records 与 SoA RuntimeScene records 的映射。
 - 定义 full compile、incremental ChangeSet、revision 和失效规则。
-- 定义 SpatialIndex 查询、visibility、multi-viewport 和 hit-test 数据。
+- 定义共享 RuntimeScene 与单视口 `ViewQuery/FrameState` 的边界；visible set、LOD、scale bucket 和 screen-space damage 不进入共享 Scene。
+- 定义 `FrameBuilder` 如何合并 RuntimeScene、FrameState、Editor/Presence overlays、Active Preview 和 ExternalSurface placement。
 - 定义 Background/Content/Ink/ExternalSurface/Overlay/Selection/HUD passes。
 - 定义 L1 Raster/Tile cache key、预算、淘汰、失效和设备丢失路径。
 
@@ -138,20 +145,23 @@
 - 单节点属性更新不得遍历全部 100K 节点；诊断中受影响 records 与 dirty area 可见。
 - 清空 L1、改变 scale bucket、resize 和模拟 device loss 后，画面可重建且 Document digest 不变。
 - 主视口与 minimap/第二视口同时查询时，不复制第二份 Document。
+- 在集成性能 Playground 分别加载 1K/10K/50K/100K objects，执行 pan、zoom、write、select 和 drag；Windows/Web 保持硬基准，Android 至少提交一台代表性真机的 frame/input/memory 与人工体验报告。
 
 ### 实现
 
 - 实现 Document→RuntimeScene 的 full/incremental SceneCompiler POC。
-- 实现 SoA records、SpatialIndex、visibility、dirty tracking 和 hit-test。
-- 实现最小 Render Tree、FrameGraph passes 和 Compositor。
+- 实现 SoA records、SpatialIndex、共享 world-space invalidation、单视口 ViewQuery/FrameState 和 hit-test。
+- 实现最小 Render Tree、FrameBuilder、FrameGraph passes 和 Compositor。
 - 实现 L1 Raster/Tile cache 原型和严格 cache key。
 - 实现场景生成器、frame trace、内存统计、scene digest 和增量差分测试。
+- 将 POC-02 Ink Playground 接入 1K/10K/50K/100K 场景，形成 Integrated Performance Playground。
 
 ### 交付物
 
 - 100K scene fixture/generator 与参数说明。
-- SceneCompiler、FrameGraph 和 cache interface 规范。
+- SceneCompiler、ViewQuery/FrameState、FrameBuilder、FrameGraph 和 cache interface 规范。
 - Windows/Web 帧时间、内存、dirty/cull 和 cache 报告。
+- Android 代表性真机集成性能/体验报告，以及 1K～100K 交互场景 bundle。
 - full/incremental 等价性语料及失败最小化工具。
 
 ### 退出条件
@@ -161,6 +171,7 @@
 - [ ] 内存保持在 768/512 MiB 上限内且 60 秒无持续增长。
 - [ ] 单节点更新没有全量遍历或全屏无条件失效。
 - [ ] device loss/cache clear 可完整恢复。
+- [ ] Integrated Performance Playground 完成三平台评审；Android 真机不存在未分类的输入中断、交互冻结或内存无界增长。
 
 ## POC-04 — RichText / IME
 
@@ -259,7 +270,8 @@
 
 ### 设计
 
-- 冻结 `FastInkBridge/FastInkBackend.begin/push/end/cancel` 和幂等语义。
+- 冻结 `FastInkBridge/FastInkBackend.begin/push(PreviewStrokeUpdate)/end/cancel`、buffer ownership 和幂等语义。
+- 保持 POC-02 Preview Model 不变，将 `DefaultPreviewSink` 替换为 Web/Windows/Android 平台 FastInk sink；backend 只负责低延迟显示，不重新实现 smooth/prediction/brush。
 - 定义 Preview buffer/pass、Canonical 首帧确认、handoff 和失败 fallback。
 - 定义 Web WASM Preview、Windows native preview、Android Native CanvasView preview 的平台能力。
 - 定义 backend 不可用、surface 重建、cancel、app background 和 device loss 行为。
@@ -277,7 +289,7 @@
 ### 实现
 
 - 实现通用 FastInkBridge 和 null/fallback backend。
-- Web 使用 WASM Skia preview；Windows/Android 实现 native low-latency preview POC。
+- Web 使用 WASM Skia preview；Windows/Android 实现消费同一 `PreviewStrokeUpdate` 的 native low-latency preview POC。
 - 实现 handoff fence/ack、preview cleanup、错误诊断和 backend capability query。
 - 条件式设备 POC 使用 `Raw Input → service → Skia Raster/GPU → DMA-BUF/GBM → DRM atomic overlay`，不把设备类型泄漏到 Runtime。
 
@@ -294,6 +306,7 @@
 - [ ] handoff ≤ 2 帧且视觉/位置门禁通过。
 - [ ] 所有 fallback 语料保留 Canonical Stroke。
 - [ ] FastInk 平台依赖没有进入通用 Document/Scene/Renderer。
+- [ ] Default 与 FastInk sink 消费同一 Preview replay 后的 confirmed/predicted revision 序列一致，平台没有第二套 Stroke 算法。
 - [ ] 设备级研究的完成与否不阻断进入 R1。
 
 # 第二层：产品化
@@ -306,8 +319,9 @@
 
 ### 设计
 
-- 冻结 core module 依赖图、公开 facade、CMake targets 和 third-party policy。
+- 冻结 core module 依赖图、公开 facade、CMake targets 和 third-party policy，包括 render、View/Frame、Resources 与 Persistence 的独立边界。
 - 冻结 WASM API、C ABI、JNI 的版本、capability、所有权、线程和错误模型。
+- 冻结 Application API、PointerAdapter、TextInputAdapter 三条入口，以及 RendererBackend/RenderTarget/PlatformSurfaceAdapter 的 acquire/present/recovery 契约。
 - 定义 stable ID、Result/diagnostic、clock/random/task injection 和 revision 类型。
 - 定义 unit/property/replay/golden/benchmark/fuzz 目录与 CI 分层。
 - 记录 POC 代码中必须重写、允许复用和明确丢弃的部分。
@@ -315,7 +329,7 @@
 ### 验证
 
 - Web/Windows/Android 从干净环境构建；公开头文件和 Bridge contract tests 100% 通过。
-- 核心依赖检查确保 Document 不依赖 Skia/platform/network，Renderer 无 Document 写接口。
+- 核心依赖检查确保 Document 不依赖 Skia/platform/network/ResourceManager/Persistence，Renderer 无 Document 写接口或 native surface 类型。
 - POC-01～06 的固定语料在产品骨架中继续通过。
 - ASan/UBSan 或平台等价检查覆盖所有核心 smoke tests。
 
@@ -339,15 +353,15 @@
 - [ ] 核心依赖图符合架构不变量。
 - [ ] 没有 POC-only 平台特例进入公开 Runtime API。
 
-## R2 — V1 Visual Document Runtime
+## R2 — V1 Local Visual Document Runtime
 
 ### 目标
 
-完成 V1 节点、Operations、EditorSession、RichText、Ink、Persistence 和资源管理的产品语义。
+完成 V1 本地节点、Operations、EditorSession、RichText、Ink、Persistence 和资源管理的产品语义。完整 V1 产品范围在 R4 Collaboration MVP 通过后闭合。
 
 ### 设计
 
-- 冻结 Page、Shape、Image、VectorPath、RichText、VectorStroke、DabStroke schema。
+- 在实现前通过 schema/migration ADR 决定单 Page 还是 `DocumentRoot → Page*`，并冻结 Page、Shape、Image、VectorPath、RichText、VectorStroke、DabStroke schema；Page 不承担 Viewport 状态。
 - 定义层级、排序、变换、样式、资源引用、unknown capability 和扩展 registry。
 - 定义 command/operation/change-set、事务、撤销/重做和 crash recovery。
 - 定义快照、操作日志、资源包和 migration；具体格式由本阶段前 ADR 接受。
@@ -392,6 +406,7 @@
 
 - 冻结 Ganesh backend matrix、颜色/DPI、device loss、资源预算和 golden tolerance。
 - 冻结生产 FrameGraph、Compositor、L1 cache 和多视口策略。
+- 冻结 Human Performance Gate 的设备、动作 rubric、签署角色和 trace/录屏归档规则。
 - 冻结 React Web、React/Tauri、RN Native CanvasView 的 surface、input、IME、clipboard、file 和 accessibility contracts。
 - 冻结应用级 FastInk backend、Hybrid Surface Overlay 和 fallback。
 
@@ -401,11 +416,12 @@
 - 全视觉矩阵、CPU reference 与产品 GPU backend 在规定容差内通过。
 - 三平台完成核心用户流、生命周期、resize、前后台、device loss、低内存和 surface 重建。
 - Input→Preview、Text/IME 和 FastInk handoff 不低于对应 POC 门禁。
+- 三平台在 Integrated Performance Playground 与核心真实编辑流上完成人工体验签署；主观缺陷必须关联量化 trace 并有处置结论。
 - 每个平台连续运行 2 小时混合编辑无 crash，稳定期内存增长 < 5%。
 
 ### 实现
 
-- 产品化 RuntimeScene、FrameGraph、Compositor、L1 cache 和 resource upload。
+- 产品化 RuntimeScene、ViewQuery/FrameState、FrameBuilder、FrameGraph、Compositor、RendererBackend、L1 cache 和 resource upload。
 - 完成三平台 shell/bridge、native surfaces、输入、IME、clipboard、file 和 accessibility。
 - 产品化 FastInk app backend 和 Hybrid Surface Overlay。
 - 实现帧诊断、cache/dirty overlay、device recovery 和性能追踪导出。
@@ -420,6 +436,7 @@
 
 - [ ] 三平台 V1 用户流与生命周期测试全部通过。
 - [ ] 100K、视觉、输入、文本和 FastInk 门禁无回归。
+- [ ] 三平台 Human Ink/Integrated Performance Gate 已使用产品 target 签署，未关闭问题均有关联 trace、负责人和处置结论。
 - [ ] 2 小时稳定性测试无 crash，内存增长 < 5%。
 - [ ] Surface/device/cache 丢失均能恢复且不改变 Document。
 

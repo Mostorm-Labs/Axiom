@@ -1,6 +1,6 @@
 # Canvas v2 项目总体框架
 
-> 状态：Architecture Baseline v1.0；当前阶段：POC-01 Shared Engine / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
+> 状态：Architecture Baseline v1.1；当前阶段：POC-01 Shared Engine / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
 
 Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯的白板应用、Skia Renderer 或跨平台 UI 框架，而是整个产品体系共享的语义文档、编辑、笔迹、文本、场景、渲染、持久化与协作运行时。
 
@@ -32,11 +32,11 @@ Canvas v2 为 Web、Windows、macOS、iOS、iPadOS、Android 和复用 Web Shell
 
 ### 2.1 V1 实现节点
 
-- `Page`：文档根和视口/导出边界。
+- `Page`：V1 的语义内容根，可声明内容/导出边界；它不是 Viewport，Viewport 始终属于 `EditorSession`。单 Page 还是 `DocumentRoot → Page*` 的长期产品模型由 R2 schema ADR 决定。
 - `Shape`：基础几何图元与样式。
 - `Image`：外部资源引用、布局和绘制。
 - `VectorPath`：可编辑矢量路径。
-- `RichText`：从第一版支持段落、runs、selection 和 composition。
+- `RichText`：节点从第一版保存 paragraphs、runs、styles 和 attributes；`TextEditSession` 另行提供 selection、caret 和 composition。
 - `VectorStroke`：保留语义中心线和笔刷参数。
 - `DabStroke`：支持纹理/dab 类型笔刷，不把所有 Stroke 简化为 `SkPath`。
 
@@ -44,8 +44,11 @@ Canvas v2 为 Web、Windows、macOS、iOS、iPadOS、Android 和复用 Web Shell
 
 以下节点不进入 V1 功能实现，但类型体系、SceneCompiler、布局和资源边界不得阻止后续加入：
 
-- `Section`、`Table`、`PDF`、`Embed`、`CommentAnchor`。
-- `Video`、`ExternalSurface`、`HybridStroke`。
+- Structural：`Section`、`Frame`、`Group`、`Table`、`Sticky`。
+- Graphics：`PDF`、`Connector`。
+- Ink：`HybridStroke`。
+- Domain：`Comment` + `Anchor`。
+- External：`Embed`、`Video`、`ExternalSurface`。
 - 复杂权限对象、AI 对象和 Presentation 专用对象。
 
 `Comment` 是领域对象与 anchor 的组合，不作为普通 RenderNode。`ExternalSurface` 首期验证 Overlay，不承诺纹理零拷贝。
@@ -84,9 +87,16 @@ flowchart TB
     Apple["Apple Native POC Harness"]
   end
 
-  API["Canvas Application API<br/>WASM / C ABI / JNI"]
+  subgraph PlatformBoundary["Platform Integration Boundary"]
+    AppAPI["Application API<br/>WASM / C ABI / JNI"]
+    Pointer["PointerAdapter<br/>PointerSampleBatch"]
+    IME["TextInputAdapter"]
+    SurfaceAdapter["PlatformSurfaceAdapter"]
+  end
 
   subgraph Runtime["C++20 Visual Document Runtime"]
+    Facade["RuntimeFacade / Commands"]
+    Input["InputRouter"]
     Doc["Semantic Document"]
     Ops["Operations"]
     Editor["EditorSession"]
@@ -94,37 +104,68 @@ flowchart TB
     Ink["InkEngine"]
     Compiler["SceneCompiler"]
     Scene["RuntimeScene"]
+    View["ViewQuery / FrameState"]
+    Builder["FrameBuilder"]
     Graph["FrameGraph"]
     Comp["Compositor"]
+    Renderer["RendererBackend"]
     Cache["RasterCache / TileCache / TileStore"]
-    Store["Resources / Persistence"]
+    Resources["Resources"]
+    Persistence["Persistence"]
   end
 
   Skia["Skia Ganesh"]
-  Targets["WebGL / Native GPU / Headless"]
+  Target["RenderTarget"]
   FastBridge["FastInkBridge"]
   FastPlatform["Platform FastInk"]
 
-  Web --> API
-  Win --> API
-  Android --> API
-  Apple --> API
-  API --> Editor
+  Web --> AppAPI
+  Win --> AppAPI
+  Android --> AppAPI
+  Apple --> AppAPI
+  Web --> Pointer
+  Win --> Pointer
+  Android --> Pointer
+  Apple --> Pointer
+  Web --> IME
+  Win --> IME
+  Android --> IME
+  Web --> SurfaceAdapter
+  Win --> SurfaceAdapter
+  Android --> SurfaceAdapter
+  Apple --> SurfaceAdapter
+  AppAPI --> Facade
+  Pointer --> Input
+  IME --> Text
+  Facade --> Editor
+  Facade --> Text
+  Facade --> Ink
+  Input --> Editor
+  Input --> Ink
   Editor --> Ops
   Ops --> Doc
-  Doc --> Store
   Doc --> Compiler
   Compiler --> Scene
-  Scene --> Graph
+  Scene --> View
+  Editor --> View
+  View --> Builder
+  Scene --> Builder
+  Builder --> Graph
   Graph --> Comp
   Cache <--> Comp
-  Comp --> Skia
-  Skia --> Targets
-  API --> Text
-  API --> Ink
+  Comp --> Renderer
+  Renderer --> Skia
+  Skia --> Target
+  SurfaceAdapter --> Target
+  AppAPI --> Text
+  AppAPI --> Ink
   Ink --> Ops
   Ink --> FastBridge
   FastBridge --> FastPlatform
+  Resources --> Compiler
+  Resources --> Renderer
+  Persistence -.->|reads immutable snapshot| Doc
+  Ops -.->|committed operations| Persistence
 ```
 
 主渲染链固定为：
@@ -133,41 +174,50 @@ flowchart TB
 Semantic Document
     → SceneCompiler
     → RuntimeScene
-    → Visibility / Spatial Query
+    → ViewQuery / FrameState
     → Render Tree
+    → FrameBuilder
     → FrameGraph
     → Compositor
+    → RendererBackend
     → Skia Ganesh
+    → RenderTarget
 ```
 
-Skia 是 GFX backend，不拥有 Document、Editor、Ink 或 Text 语义。Graphite/WebGPU 只能作为未来 RendererBackend，不得反向改变上层接口。
+`PlatformSurfaceAdapter` 在平台侧拥有 HTML Canvas/WebGL context、HWND/swapchain、ANativeWindow/EGLSurface、CAMetalLayer/drawable 和 Headless surface 的生命周期，通过 acquire/resize/present/recover 契约提供 `RenderTarget`。`RendererBackend` 不拥有窗口、View 或 native surface handle。Skia 是 GFX backend，不拥有 Document、Editor、Ink 或 Text 语义；Graphite/WebGPU 只能作为未来 RendererBackend，不得反向改变上层接口。
 
 ## 5. Runtime 模块
 
 | 模块 | 权威职责 | 明确不负责 |
 | --- | --- | --- |
+| RuntimeFacade | Application API 的命令、查询、能力与生命周期入口 | 高频 Pointer/IME 数据面、平台 UI |
+| InputRouter | Pointer batch 的顺序、设备/手势路由和 Editor/Ink 分发 | Application commands、IME 文本状态 |
 | Document | 语义节点、层级、样式、资源引用、版本 | Skia 对象、选区、GPU 缓存 |
 | Operations | 唯一持久写入口、事务、回放、协作操作 | 平台输入与绘制 |
 | EditorSession | Selection、Hover、Tools、Snap、History、Clipboard | 文档持久化真相 |
-| RichText | TextDocument、runs、selection、composition | 平台 IME UI |
+| RichText | TextDocument 的 paragraphs/runs/styles/attributes；TextEditSession 的 selection/caret/composition | 平台 IME UI |
 | InkEngine | Pointer 批次、StrokeSession、笔刷语义、Canonical Stroke | 平台直接送显 |
 | SceneCompiler | Document 到 RuntimeScene 的确定性增量编译 | 文档写入 |
-| RuntimeScene | 布局结果、空间索引、可见性、命中查询 | 领域元数据真相 |
+| RuntimeScene | 多视口共享的布局、world bounds、空间索引、render/hit-test records、资源引用和 world-space invalidation | Viewport、可见集合、screen damage、Selection/HUD |
+| ViewQuery / FrameState | 单视口可见集合、clip、LOD、scale bucket、target 参数和 screen damage | 共享场景真相、持久状态 |
+| FrameBuilder | 合并 Scene、View、Editor overlay、Preview、Presence 和 ExternalSurface placement，生成不可变帧计划 | 文档写入和平台 surface 生命周期 |
 | FrameGraph | Pass、依赖、资源生命周期 | 工具和文档规则 |
 | Compositor | Background/Content/Ink/Overlay/Selection/HUD 合成 | 文档操作 |
+| RendererBackend | 将帧计划通过 Ganesh 绘制到调用方提供的 RenderTarget | HWND/ANativeWindow/CAMetalLayer 生命周期 |
 | TileCache | L1/L2/L3 缓存契约、预算、失效 | 权威内容存储 |
 | Resources | 图片、字体、外部资源加载与版本 | 平台文件对话框 |
 | Persistence | 快照、操作日志、迁移、崩溃恢复 | 网络 transport |
 
 ## 6. 状态与生命周期
 
-五类状态必须独立：
+六类状态必须独立：
 
 1. **Document State**：可保存、可同步的语义事实。
 2. **EditorSession State**：Selection、Hover、Tool、TextEditSession、Viewport。
 3. **Collaboration Presence**：在线成员、远端光标、临时选区和连接状态。
-4. **RuntimeScene State**：布局、空间索引、Render Tree 和 Dirty Region，可重建。
-5. **GPU/Cache State**：纹理、display list、tile 和设备资源，可丢弃。
+4. **RuntimeScene State**：多视口共享的布局、空间索引、Render Tree 和 world-space invalidation，可重建。
+5. **View/Frame State**：Viewport 查询结果、visible set、screen damage、Selection/HUD 和当前帧计划，按 view/frame 短暂存在。
+6. **GPU/Cache State**：纹理、display list、tile 和设备资源，可丢弃。
 
 任何缓存或 GPU 设备丢失都不得改变 Document。Presence 不进入文件，EditorSession 不成为协作事实，Document 不保存 Skia 或平台句柄。
 
@@ -186,7 +236,9 @@ Skia 是 GFX backend，不拥有 Document、Editor、Ink 或 Text 语义。Graph
 
 ### 7.2 FastInk
 
-`FastInkBridge/FastInkBackend` 固定提供 `begin`、`push`、`end`、`cancel`。核心不知道 DirectComposition、SurfaceControl、DRM、HWC 或硬件 plane。
+`StrokeSession` 统一完成 resample、smooth、pressure mapping、prediction 和 rollback，并输出版本化 `PreviewStrokeUpdate`。它至少表达 Stroke ID、update revision、brush descriptor、transform/坐标空间、confirmed representation、predicted tail 和 replace/truncate 语义；具体 vector segment/dab batch 编码由 POC-02 冻结。
+
+`FastInkBridge/FastInkBackend` 固定提供 `begin`、`push(PreviewStrokeUpdate)`、`end`、`cancel`。平台 backend 只负责快速显示和 surface/presentation，不得从 raw pointer sample 重新实现另一套平滑、预测或笔刷语义。核心不知道 DirectComposition、SurfaceControl、DRM、HWC 或硬件 plane。
 
 - Web：使用正常 WASM Skia Preview。
 - Windows/Android：实现应用级 native low-latency preview。
@@ -195,6 +247,8 @@ Skia 是 GFX backend，不拥有 Document、Editor、Ink 或 Text 语义。Graph
 ### 7.3 Scene 与缓存
 
 `SceneCompiler` 接收 Document revision/ChangeSet，生成可完整重建、可增量更新的 RuntimeScene。全量编译和相同变更序列的增量编译必须等价。
+
+Document 只保存稳定的 `ResourceId/ResourceRef`，不调用 ResourceManager 或 Persistence。Resources 独立负责 resolve/decode/version，Persistence 通过受控服务保存 snapshot、operation log、resource manifest 和 blob；两者都不得反向修改 Document。
 
 缓存接口从首版存在，能力按阶段展开：
 
@@ -230,6 +284,7 @@ canvas/
 │   ├── text/
 │   ├── ink/
 │   ├── scene/
+│   ├── render/
 │   ├── frame_graph/
 │   ├── compositor/
 │   ├── cache/
@@ -240,6 +295,8 @@ canvas/
 │   ├── web/
 │   ├── windows/
 │   ├── android/
+│   ├── apple/
+│   ├── surfaces/
 │   └── fastink/
 ├── shells/
 │   ├── web/
@@ -278,7 +335,7 @@ canvas/
 | 阶段 | 主题 | 核心结果 |
 | --- | --- | --- |
 | R1 | Runtime Foundation | 工程、模块、Bridge、诊断和确定性基础 |
-| R2 | V1 Visual Document Runtime | V1 节点、Editor、Operations、RichText、Ink、Persistence |
+| R2 | V1 Local Visual Document Runtime | V1 本地节点、Editor、Operations、RichText、Ink、Persistence；完整 V1 产品范围在 R4 后闭合 |
 | R3 | Production Rendering and Shells | 生产 FrameGraph/Cache 与三平台集成 |
 | R4 | Collaboration MVP | 对象同步、Presence、断网重连和基本收敛 |
 | R5 | Hardening and Release | 兼容、恢复、安全、性能和发布闭环 |
@@ -287,7 +344,7 @@ canvas/
 
 ## 11. 已接受与待验证决策
 
-已经接受：Visual Document Runtime 定位、三平台 Shell、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略。
+已经接受：Visual Document Runtime 定位、三平台 Shell、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权和共享 Preview Model/FastInk sink 边界。
 
 仍需实验型 ADR：
 
@@ -295,6 +352,7 @@ canvas/
 - Collaboration MVP 的具体合并算法和协议。
 - L2/L3 缓存格式与压缩策略。
 - POC 后的线程拓扑和 WASM pthread 启用时机。
+- `DocumentRoot`/单 Page/多 Page 的产品 schema 与迁移规则。
 
 “待验证”是明确的阶段输出，不允许实现人员在没有 ADR 和证据时自行选择。
 
