@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "report_id": "poc01-mobile-physical-2026-08-17",
+  "captured_timezone": "Asia/Shanghai",
+  "status": "passed",
+  "scope": ["ios", "ipados", "android"],
+  "poc01_status_after_report": "validating",
+  "tested_source": {
+    "repository": "Mostorm-Labs/canvas",
+    "commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+    "branch_at_capture": "codex/poc-01-determinism-revalidation",
+    "deps_lock_sha256": "f4653ac106f39aa95a2ea225ad470e5f262089c5f190f1c4035dbb9d736e1dcf",
+    "skia_sdk_lock_sha256": "847284704af4bcc0fea113c4046bd4832d52a07cfc00ead26b7f3d3b8ffd5361"
+  },
+  "skia": {
+    "commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "profile": "poc01-minimal-v1",
+    "profile_hash": "7b341c9e1987c7b797087eafcae2dfb0f7eb3fb0635fc18537b8dd3e26213f00",
+    "release_tag": "skia-sdk-poc01-minimal-v1-debcbb7b9376806c",
+    "set_id": "debcbb7b9376806c94ffb9af5950ebd8a6de0547833f9b57df96a20531ca7817",
+    "ios_sdk_id": "eab7bc961815a59c8427efefc0cabb360c73ab7e679bf8e81c729426e397e8ea",
+    "android_sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f"
+  },
+  "fixtures": {
+    "scene_ndjson_sha256": "110a9572d54864ae913e28d91a5e392135e22c1dbedc06a88db6d7b425d25724",
+    "checker_png_sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59",
+    "roboto_regular_sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f",
+    "reference_rgba_sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041"
+  },
+  "acceptance": {
+    "document_digest": "47826449b895ac4f4a57b4f386379775",
+    "core_conformance_version": 1,
+    "core_case_count": 10,
+    "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4,
+    "lifecycle_iterations": 100,
+    "smoke_seconds": 60,
+    "smoke_minimum_frames": 1,
+    "maximum_frame_ms": 100.0,
+    "visual_tolerance": 2,
+    "minimum_visual_ratio": 0.999
+  },
+  "host": {
+    "os": "macOS 26.6.1",
+    "os_build": "25G76",
+    "arch": "arm64",
+    "cmake": "4.0.1"
+  },
+  "runs": [
+    {
+      "id": "iphone15-pro-ios26.6",
+      "captured_at": "2026-08-17T21:11:46+08:00",
+      "device": {
+        "reality": "physical",
+        "model": "iPhone 15 Pro",
+        "product_type": "iPhone16,1",
+        "os": "iOS 26.6",
+        "os_build": "23G71",
+        "cpu_abi": "arm64e",
+        "gpu": "Apple A17 Pro GPU"
+      },
+      "consumer_build": {
+        "configuration": "Release",
+        "xcode": "26.2 (17C52)",
+        "sdk": "iphoneos 26.2 (23C53)",
+        "deployment_target": "17.0",
+        "runner_sha256": "2f2b2dd3436176566dde09d9e47b02f20a82140f2871867bc8db515938bd6f84"
+      },
+      "result_file": "results/iphone15-pro-ios.json",
+      "visual_file": "results/iphone15-pro-ios-visual.json",
+      "raw_result_sha256": "e8843f293d449d2654ad155a24c73ffb16988cf9d6252bb4c17ad40e27209937",
+      "raw_rgba_bytes": 1920000,
+      "raw_rgba_sha256": "1e1aa97f011e1d991b4f025c8df45cd96bd0b54ee0e746f0b8c8d4a58ca955a8",
+      "raw_visual_metrics_sha256": "c28fe6876bcce0380e311bd1aa1b808b236da2cfa9ff2d9a6dd025503bd03281",
+      "passed": true
+    },
+    {
+      "id": "ipad-air4-ipados26.6",
+      "captured_at": "2026-08-17T21:25:15+08:00",
+      "device": {
+        "reality": "physical",
+        "model": "iPad Air (4th generation)",
+        "product_type": "iPad13,1",
+        "os": "iPadOS 26.6",
+        "os_build": "23G71",
+        "cpu_abi": "arm64e",
+        "gpu": "Apple A14 GPU"
+      },
+      "consumer_build": {
+        "configuration": "Release",
+        "xcode": "26.2 (17C52)",
+        "sdk": "iphoneos 26.2 (23C53)",
+        "deployment_target": "17.0",
+        "runner_sha256": "2f2b2dd3436176566dde09d9e47b02f20a82140f2871867bc8db515938bd6f84"
+      },
+      "result_file": "results/ipad-air4-ipados.json",
+      "visual_file": "results/ipad-air4-ipados-visual.json",
+      "raw_result_sha256": "6fcda738c3448aee8f99f0c6a4510e633baa3461161a36329993373857665098",
+      "raw_rgba_bytes": 1920000,
+      "raw_rgba_sha256": "1e1aa97f011e1d991b4f025c8df45cd96bd0b54ee0e746f0b8c8d4a58ca955a8",
+      "raw_visual_metrics_sha256": "ede89792b73d077d911365fa321ccb7a375d16b5af557fc50e76e82f570657ac",
+      "passed": true
+    },
+    {
+      "id": "oppo-pkd130-android15",
+      "captured_at": "2026-08-17T22:16:52+08:00",
+      "device": {
+        "reality": "physical",
+        "manufacturer": "OPPO",
+        "model": "PKD130",
+        "os": "Android 15",
+        "api_level": 35,
+        "cpu_abi": "arm64-v8a",
+        "soc": "MediaTek MT6835",
+        "gpu": "Mali-G57 MC2",
+        "gles": "OpenGL ES 3.2 v1.r38p1"
+      },
+      "consumer_build": {
+        "configuration": "Debug acceptance artifact",
+        "java": "Temurin 17.0.20+8",
+        "gradle": "8.11.1",
+        "android_gradle_plugin": "8.10.1",
+        "cmake": "3.30.5",
+        "ndk": "27.2.12479018",
+        "compile_sdk": 35,
+        "target_sdk": 35,
+        "minimum_sdk": 26,
+        "apk_sha256": "cd23379a1531122988bcee411fbff2390eb74e6b67b31845b496586e87140a40"
+      },
+      "result_file": "results/oppo-pkd130-android.json",
+      "visual_file": "results/oppo-pkd130-android-visual.json",
+      "memory_file": "results/android-memory-samples.json",
+      "raw_result_sha256": "99a1ab7f60787c1e87273384557690da066188155a16d56c4e611b50a4cd6e88",
+      "raw_rgba_bytes": 1920000,
+      "raw_rgba_sha256": "1e1aa97f011e1d991b4f025c8df45cd96bd0b54ee0e746f0b8c8d4a58ca955a8",
+      "raw_visual_metrics_sha256": "d3d49ac093f5761caf533933d762c7622c8cc273e3264646b0ce4ba8d1bc9888",
+      "crash_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "passed": true
+    }
+  ],
+  "cross_device_readback": {
+    "identical": true,
+    "bytes": 1920000,
+    "sha256": "1e1aa97f011e1d991b4f025c8df45cd96bd0b54ee0e746f0b8c8d4a58ca955a8"
+  },
+  "privacy": {
+    "redacted": true,
+    "excluded_fields": [
+      "device serial number",
+      "UDID",
+      "ECID",
+      "user-assigned device name",
+      "Apple signing identity",
+      "Apple Development Team identifier"
+    ]
+  },
+  "external_evidence": {
+    "asset_name": "poc01-mobile-physical-2026-08-17.zip",
+    "bytes": 40775,
+    "uncompressed_bytes": 5808939,
+    "member_count": 26,
+    "sha256": "62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7",
+    "internal_sha256s_sha256": "0fbd18514c88344b8f31abcc27811cdc695329ef3c2266090312fbf8273e379a",
+    "retention": "content-addressed GitHub prerelease; referenced asset must not be overwritten or deleted",
+    "publication": {
+      "status": "published",
+      "repository": "Mostorm-Labs/canvas",
+      "release_tag": "poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd",
+      "release_url": "https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd",
+      "target_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+      "prerelease": true,
+      "github_release_immutable": false,
+      "published_at": "2026-08-17T15:07:13Z",
+      "asset_url": "https://github.com/Mostorm-Labs/canvas/releases/download/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd/poc01-mobile-physical-2026-08-17.zip",
+      "github_asset_digest": "sha256:62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7"
+    }
+  },
+  "remaining_gate": "same-machine Windows D3D12 and Chrome Web physical-GPU benchmark bundle"
+}

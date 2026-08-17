@@ -1,0 +1,13 @@
+{
+  "source": "host-side adb dumpsys meminfo samples during the acceptance run",
+  "unit": "KiB",
+  "samples": [
+    {"elapsed_seconds": 10, "total_pss": 104534},
+    {"elapsed_seconds": 20, "total_pss": 104353},
+    {"elapsed_seconds": 30, "total_pss": 105677},
+    {"elapsed_seconds": 40, "total_pss": 103585},
+    {"phase": "after_result_capture", "total_pss": 86227, "total_rss": 234060, "total_swap_pss": 5512}
+  ],
+  "monotonic_growth_observed": false,
+  "note": "Sparse diagnostic samples for the POC smoke gate; not a release memory benchmark."
+}

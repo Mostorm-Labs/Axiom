@@ -180,6 +180,16 @@ and an EGL ES3 surface; the high-frequency rendering data path never enters
 JavaScript. CI clean-builds arm64 and executes the x86_64 emulator/SwiftShader
 artifact. A physical-device report remains a separate acceptance gate.
 
+The reviewed iPhone, iPad, and Android physical-device report is recorded in
+[`mobile-physical-2026-08-17`](../reports/poc01/mobile-physical-2026-08-17/README.md).
+It binds the structured results to the tested source commit, immutable Skia SDK
+IDs, fixtures, golden, environment, reproduction commands, and an external
+privacy-filtered evidence bundle. The structured report is committed; the raw
+bundle is published as the content-addressed retained prerelease
+[`poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd`](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd),
+and its manifest records the release, asset, target commit, and GitHub digest.
+It closes no non-mobile gate and does not change POC-01 from `Validating`.
+
 ## 7. Manual Windows benchmark bundle
 
 The bundle must run native D3D12 and Chrome Stable Web on the same physical
@@ -196,6 +206,11 @@ this hardware performance gate.
 - [ ] Each platform passes 100 lifecycle iterations and a 1,000-node 60-second
       smoke without crash, sustained growth, or a frame over 100 ms.
 - [ ] Web output contains no pthread/SharedArrayBuffer dependency.
+- [x] iPhone, iPadOS, and Android physical-device report is reviewed and
+      committed with raw artifact hashes and reproduction commands.
+- [x] The privacy-filtered mobile raw evidence bundle is published as the
+      content-addressed Release asset bound by the report manifest and covered
+      by the repository's no-overwrite/no-delete retention policy.
 - [ ] Windows and Web physical benchmark bundle is archived.
 - [ ] Runtime sources contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit,
       Android, EGL, or JNI types.
