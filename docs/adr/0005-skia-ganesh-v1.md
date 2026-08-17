@@ -23,4 +23,4 @@ FrameGraph、Compositor 和 RendererBackend 不暴露 Ganesh 私有类型给 Doc
 
 ## Validation
 
-POC-01 验证 Windows/Web bring-up，POC-03 验证 100K scene、FrameGraph 和 cache。若目标平台 Ganesh 无法达到门禁，应先分析 backend/场景瓶颈，再由新 ADR 评估替代。
+POC-01 验证 Web、Windows、macOS、iOS、iPadOS、Android bring-up，POC-03 验证 100K scene、FrameGraph 和 cache。若目标平台 Ganesh 无法达到门禁，应先分析 backend/场景瓶颈，再由新 ADR 评估替代。

@@ -136,7 +136,7 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 
 | POC | 正确性门禁 | 性能/资源门禁 | 故障门禁 |
 | --- | --- | --- | --- |
-| POC-01 | Windows/Web digest 一致；黄金图 99.9%/差值 2 | 1K 节点连续 60 秒；无单帧 >100 ms | 100 次 runtime/view 生命周期 |
+| POC-01 | Web/Windows/macOS/iOS/iPadOS/Android digest 一致；黄金图 99.9%/差值 2 | 各平台 1K 节点连续 60 秒；无单帧 >100 ms | 各平台 100 次 runtime/view 生命周期 |
 | POC-02 | Canonical Stroke digest 一致；预测点不入文档 | Preview p95/p99 ≤16.7/33.3 ms | cancel、prediction rollback、handoff 无空白 |
 | POC-03 | full/incremental scene 等价 | 100K scene；Web ≤512 MiB、Windows ≤768 MiB | cache clear、resize、device loss 恢复 |
 | POC-04 | 三平台 text digest/行为一致 | 10K 字符输入/layout p95 ≤16.7/33.3 ms | 100 次 focus/composition lifecycle |
@@ -186,7 +186,7 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 
 ### 合并前
 
-- Web/Windows/Android clean build。
+- Web/Windows/macOS/iOS/iPadOS/Android clean build；iOS 与 iPadOS 使用不同 simulator device 验收同一 universal runner。
 - 完整 unit/property/replay/golden/Bridge/lifecycle。
 - sanitizer 核心矩阵和受影响模块 benchmark。
 - 文件/协议变更必须运行兼容与 migration 语料。

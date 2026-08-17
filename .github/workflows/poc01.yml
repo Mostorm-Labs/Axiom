@@ -1,0 +1,323 @@
+name: POC-01 Shared Engine
+
+on:
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "deps.lock.json"
+      - "cmake/**"
+      - "pocs/shared_engine/**"
+      - "tools/**"
+      - ".github/workflows/poc01.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: poc01-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SKIA_COMMIT: b6d106297ff9ef2ff8094033695d045e87775581
+  EXPECTED_DIGEST: 47826449b895ac4f4a57b4f386379775
+
+jobs:
+  host-core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap core dependencies
+        run: python3 tools/bootstrap_deps.py --core --font-only
+      - name: Documentation and repository validation
+        run: |
+          python3 tools/check_docs.py
+          git diff --check
+      - name: Configure and build
+        run: cmake --preset host-debug && cmake --build --preset host-debug --parallel
+      - name: Unit, determinism, lifecycle, and short smoke
+        run: |
+          ctest --preset host-debug --output-on-failure
+          out/host-debug/pocs/shared_engine/canvas_poc01_cli --lifecycle=100 --smoke=5
+      - name: Sanitizer build
+        run: |
+          cmake --preset host-asan
+          cmake --build --preset host-asan --parallel
+          ctest --preset host-asan --output-on-failure
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: pocs/shared_engine/platform/web/package-lock.json
+      - name: Bootstrap locked dependencies
+        run: python3 tools/bootstrap_deps.py --core --skia --sync-skia --web
+      - uses: actions/cache@v4
+        with:
+          path: .deps/skia/out/poc01-web
+          key: skia-web-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+      - name: Build Skia WebGL2
+        shell: bash
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          python3 tools/build_skia.py web
+      - name: Build WASM runtime
+        shell: bash
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          cmake --preset web-release
+          cmake --build --preset web-release --parallel
+      - name: Assert single-threaded Web artifact
+        run: >-
+          python3 pocs/shared_engine/tools/check_web_artifact.py
+          out/web-release/pocs/shared_engine/platform/web/canvas_poc01_web.js
+          out/web-release/pocs/shared_engine/platform/web/canvas_poc01_web.wasm
+      - name: Build and test React demo
+        working-directory: pocs/shared_engine/platform/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm run test:e2e
+      - name: Visual gate
+        run: >-
+          python3 pocs/shared_engine/tools/visual_compare.py
+          --expected pocs/shared_engine/goldens/reference.rgba
+          --actual pocs/shared_engine/platform/web/test-results/web-actual.rgba
+          --artifacts out/results/web-visual
+          --backend ganesh-webgl2
+          --skia-commit "$SKIA_COMMIT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc01-web
+          path: |
+            pocs/shared_engine/platform/web/test-results
+            out/results/web-visual
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
+      - name: Bootstrap locked dependencies and LLVM
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --core --skia --sync-skia --font-only --windows-llvm
+          $installer = Resolve-Path .deps/downloads/LLVM-22.1.8-win64.exe
+          $installDir = Join-Path $PWD ".deps/llvm"
+          Start-Process $installer -ArgumentList "/S", "/D=$installDir" -Wait
+          $installDir | Out-File -FilePath $env:GITHUB_PATH -Append
+          (Join-Path $installDir "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+      - uses: actions/cache@v4
+        with:
+          path: .deps/skia/out/poc01-windows
+          key: skia-windows-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+      - name: Build Skia D3D12
+        shell: pwsh
+        run: python tools/build_skia.py windows --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
+      - name: Build Windows runtime and demo
+        shell: pwsh
+        run: |
+          cmake --preset windows-release -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe"
+          cmake --build --preset windows-release --parallel
+      - name: Unit and WARP acceptance
+        shell: pwsh
+        run: |
+          ctest --preset windows-release --output-on-failure
+          New-Item -ItemType Directory -Force out/results | Out-Null
+          & out/windows-release/pocs/shared_engine/platform/windows/canvas_poc01_windows.exe --offscreen --lifecycle=100 --smoke=60 --output=out/results/windows-actual.rgba | Tee-Object -FilePath out/results/windows-result.json
+      - name: Clang-cl ASan core check
+        shell: pwsh
+        run: |
+          cmake -S . -B out/windows-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCANVAS_POC01_ENABLE_SKIA=OFF -DCANVAS_POC01_ENABLE_SANITIZERS=ON
+          cmake --build out/windows-asan --target canvas_poc01_tests --parallel
+          ctest --test-dir out/windows-asan --output-on-failure
+      - name: Visual gate
+        run: >-
+          python pocs/shared_engine/tools/visual_compare.py
+          --expected pocs/shared_engine/goldens/reference.rgba
+          --actual out/results/windows-actual.rgba
+          --artifacts out/results/windows-visual
+          --backend ganesh-d3d12-warp
+          --skia-commit "$env:SKIA_COMMIT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc01-windows
+          path: out/results
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap locked dependencies
+        run: python3 tools/bootstrap_deps.py --core --skia --sync-skia --font-only
+      - uses: actions/cache@v4
+        with:
+          path: .deps/skia/out/poc01-macos
+          key: skia-macos-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+      - name: Build Skia Metal and runtime
+        run: |
+          python3 tools/build_skia.py macos
+          cmake --preset macos-release
+          cmake --build --preset macos-release --parallel
+          ctest --preset macos-release --output-on-failure
+      - name: Reproduce reviewed raster golden
+        run: |
+          out/macos-release/pocs/shared_engine/platform/canvas_poc01_golden --update-golden --output=out/reference.rgba
+          cmp pocs/shared_engine/goldens/reference.rgba out/reference.rgba
+      - name: Metal lifecycle and result
+        run: |
+          mkdir -p out/results
+          (cd out/results && ../macos-release/pocs/shared_engine/platform/apple/canvas_poc01_macos_runner --lifecycle=100 --smoke=60 > macos-result.json)
+      - name: Visual gate
+        run: >-
+          python3 pocs/shared_engine/tools/visual_compare.py
+          --expected pocs/shared_engine/goldens/reference.rgba
+          --actual out/results/apple-actual.rgba
+          --artifacts out/results/macos-visual
+          --backend ganesh-metal
+          --skia-commit "$SKIA_COMMIT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc01-macos
+          path: out/results
+
+  apple-mobile:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap locked dependencies
+        run: python3 tools/bootstrap_deps.py --core --skia --sync-skia --font-only
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .deps/skia/out/poc01-ios-simulator
+            .deps/skia/out/poc01-ios
+          key: skia-apple-mobile-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+      - name: Clean-build iOS/iPadOS device target
+        run: |
+          python3 tools/build_skia.py ios
+          cmake --preset ios-device-release
+          cmake --build --preset ios-device-release --config Release --parallel
+      - name: Build universal iOS/iPadOS simulator runner
+        run: |
+          python3 tools/build_skia.py ios-simulator
+          cmake --preset ios-simulator-release
+          cmake --build --preset ios-simulator-release --config Release --parallel
+      - name: Run on iPhone and iPad simulators
+        run: |
+          app=$(find out/ios-simulator-release -name canvas_poc01_ios_runner.app -type d | head -1)
+          python3 pocs/shared_engine/tools/run_apple_simulators.py --app "$app" --output out/results
+      - name: Visual gates
+        run: |
+          python3 pocs/shared_engine/tools/visual_compare.py --expected pocs/shared_engine/goldens/reference.rgba --actual out/results/ios-actual.rgba --artifacts out/results/ios-visual --backend ganesh-metal-ios-simulator --skia-commit "$SKIA_COMMIT"
+          python3 pocs/shared_engine/tools/visual_compare.py --expected pocs/shared_engine/goldens/reference.rgba --actual out/results/ipados-actual.rgba --artifacts out/results/ipados-visual --backend ganesh-metal-ipados-simulator --skia-commit "$SKIA_COMMIT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc01-apple-mobile
+          path: out/results
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.11.1" }
+      - name: Install locked Android SDK components
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.30.5" "ndk;27.2.12479018" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Bootstrap locked dependencies
+        run: |
+          python3 tools/bootstrap_deps.py --core --skia --sync-skia --font-only
+      - uses: actions/cache@v4
+        with:
+          path: .deps/skia/out/poc01-android-*
+          key: skia-android-arm64-x64-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+      - name: Clean-build Android arm64 target
+        run: |
+          python3 tools/build_skia.py android --cpu arm64 --ndk "$ANDROID_HOME/ndk/27.2.12479018"
+          (cd pocs/shared_engine/platform/android && gradle :app:assembleDebug -PcanvasPocAbi=arm64-v8a --no-daemon)
+      - name: Build Skia Android x64
+        run: python3 tools/build_skia.py android --cpu x64 --ndk "$ANDROID_HOME/ndk/27.2.12479018"
+      - name: Build Android Native CanvasView demo
+        working-directory: pocs/shared_engine/platform/android
+        run: gradle :app:assembleDebug -PcanvasPocAbi=x86_64 --no-daemon
+      - name: Enable Android emulator hardware acceleration
+        run: sudo chmod 0666 /dev/kvm
+      - name: Emulator acceptance
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r pocs/shared_engine/platform/android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell wm size 800x600
+            adb logcat -c
+            adb shell am start -n dev.mostorm.canvas.poc01/dev.mostorm.canvas.CanvasPocActivity
+            timeout 180 bash -c 'until adb logcat -d -s CanvasPOC01:I | grep -q CANVAS_POC01_RESULT; do sleep 1; done'
+            mkdir -p out/results
+            adb shell run-as dev.mostorm.canvas.poc01 cat files/android-actual.rgba > out/results/android-actual.rgba
+            adb logcat -d -s CanvasPOC01:I | sed -n 's/.*CANVAS_POC01_RESULT //p' | tail -1 > out/results/android-result.json
+      - name: Visual gate
+        run: >-
+          python3 pocs/shared_engine/tools/visual_compare.py
+          --expected pocs/shared_engine/goldens/reference.rgba
+          --actual out/results/android-actual.rgba
+          --artifacts out/results/android-visual
+          --backend ganesh-gles3-swiftshader
+          --skia-commit "$SKIA_COMMIT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc01-android
+          path: out/results
+
+  cross-platform-acceptance:
+    if: always()
+    needs: [web, windows, macos, apple-mobile, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: poc01-*
+          path: out/all-results
+          merge-multiple: false
+      - name: Compare semantic results byte-for-byte
+        run: >-
+          python3 pocs/shared_engine/tools/cross_platform_acceptance.py
+          --results out/all-results
+          --required web windows macos ios ipados android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc01-cross-platform-acceptance
+          path: out/all-results/cross-platform-acceptance.json

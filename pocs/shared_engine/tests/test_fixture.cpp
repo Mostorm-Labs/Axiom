@@ -1,0 +1,36 @@
+#include "test_fixture.h"
+
+#include <array>
+
+#include "operations.h"
+
+namespace canvas::poc01::test {
+
+std::shared_ptr<AssetRegistry> MakeAssets() {
+  auto assets = std::make_shared<AssetRegistry>();
+  constexpr std::array<uint8_t, 8> checker = {137, 80, 78, 71, 1, 2, 3, 4};
+  constexpr std::array<uint8_t, 8> font = {0, 1, 0, 0, 5, 6, 7, 8};
+  if (assets->Register("checker.png", checker) != CANVAS_POC_STATUS_OK ||
+      assets->Register("roboto.ttf", font) != CANVAS_POC_STATUS_OK) {
+    return nullptr;
+  }
+  return assets;
+}
+
+std::unique_ptr<Document> MakeDocument() {
+  return std::make_unique<Document>(MakeAssets(), 800, 600,
+                                    Color{244, 245, 247, 255});
+}
+
+std::string FixedReplay() {
+  return
+      "{\"v\":1,\"seq\":1,\"op\":\"create\",\"node\":{\"id\":1,\"type\":\"rect\",\"order\":10,\"x\":80,\"y\":72,\"width\":220,\"height\":132,\"color\":[43,108,246,255]}}\n"
+      "{\"v\":1,\"seq\":2,\"op\":\"create\",\"node\":{\"id\":2,\"type\":\"image\",\"order\":20,\"x\":360,\"y\":72,\"width\":128,\"height\":128,\"asset_key\":\"checker.png\"}}\n"
+      "{\"v\":1,\"seq\":3,\"op\":\"create\",\"node\":{\"id\":3,\"type\":\"vector_path\",\"order\":30,\"commands\":[{\"verb\":\"M\",\"x\":100,\"y\":330},{\"verb\":\"C\",\"x1\":230,\"y1\":210,\"x2\":390,\"y2\":460,\"x\":540,\"y\":310}],\"color\":[232,78,63,255],\"stroke_width\":12}}\n"
+      "{\"v\":1,\"seq\":4,\"op\":\"create\",\"node\":{\"id\":4,\"type\":\"text\",\"order\":40,\"x\":100,\"y\":490,\"font_size\":56,\"text\":\"Canvas v2\",\"font_asset_key\":\"roboto.ttf\",\"color\":[30,34,43,255]}}\n"
+      "{\"v\":1,\"seq\":5,\"op\":\"move\",\"id\":1,\"dx\":12,\"dy\":8}\n"
+      "{\"v\":1,\"seq\":6,\"op\":\"create\",\"node\":{\"id\":999,\"type\":\"rect\",\"order\":50,\"x\":700,\"y\":500,\"width\":32,\"height\":32,\"color\":[0,0,0,255]}}\n"
+      "{\"v\":1,\"seq\":7,\"op\":\"delete\",\"id\":999}\n";
+}
+
+}  // namespace canvas::poc01::test

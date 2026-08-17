@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "width": 800,
+  "height": 600,
+  "device_pixel_ratio": 1,
+  "color_space": "sRGB",
+  "sample_count": 1,
+  "background_rgba": [244, 245, 247, 255],
+  "operation_count": 7,
+  "final_node_count": 4,
+  "expected_digest": "47826449b895ac4f4a57b4f386379775",
+  "replay_sha256": "110a9572d54864ae913e28d91a5e392135e22c1dbedc06a88db6d7b425d25724",
+  "golden": {
+    "path": "pocs/shared_engine/goldens/reference.rgba",
+    "sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041",
+    "xxh3_128": "a3766783503f993b3fb8ed3da322a499",
+    "coverage": "binary-vector-path-and-text"
+  },
+  "assets": {
+    "checker.png": {
+      "width": 64,
+      "height": 64,
+      "generator": "tools/generate_fixtures.py",
+      "sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59"
+    },
+    "roboto.ttf": {
+      "source": ".deps/skia/resources/fonts/Roboto-Regular.ttf",
+      "sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f"
+    }
+  }
+}

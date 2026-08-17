@@ -1,0 +1,17 @@
+.deps/
+.cache/
+build/
+out/
+node_modules/
+.gradle/
+dist/
+test-results/
+playwright-report/
+*.user
+*.suo
+*.dSYM/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+.DS_Store
+pocs/shared_engine/platform/web/public/

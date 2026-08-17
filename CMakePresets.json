@@ -1,0 +1,119 @@
+{
+  "version": 10,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 30,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "host-debug",
+      "displayName": "POC-01 host core (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/host-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CANVAS_POC01_BUILD_TESTS": "ON",
+        "CANVAS_POC01_ENABLE_SKIA": "OFF"
+      }
+    },
+    {
+      "name": "host-asan",
+      "inherits": "host-debug",
+      "displayName": "POC-01 host core (sanitizers)",
+      "binaryDir": "${sourceDir}/out/host-asan",
+      "cacheVariables": {
+        "CANVAS_POC01_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "web-release",
+      "displayName": "POC-01 Web/WASM (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/web-release",
+      "toolchainFile": "${sourceDir}/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_POC01_BUILD_TESTS": "OFF",
+        "CANVAS_POC01_ENABLE_SKIA": "ON",
+        "CANVAS_POC01_WEB": "ON"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "POC-01 Windows/D3D12 (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/windows-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_POC01_BUILD_TESTS": "ON",
+        "CANVAS_POC01_ENABLE_SKIA": "ON",
+        "CANVAS_POC01_WINDOWS": "ON"
+      }
+    },
+    {
+      "name": "macos-release",
+      "displayName": "POC-01 macOS/Metal (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/macos-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_POC01_BUILD_TESTS": "ON",
+        "CANVAS_POC01_ENABLE_SKIA": "ON"
+      }
+    },
+    {
+      "name": "ios-simulator-release",
+      "displayName": "POC-01 iOS/iPadOS simulator/Metal (Release)",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/out/ios-simulator-release",
+      "toolchainFile": "${sourceDir}/cmake/ios-simulator.toolchain.cmake",
+      "cacheVariables": {
+        "CANVAS_POC01_BUILD_TESTS": "OFF",
+        "CANVAS_POC01_ENABLE_SKIA": "ON"
+      }
+    },
+    {
+      "name": "ios-device-release",
+      "displayName": "POC-01 iOS/iPadOS device/Metal (Release)",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/out/ios-device-release",
+      "toolchainFile": "${sourceDir}/cmake/ios.toolchain.cmake",
+      "cacheVariables": {
+        "CANVAS_POC01_BUILD_TESTS": "OFF",
+        "CANVAS_POC01_ENABLE_SKIA": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "host-debug", "configurePreset": "host-debug" },
+    { "name": "host-asan", "configurePreset": "host-asan" },
+    { "name": "web-release", "configurePreset": "web-release" },
+    { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "macos-release", "configurePreset": "macos-release" },
+    { "name": "ios-simulator-release", "configurePreset": "ios-simulator-release" },
+    { "name": "ios-device-release", "configurePreset": "ios-device-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "host-debug",
+      "configurePreset": "host-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "host-asan",
+      "configurePreset": "host-asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "macos-release",
+      "configurePreset": "macos-release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
