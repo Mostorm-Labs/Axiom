@@ -188,6 +188,25 @@ Skia/toolchain commits, frame p50/p95/p99/max, peak memory, and hashes of every
 binary, fixture, and result. WARP/SwiftShader correctness runs never satisfy
 this hardware performance gate.
 
+Run the local Web demo and then collect both hardware paths into one bundle:
+
+```powershell
+$native = Resolve-Path out/windows-release/pocs/shared_engine/platform/windows/canvas_poc01_windows.exe
+pocs/shared_engine/benchmarks/windows/run_bundle.ps1 `
+  -NativeExe $native `
+  -WebUrl http://127.0.0.1:4173 `
+  -OutputDirectory out/results/windows-web-physical `
+  -DurationSeconds 60 `
+  -RuntimeCommit 5ab8b16bdac8f982a9d221d1f48d3867dda7b43c
+```
+
+The command refuses WARP, SwiftShader/software WebGL, digest drift, missing
+percentiles or peak-memory fields, an incomplete 100/60 gate, and any frame
+over 100 ms. Commit only the redacted report and structured summary; publish
+the generated ZIP containing raw RGBA/log/diff evidence as a Release asset.
+Both native D3D12 and Chrome WebGL2 readbacks and visual-diff directories must
+be present in that single ZIP.
+
 ## 8. Exit checklist
 
 - [ ] All six platform families clean-build from the lock file.

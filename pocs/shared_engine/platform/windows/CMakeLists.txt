@@ -20,5 +20,5 @@ target_compile_definitions(canvas_poc01_windows PRIVATE
   CANVAS_POC01_FONT_PATH=L"${CANVAS_POC01_SKIA_FONT_PATH}"
 )
 target_link_libraries(canvas_poc01_windows PRIVATE
-  canvas_poc01_windows_adapter user32 gdi32 shell32
+  canvas_poc01_windows_adapter user32 gdi32 shell32 psapi
 )
