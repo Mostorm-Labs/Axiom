@@ -4,6 +4,8 @@
 
 本文档定义 Visual Document Runtime 的模块边界、数据流和接口语义。具体容器、序列化库、协作算法和最终线程拓扑仍由对应 POC/ADR 决定，但实现不得绕过这里规定的所有权和依赖方向。
 
+V1 产品发布目标是 Web、Windows、Android（Product Tier A）。macOS/iOS/iPadOS 是 Portability Tier B，持续验证共享 Runtime 与 Ganesh/Metal，但不承诺 V1 产品 Shell；ChromiumOS 复用 Web target；Headless 是 test/reference Utility Target。完整责任见 ADR-0015。
+
 ## 1. 系统分层
 
 ```mermaid
@@ -27,9 +29,12 @@ flowchart TB
   subgraph Core["C++20 Canvas Runtime"]
     Facade["RuntimeFacade / Commands"]
     Input["InputRouter"]
+    Geometry["Geometry / Coordinate Contract"]
     Editor["EditorSession"]
     Text["RichText"]
     Ink["InkEngine"]
+    Layout["Layout"]
+    HitTest["HitTest"]
     Ops["Operations"]
     Doc["Semantic Document"]
     Compiler["SceneCompiler"]
@@ -74,6 +79,9 @@ flowchart TB
   Facade --> Ink
   Input --> Editor
   Input --> Ink
+  Geometry --> Input
+  Geometry --> Layout
+  Geometry --> HitTest
   Editor --> Ops
   Text --> Ops
   Ink --> Ops
@@ -81,6 +89,8 @@ flowchart TB
   Collab <--> Ops
   Doc --> Compiler
   Compiler --> Scene
+  Layout --> Compiler
+  Scene --> HitTest
   Scene --> ViewState
   Editor --> ViewState
   Scene --> FrameBuilder
@@ -99,7 +109,7 @@ flowchart TB
   Ink --> FastInk
 ```
 
-依赖只能自上而下：Shell 的低频产品命令依赖 Application API；Pointer 与 IME 分别通过专用 adapter 进入 InputRouter 和 TextEditSession。Bridge 依赖 Runtime 的公开 facade，Document 不依赖 Editor、ResourceManager、Persistence、Skia、网络或平台，Renderer 不拥有 Document 写入口或平台 surface 生命周期。
+依赖只能自上而下：Shell 的低频产品命令依赖 Application API；Pointer 与 IME 分别通过专用 adapter 进入 InputRouter 和 TextEditSession。Bridge 依赖 Runtime 的公开 facade，Document 不依赖 Editor、ResourceManager、Persistence、Skia、网络或平台，Renderer 不拥有 Document 写入口或平台 surface 生命周期。Serialization 是 Bridge、Operations 与 Persistence 使用的版本化 codec 机制，不是独立权威状态模块。
 
 ## 2. 平台边界
 
@@ -110,6 +120,7 @@ flowchart TB
 - Skia Ganesh 使用 WebGL；POC 阶段单线程运行，不启用 SharedArrayBuffer/pthread。
 - Web adapter 拥有 HTML Canvas/WebGL context 的创建、resize、context loss 与 present；Runtime 只消费本帧 `RenderTarget`。
 - HTML/DOM 不插入 RuntimeScene 的任意深度。ExternalSurface 只通过受控 Overlay 层出现。
+- React/TypeScript 是当前 Tier A 产品选择；架构不变量是 WASM 窄接口、WebGL surface ownership 和共享 Runtime，不是某个具体 React/Vite 版本。
 
 ### 2.2 Windows
 
@@ -118,6 +129,7 @@ flowchart TB
 - Windows adapter 拥有 HWND、DXGI swapchain/backbuffer、resize、present 与 device-loss 生命周期；这些类型不进入 Runtime Core。
 - DOM/WebView2 与 native canvas 使用固定层级区域，不允许单个 DOM 元素穿插在画布对象之间。
 - Pen/Pointer 输入由 native region 收集并批量进入 InputRouter。
+- React/Tauri 是当前 Tier A 产品选择。更换产品壳若保持 C ABI、native canvas region 和高频数据面边界，只需新的产品/平台决策与 contract evidence；改变这些不变量才需要 Architecture ADR。
 
 ### 2.3 Android
 
@@ -125,17 +137,24 @@ flowchart TB
 - Native `CanvasView` 拥有 Surface 生命周期、MotionEvent、历史点、IME 桥和 JNI 调用。
 - 触控笔数据链固定为 `MotionEvent/history → Native CanvasView → PointerSampleBatch → C++ InputRouter`，不得走 RN event/JS/NativeModule 往返。
 - JNI 只传递 opaque handle、批量结构、命令和事件；高频路径不得逐 sample 跨 JNI。
+- React Native 是当前 Tier A 产品选择。替换 JS Shell 不得改变 Native CanvasView/JNI、IME 与 Pointer 的 native 数据面不变量。
 
 ### 2.4 Apple POC
 
 - macOS/iOS/iPadOS adapter 拥有 native view、CAMetalLayer/Metal drawable、resize、前后台与 drawable failure 生命周期。
-- Apple 平台在 POC-01 只验证共享 Runtime 与 Ganesh/Metal；产品 Shell 和正式平台 API 另行 ADR。
+- Apple 平台属于 Portability Tier B：POC-01 验证共享 Runtime 与 Ganesh/Metal，后续维持 core conformance；产品 Shell、发布和支持范围另行 ADR。
 
 ### 2.5 ChromiumOS 与自有设备
 
 - ChromiumOS 默认复用 Web Shell 和 WASM Runtime。
 - 系统 FastInk 是平台能力，通过 FastInkBackend 注入；Runtime 不依赖 ChromiumOS、Android BSP 或 DRM 类型。
 - 自有设备预研可以拥有 RawInputSource 和 system service，但它们不进入通用 Runtime target。
+
+### 2.6 Headless
+
+- V1 Headless 是 test/reference/golden 与内部受控 export Utility Target，不是公开 server/batch rendering 产品 API。
+- Headless 使用同一 Document、SceneCompiler、FrameBuilder 和 Renderer 语义，但没有 Editor viewport UI、Platform Pointer/IME 或 native overlay。
+- server-side export、thumbnail、PDF/image batch conversion、并发隔离和公共稳定 API 在产品化前另建 ADR。
 
 ## 3. 权威状态边界
 
@@ -148,7 +167,7 @@ Document 是唯一可保存、迁移和协作同步的业务真相，包含：
 - RichText 内容、Vector/Dab Stroke 的语义数据。
 - 操作与迁移需要的最小版本/因果元数据。
 
-Document 不包含：Skia 对象、GPU handle、空间索引、选区、hover、IME composition UI、远端光标或连接状态。
+Document semantic state 同时包含版本化 ResourceManifest；节点只保存稳定 ResourceId，manifest 将 ResourceId 绑定到 ResourceRevision、ContentHash 和语义元数据。Document 不包含：blob 下载 URL/本地路径、decode 状态、Skia 对象、GPU handle、空间索引、选区、hover、IME composition UI、远端光标或连接状态。
 
 ### 3.2 EditorSession
 
@@ -159,6 +178,8 @@ Document 不包含：Skia 对象、GPU handle、空间索引、选区、hover、
 - Active Stroke session 与局部 preview 状态。
 
 EditorSession 可根据产品需要局部恢复，但不作为 Document collaboration state。
+
+History/Undo intention 属于 EditorSession。Undo/Redo 选择本地 intention，并针对当前 Document revision 产生新的 compensating Operation transaction；不能倒退 Document state pointer、operation sequence 或改写旧 Operation。
 
 ### 3.3 Collaboration Presence
 
@@ -235,7 +256,34 @@ Normalized Input
 
 远端写路径从 operation validation 开始，不能进入 Tool state machine。Document 只提供一个有序写入口；同一初始快照和 operation sequence 必须得到相同逻辑摘要。
 
-## 6. Pointer 与 Ink 接口
+Undo/Redo 不构成第二写路径：History 只选择 local intention/undo group，随后生成新的原子 compensating Operations。并发导致补偿不再适用时必须返回明确 applied/no-op/rejected/conflicted 结果，不能通过恢复旧 snapshot 覆盖当前 Document。
+
+## 6. 坐标空间、Pointer 与 Ink 接口
+
+### 6.1 坐标与 DPI
+
+概念空间和变换顺序固定为：
+
+```text
+Node Local
+  → node/world transform
+Page/World
+  → viewport transform (ViewId + viewport_revision)
+View Logical
+  → RenderTarget DPR/device transform
+Device Pixel
+  → platform placement transform（仅 adapter）
+Platform Screen
+```
+
+- Page/World unit 是抽象文档单位，x 向右、y 向下，不等于 device pixel 或物理长度。
+- Web CSS pixel、Windows DIP、Android logical pixel 和 Apple point 在 adapter 边界归一化为 View Logical。
+- PointerAdapter 先得到 View Logical sample，再使用该 batch 记录的 viewport snapshot 逆变换为 Page/World。历史 sample 不得用较新的 viewport revision 重新解释。
+- Document/Canonical Stroke 保存 Page/World geometry；DPR、screen coordinates、像素取整和平台 inset 不进入 Document。
+- HitTest 使用 Page/World point 与由 View Logical tolerance 转换的 world tolerance。ExternalSurface placement 由 FrameBuilder 从 world 变换到 device，再由平台 registry 映射到 screen/view。
+- 像素取整只在 raster/overlay adapter 边界发生；bounds/clip 在此前保持连续值并采用 half-open extent 语义。
+
+### 6.2 PointerSampleBatch
 
 以下是必须保持的语义接口；具体二进制布局由 POC-02 固定。
 
@@ -251,6 +299,9 @@ struct PointerSample {
 };
 
 struct PointerSampleBatch {
+  ViewId view_id;
+  ViewportRevision viewport_revision;
+  Mat3 view_to_world;
   PointerDeviceInfo device;
   Span<const PointerSample> samples;
 };
@@ -262,6 +313,7 @@ struct PointerSampleBatch {
 - 平台 timestamp 进入 Runtime 前转换为同一单调时间域。
 - 缺失 pressure/tilt 使用 capability 标记，不伪造硬件精度。
 - 历史点批量传递，不逐点跨 WASM/C ABI/JNI。
+- batch 内位置在进入 InputRouter 时使用 View Logical space，并通过同 batch 的不可变 `view_to_world` 生成 canonical Page/World samples；矩阵失效或不可逆时整 batch 明确拒绝。
 
 `StrokeSession` 生命周期：
 
@@ -276,8 +328,8 @@ class StrokeSession {
 
 - Session 允许 resample、smooth 和 prediction。
 - Preview 可以包含预测点，Canonical 只能提交确认样本派生的稳定语义。
-- `end()` 生成一次原子 Stroke operation；`cancel()` 不留下 Document 修改。
-- Preview 与 Canonical 共享 Stroke ID、transform 和 brush descriptor。
+- `push()` 允许持续增量维护 Canonical candidate；`end()` 只把已经验证完成的 Canonical Stroke 作为一次原子 Operation 提交，不能把超长笔迹的全部计算推迟到 pointer up。`cancel()` 不留下 Document 修改。
+- Preview 与 Canonical 共享 Stroke ID、transform 和版本化 `BrushDescriptor`。Descriptor 至少包含 brush type/version、semantic parameters 及所需 ResourceId/ContentHash；同一 descriptor/version 的跨平台 replay 必须产生等价结果。
 
 ## 7. FastInk 双路径
 
@@ -328,6 +380,8 @@ Platform IME
 
 `TextDocument` 包含 paragraphs、runs、styles 和 attributes；`TextEditSession` 包含 selection、caret、composition 和 undo grouping。平台 composition 未提交前属于 session，提交后通过 Operation 进入 Document。
 
+Canonical text style 使用 `FontResourceId`/ContentHash 与规范化 fallback chain。系统字体的偶然可用性只能服务非 canonical Shell UI，不能静默改变 Document 的 shaping、换行、caret/selection geometry 或 export；font missing/hash mismatch 必须产生确定 placeholder/diagnostic。
+
 `TextInputAdapter` 必须表达：
 
 - begin/update/commit/cancel composition。
@@ -339,7 +393,7 @@ Web、Windows、Android 运行同一文本行为语料；平台只能适配 IME�
 
 ## 9. SceneCompiler 与渲染管线
 
-`SceneCompiler` 提供两个逻辑入口：全量 `compile(DocumentSnapshot)` 与增量 `apply(ChangeSet)`。二者输出相同 revision 的 RuntimeScene 时，render records、bounds、hit-test 和视觉结果必须等价。Document 只携带稳定 `ResourceId/ResourceRef`；SceneCompiler 通过只读 `ResourceResolver` 获取状态，不让 Document 调用或拥有 ResourceManager。
+`SceneCompiler` 提供两个逻辑入口：全量 `compile(DocumentSnapshot)` 与增量 `apply(ChangeSet)`。二者输出相同 revision 的 RuntimeScene 时，render records、bounds、hit-test 和视觉结果必须等价。Document 节点只携带稳定 ResourceId；versioned ResourceManifest 将其映射到 ResourceRevision、ContentHash 与 blob metadata。SceneCompiler 通过只读 `ResourceResolver` 获取并校验内容，不让 Document 调用或拥有 ResourceManager。
 
 共享 Scene 和单视口/临时状态进入以下管线：
 
@@ -371,16 +425,16 @@ class TileStore;
 - `TileCache`：按 viewport/scale/content revision 管理 L1/L2 tile。
 - `TileStore`：可选 L3 持久 tile，必须包含版本、内容摘要和兼容信息。
 
-缓存 key 至少覆盖内容 revision、渲染参数、scale bucket、颜色空间和 backend capability。任何无法证明有效的缓存项必须 miss，不允许展示过期内容。
+L1 cache key 至少覆盖内容 revision、渲染参数、scale bucket、颜色空间和 backend capability。任何无法证明有效的缓存项必须 miss，不允许展示过期内容。未来 L3 `TileStore` 的 compatibility namespace 还必须覆盖 CacheSchemaVersion、RendererVersion、Skia SDK/backend shader compatibility、资源/字体内容 hash 和平台能力；具体哪些进入 namespace、manifest 或每 tile key 由 L2/L3 ADR 决定。
 
 演进顺序：POC-03 验证接口与 L1 原型；R3 产品化 L1；L2/L3 只有在性能证据和 ADR 通过后实现。
 
 ## 11. Hybrid Surface
 
-POC-05 固定使用 Overlay：
+POC-05 固定使用 Overlay 做未来能力的 architecture risk proof；ExternalSurface/Video/Embed 不进入 V1 产品实现：
 
-- RuntimeScene 保存 ExternalSurface 的语义 bounds、clip、opacity 和稳定 `ExternalSurfaceId`；native view/surface handle 只存在于 Platform Shell/adapter。
-- Platform Shell 创建并定位 WebView/Video surface。
+- RuntimeScene 保存 ExternalSurface 的语义 bounds、clip、opacity、pass info 和稳定 `ExternalSurfaceId`；native view/surface handle 只存在于 Platform Shell 的 `ExternalSurfaceRegistry`/adapter。
+- Platform Shell 通过 ExternalSurfaceId 查找 registry entry，创建并定位 WebView/Video surface。
 - Compositor 输出 overlay placement，不把外部 surface 当 Skia texture。
 - Overlay 只允许位于约定 pass；不支持任意外部 UI 穿插到每个 Document node 之间。
 
@@ -388,9 +442,9 @@ Texture import、zero-copy、复杂 mask/effect 与跨平台一致混合留给�
 
 ## 12. Resources 与 Persistence
 
-- Document 只保存稳定 `ResourceId/ResourceRef`、内容 hash 和必要语义元数据，不依赖 ResourceManager、平台文件 API 或 Persistence。
-- Resources 负责 resolve、decode、版本、placeholder、CPU/GPU upload 协调；资源失败只能产生诊断和派生状态，不能反向修改 Document。
-- Persistence 作为服务保存 Document snapshot、operation log、resource manifest 和 blobs，并负责 migration/crash recovery；Document 本身不发起 IO。
+- 节点只保存稳定、不可复用的 ResourceId。ResourceManifest 是版本化 Document semantic state，将 ResourceId 映射到 ResourceRevision、`sha256:<content-hash>`、kind、长度和必要语义元数据；manifest binding 改变必须改变 Document digest。
+- Blob 按 ContentHash 不可变寻址。Resources 负责 resolve、hash verify、decode、版本、placeholder、CPU/GPU upload 协调；资源 missing/corrupt 只能产生诊断和派生状态，不能反向修改 Document。
+- Persistence 作为服务原子保存 Document snapshot、operation log、resource manifest 和 blobs，并负责 migration/crash recovery；Document 本身不发起 IO。下载 URL、本地路径、decode/GPU/cache state 不进入 Document digest。
 - Resources 与 Persistence 可以共享 blob/content-addressed storage 接口，但生命周期和模块所有权保持独立。
 
 ## 13. Collaboration MVP
@@ -406,7 +460,7 @@ Collaboration 只传输 Operation 和独立 Presence：
 
 ## 14. 线程模型
 
-POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序执行 Document write、SceneCompiler 和 Canonical Renderer，以建立确定性参考结果。接口需传递 revision、不可变 snapshot 和任务取消信息，但不提前创建 Runtime worker。
+POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序执行 Document write、SceneCompiler 和 Canonical Renderer，以建立确定性参考结果。接口需传递 document/view/viewport/resource/target revision、不可变 snapshot 和任务取消信息，但不提前创建 Runtime worker。
 
 平台原始输入采集、OS compositor、GPU driver，以及 POC-06 FastInkBackend 必需的平台 presentation thread 不属于该 executor。它们与 canonical Runtime 的通信必须通过显式 queue、revision、generation、ack/fence、cancel 和销毁契约；这项豁免不代表产品线程拓扑已经确定。
 
@@ -433,12 +487,16 @@ POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序�
 - Shell 不拥有 Document 业务真相。
 - Document 不依赖 Skia、平台或网络。
 - Document 只保存资源引用，不依赖 ResourceManager 或 Persistence。
+- ResourceManifest binding 是版本化语义事实；同 ResourceId 的内容不能在原 hash 下静默变化。
+- 所有跨模块 geometry 声明坐标空间；DPR、screen coordinates 和像素取整不进入 Document。
 - RuntimeScene 可由 Document 完整重建。
 - RuntimeScene 不拥有 per-view visible set、screen damage 或 Editor overlay。
 - Renderer 和 cache 无 Document 写入口。
 - RendererBackend 不拥有平台 window/view/surface 生命周期；PlatformSurfaceAdapter 不拥有 Document 语义。
 - FastInk 失败不阻断 Canonical Stroke。
 - FastInkBackend 消费共享 Preview Model，不重新定义 Stroke 平滑、预测或笔刷语义。
+- BrushDescriptor 是版本化、可回放的语义，不是未标版本的运行时参数。
+- Undo/Redo 通过新 compensating Operations 进入唯一 Document 写入口。
 - Android 高频 pen path 不经过 RN JS。
 - POC 参考结果在引入多线程后继续作为等价性 oracle。
 - 所有平台共享 operation、input replay、text behavior 和 golden scene 语料。

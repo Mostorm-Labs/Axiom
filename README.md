@@ -13,16 +13,21 @@ should bypass their documented exit gates.
 
 ## Fixed architecture baseline
 
-- Web: React/TypeScript + WASM + WebGL.
-- Windows: React/Tauri + native canvas region + C ABI.
-- Android: React Native shell + native `CanvasView` + JNI. Pen input and canvas
+- Product Tier A: Web, Windows, and Android receive complete product, device,
+  performance, release, and support gates.
+- Web reference/product shell: React/TypeScript + WASM + WebGL.
+- Windows reference/product shell: React/Tauri + native canvas region + C ABI.
+- Android reference/product shell: React Native + native `CanvasView` + JNI. Pen input and canvas
   rendering never pass through React Native JS.
-- Apple runtime validation: native macOS/iOS/iPadOS harnesses + C ABI + Ganesh
-  Metal. A product-shell choice for Apple platforms is intentionally deferred.
+- Portability Tier B: native macOS/iOS/iPadOS harnesses + C ABI + Ganesh Metal
+  continuously validate the shared Runtime; Apple product shells are deferred.
+- ChromiumOS reuses the Web target. Headless is a V1 test/reference utility,
+  not yet a supported public server or batch-rendering product API.
 - Runtime: C++20 modules for RuntimeFacade, InputRouter, Document, Operations,
-  EditorSession, RichText, InkEngine, SceneCompiler, shared RuntimeScene,
-  per-view FrameState, FrameBuilder, FrameGraph, Compositor, RendererBackend,
-  TileCache, Resources, and Persistence.
+  EditorSession, RichText, InkEngine, Geometry, Layout, HitTest, SceneCompiler,
+  shared RuntimeScene, per-view FrameState, FrameBuilder, FrameGraph,
+  Compositor, RendererBackend, TileCache, Resources, Persistence, and
+  Collaboration.
 - Renderer: Skia Ganesh for v1; Graphite/WebGPU is a future backend.
 - Surfaces: platform adapters own native window/surface/context lifecycles and
   provide generation-bound RenderTargets; RendererBackend does not own them.
@@ -42,9 +47,13 @@ should bypass their documented exit gates.
 
 ## Current sequence
 
-`POC-01 Shared Engine` → `POC-02 Ink Engine` → `POC-03 100K Scene` →
-`POC-04 RichText / IME` → `POC-05 Hybrid Surface` → `POC-06 FastInk`
+`POC-01 Shared Engine` unlocks parallel Ink, Scene, and RichText work. POC-06
+depends on the POC-02 Preview Model; POC-05 depends on the POC-03 reserved
+external-surface pass. POC-03's integrated ink experience gate also consumes
+POC-02 outputs.
 
-After all POC gates pass, the project proceeds through Runtime Foundation, V1
-Runtime, Production Rendering and Shells, Collaboration MVP, then Hardening and
-Release.
+R1 foundation acceptance is blocked by POC-01 through POC-04. POC-05 is a
+future-capability risk proof and does not enter V1 product scope. POC-06 may run
+alongside R1 but blocks FastInk productization in R3. Product stages then proceed
+through the local V1 Runtime, Tier A rendering and shells, Collaboration MVP,
+and release hardening.

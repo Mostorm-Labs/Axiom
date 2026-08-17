@@ -1,8 +1,27 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Validating；原则：先验证五个高风险边界，再产品化，FastInk 作为第六个独立验证
+> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
 
-路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。阶段按顺序验收；准备工作可以并行，但依赖未通过 POC 的产品实现不能提前固化。
+路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。编号表达工作包，不表达无条件串行关系；设计、实现和验收遵循以下 evidence DAG：
+
+```mermaid
+flowchart LR
+  P1["POC-01 Shared Engine"] --> P2["POC-02 Ink"]
+  P1 --> P3["POC-03 Scene core"]
+  P1 --> P4["POC-04 RichText"]
+  P2 --> P6["POC-06 FastInk"]
+  P2 --> P3Gate["POC-03 integrated ink gate"]
+  P3 --> P3Gate
+  P3 --> P5["POC-05 Hybrid Surface risk proof"]
+  P1 --> R1["R1 foundation work"]
+  P2 --> R1Accept["R1 acceptance"]
+  P3Gate --> R1Accept
+  P4 --> R1Accept
+  R1 --> R1Accept
+  P6 --> R3Fast["R3 FastInk productization"]
+```
+
+POC-02/03/04 的核心工作可在 POC-01 后并行。R1 工程准备可在证据收集期间进行，但 R1 acceptance 最低要求 POC-01～04 通过；POC-05 是非 V1 的未来能力风险验证，不阻塞 R1/V1；POC-06 可与 R1 并行，但在通过前阻塞 R3 FastInk 产品化。任何未通过 POC 的接口都不能因并行开发而被提前视为稳定产品契约。
 
 每个性能结果必须记录设备、系统、编译器、构建模式、Skia commit/backend、场景版本、分辨率和采样方法。下文阈值是当前门禁；如基准设备变化，只能通过 ADR 修订。
 
@@ -29,6 +48,7 @@
 - 定义 WASM API 与版本化 C ABI 的错误、字符串、数组、所有权和生命周期规则。
 - 定义最小场景：Page、Rect/Shape、Image、VectorPath、只读 Text。
 - 定义固定坐标、颜色空间、DPI、资源、字体和逻辑摘要格式。
+- POC fixture 使用 Page/World、View Logical 与 Device Pixel 的显式元数据；固定 DPR 1 只用于 POC-01 golden，不替代 ADR-0012 的长期坐标契约。
 - 定义单线程 event loop：command → document → scene → frame。
 - 定义 WebGL2、D3D12、Metal 和 Android GLES3 `PlatformSurfaceAdapter`；adapter 拥有 native surface/context 的 acquire/resize/present/recover，平台句柄不得进入通用 Runtime 或 `RenderTarget` 公共契约。
 - 选择并登记 Windows/Web 基准设备与浏览器，作为 POC-01～03 性能基线；Apple/Android 记录验证设备但不替代该性能基线。
@@ -77,11 +97,15 @@
 - 冻结 `PointerSample`、`PointerSampleBatch`、device capability 和单调 timestamp 契约。
 - 定义 resample、smooth、pressure mapping、prediction 和 prediction rollback 次序。
 - 定义 `StrokeSession` 的 begin/push/end/cancel、Stroke ID 和 brush descriptor。
+- 定义版本化 `BrushDescriptor`：brush type/version、semantic parameters、资源身份与跨平台 replay/升级规则。
+- 决定 Vector/Dab Canonical Stroke 为长期重放需要保存的稳定表示：中心线/语义参数、版本化算法输入、稳定 geometry/dabs 的组合，以及未知 brush version 的拒绝/迁移策略。
+- 定义 `push()` 增量 Canonical candidate 与 `end()` 原子 Document commit 的边界，避免长笔迹抬笔时集中计算。
 - 定义 VectorStroke 的语义中心线与 DabStroke 的 dab/纹理参数。
 - 定义 Preview/Canonical 共享数据、差异容差、抬笔交接和失败 fallback。
 - 定义版本化 `PreviewStrokeUpdate`：confirmed/predicted 表示、revision、坐标空间和 replace/truncate 语义；平台 Preview sink 不重新解释 raw samples。
 - 定义 `DefaultPreviewSink`，使用普通 Skia Canvas overlay 验证 Preview Model，不依赖 POC-06 平台低延迟 surface。
 - 定义输入录制格式和设备无关回放语料。
+- 定义 View Logical→Page/World 输入逆变换、ViewId/viewport revision 绑定，以及 zoom/pan/DPR 变化时的 batch 规则。
 
 ### 验证
 
@@ -92,12 +116,16 @@
 - 基准设备上 input sample 到 Preview 可见的 p95 ≤ 16.7 ms、p99 ≤ 33.3 ms。
 - Pointer up 到 Canonical 接管不超过 2 帧，期间没有空白帧或重复深色叠加。
 - prediction 错误时 Preview 能回退，Canonical 不包含未确认预测点。
+- 30 秒长笔迹在 pointer up 后的 Canonical commit p95 ≤ 16.7 ms；主要 geometry/dab 处理必须在 push 阶段增量完成。
+- DPR 1/1.25/1.5/2/3、非整数 zoom、pan 与 viewport revision 变化语料中，Pointer replay 的 world-space Canonical digest 一致，失效/不可逆 transform 明确拒绝。
+- BrushDescriptor version/resource 改变必须影响 Stroke digest；未知必需 brush version 明确拒绝，不能静默用当前算法重绘。
 - 在 Windows/Web/Android 代表性实机输入环境运行 Human Ink Gate：慢写、快速长划、急转、画圈、压力渐变和连续书写；主观评分必须关联同次 trace、frame pacing、prediction correction 与 handoff 证据，不能替代量化门禁。
 
 ### 实现
 
 - 实现平台 batch 适配、InputRouter 和输入录制/回放。
 - 实现独立 InkEngine、StrokeSession、resampler、smoother 和 predictor。
+- 实现增量 Canonical candidate builder 和版本化 BrushDescriptor dispatch。
 - 实现 Vector Brush 与 Dab Brush 的最小语义和渲染。
 - 实现 `PreviewStrokeUpdate`、`DefaultPreviewSink`、Active/Preview overlay、Canonical operation 和 handoff 状态机。
 - 输出 input/processing/render 分段耗时、sample 数和 prediction 诊断。
@@ -106,6 +134,7 @@
 ### 交付物
 
 - Pointer/Stroke 接口规范和行为状态图。
+- 坐标/viewport replay、BrushDescriptor registry/version 和 Canonical incremental processing 规范。
 - 输入语料、Vector/Dab 黄金图与 digest 工具。
 - 延迟追踪、handoff 录屏/帧序列和压力曲线报告。
 - Windows/Web/Android Human Ink Gate 报告，包含固定动作 rubric、设备/笔/刷新率、体验结论和关联 trace。
@@ -119,6 +148,7 @@
 - [ ] 所有 handoff/cancel/prediction 语料无空白和 Document 污染。
 - [ ] 三平台 Human Ink Gate 已在代表性设备完成，无未分类的书写中断、明显抖动或 handoff 缺陷；所有主观问题均能关联 trace/录屏。
 - [ ] Stroke 模型没有退化为只保存 `SkPath` 或 bitmap。
+- [ ] 长笔迹没有 pointer-up 集中计算尖峰；BrushDescriptor 与坐标/viewport 语料通过确定性门禁。
 
 ## POC-03 — 100K Scene
 
@@ -128,12 +158,12 @@
 
 ### 设计
 
-- 定义 100K 可重复场景生成器：混合 Shape、Image、VectorPath、Text 和 Stroke。
+- 定义 100K 可重复场景生成器：混合 Shape、Image、VectorPath、POC-01 read-only/simple Text render record 和 Stroke；不实现 POC-04 RichText layout/editing。
 - 定义 Document records 与 SoA RuntimeScene records 的映射。
 - 定义 full compile、incremental ChangeSet、revision 和失效规则。
 - 定义共享 RuntimeScene 与单视口 `ViewQuery/FrameState` 的边界；visible set、LOD、scale bucket 和 screen-space damage 不进入共享 Scene。
 - 定义 `FrameBuilder` 如何合并 RuntimeScene、FrameState、Editor/Presence overlays、Active Preview 和 ExternalSurface placement。
-- 定义 Background/Content/Ink/ExternalSurface/Overlay/Selection/HUD passes。
+- 定义 Background/Content/Ink/Overlay/Selection/HUD passes，并只预留 empty/reserved ExternalSurface pass contract；placement、registry、focus 与 lifecycle 语义归 POC-05。
 - 定义 L1 Raster/Tile cache key、预算、淘汰、失效和设备丢失路径。
 
 ### 验证
@@ -145,6 +175,7 @@
 - 单节点属性更新不得遍历全部 100K 节点；诊断中受影响 records 与 dirty area 可见。
 - 清空 L1、改变 scale bucket、resize 和模拟 device loss 后，画面可重建且 Document digest 不变。
 - 主视口与 minimap/第二视口同时查询时，不复制第二份 Document。
+- 两个 Viewport 使用不同 pan/zoom/DPR 时，visible set、screen damage、HitTest 和 cache key 互不污染；world→view→device 结果符合 ADR-0012。
 - 在集成性能 Playground 分别加载 1K/10K/50K/100K objects，执行 pan、zoom、write、select 和 drag；Windows/Web 保持硬基准，Android 至少提交一台代表性真机的 frame/input/memory 与人工体验报告。
 
 ### 实现
@@ -172,6 +203,7 @@
 - [ ] 单节点更新没有全量遍历或全屏无条件失效。
 - [ ] device loss/cache clear 可完整恢复。
 - [ ] Integrated Performance Playground 完成三平台评审；Android 真机不存在未分类的输入中断、交互冻结或内存无界增长。
+- [ ] POC-03 未提前实现 RichText 编辑或 ExternalSurface placement；仅 simple Text 和 reserved pass 进入 Scene POC。
 
 ## POC-04 — RichText / IME
 
@@ -185,6 +217,7 @@
 - 定义 TextEditSession 的 selection、caret、composition、undo grouping 和焦点生命周期。
 - 定义 TextInputAdapter 的 begin/update/commit/cancel composition 与 surrounding-text 契约。
 - 定义 TextLayout/SkParagraph、字体解析、固定测试字体和 fallback 规则。
+- 定义 canonical `FontResourceId`、ContentHash、规范化 fallback chain、missing font 和系统字体隔离规则；测试固定字体只是 oracle，不是产品字体模型。
 - 定义文本 operation 与 V1 Collaboration MVP 的原子边界。
 - 定义 Shell UI、平台 IME 和 Runtime 的所有权，禁止平台复制 TextDocument。
 
@@ -194,6 +227,8 @@
 - composition cancel 不产生 Operation；commit 只产生一次可回放事务。
 - 同一已提交编辑序列的 TextDocument digest 在三平台 100% 一致。
 - 使用固定字体时，layout line/cluster/selection geometry 与黄金数据一致；允许的像素差异按黄金图门禁处理。
+- 同一 FontResourceId/ContentHash/fallback chain 在三平台产生相同 canonical shaping、换行、caret 与 selection geometry；系统安装字体差异不能改变结果。
+- font missing、hash mismatch、fallback 缺失和资源替换有确定 placeholder/diagnostic、layout invalidation 与 Document digest 变化。
 - 10K 字符文档中的普通输入和 caret 移动 p95 ≤ 16.7 ms；全量 layout p95 ≤ 33.3 ms。
 - 连续 focus/unfocus、切换节点和销毁 view 100 次，无残留 composition 或崩溃。
 
@@ -201,12 +236,14 @@
 
 - 实现 TextDocument、TextEditSession、Text operations 和 undo grouping POC。
 - 实现 SkParagraph TextLayout 与固定字体资源。
+- 实现 FontResourceId→verified blob→typeface 的 ResourceResolver 路径和规范化 fallback chain。
 - 实现 Web、Windows、Android TextInputAdapter；Android IME 走 Native CanvasView/JNI，不走 RN JS 文本数据面。
 - 实现 text behavior recorder、layout dump 和 selection geometry debug overlay。
 
 ### 交付物
 
 - RichText schema、logical position 和 IME 状态机规范。
+- Font identity/fallback/missing-resource 规范和跨平台字体 conformance corpus。
 - 三平台 demo、行为语料、layout/golden 结果。
 - 输入/布局延迟和生命周期报告。
 - 协作文本原子边界的待决 ADR 输入。
@@ -218,16 +255,18 @@
 - [ ] cancel/commit/undo 没有重复或部分 Operation。
 - [ ] 10K 字符输入与布局达到 16.7/33.3 ms 门禁。
 - [ ] RichText 模型不依赖任何平台 widget 或 JS 数据模型。
+- [ ] Canonical layout 不依赖未声明的系统字体；FontResourceId/ContentHash/fallback 语料全部通过。
 
 ## POC-05 — Hybrid Surface
 
 ### 目标
 
-证明 WebView/Video 等外部内容可以通过受控 Overlay 与 Native/WASM Canvas 共存，而不破坏 RuntimeScene、输入和 z-order 边界。
+证明 WebView/Video 等未来外部内容可以通过受控 Overlay 与 Native/WASM Canvas 共存，而不破坏 RuntimeScene、输入和 z-order 边界。本 POC 是 architecture risk proof；ExternalSurface/Video/Embed 不进入 V1 产品实现，也不阻塞 R1～R5。
 
 ### 设计
 
 - 定义 ExternalSurface semantic placeholder、surface ID、bounds、clip、opacity 和 lifecycle。
+- 定义 RuntimeScene `ExternalSurfaceId` 与平台 `ExternalSurfaceRegistry` 的映射；native handle 不进入 RuntimeScene、FrameState 或 frame plan。
 - 定义 FrameGraph 中 ExternalSurface pass 与平台 overlay placement。
 - 定义 DOM/native canvas、RN native view 和 Tauri/WebView2 的固定 z-order 规则。
 - 定义移动、缩放、滚动、隐藏、页面切换、前后台和销毁行为。
@@ -261,6 +300,7 @@
 - [ ] 100 次 lifecycle 测试无 surface 泄漏，内存增长 < 5%。
 - [ ] focus/input/failure 语料全部通过。
 - [ ] 产品设计已接受“受控 Overlay、不任意穿插”的限制。
+- [ ] POC 结果只冻结未来扩展边界，没有把 ExternalSurface 加入 V1 schema、R3 产品 target 或发布门禁。
 
 ## POC-06 — FastInk
 
@@ -272,6 +312,7 @@
 
 - 冻结 `FastInkBridge/FastInkBackend.begin/push(PreviewStrokeUpdate)/end/cancel`、buffer ownership 和幂等语义。
 - 保持 POC-02 Preview Model 不变，将 `DefaultPreviewSink` 替换为 Web/Windows/Android 平台 FastInk sink；backend 只负责低延迟显示，不重新实现 smooth/prediction/brush。
+- 保持版本化 BrushDescriptor、ViewId/viewport revision 和 PreviewStrokeUpdate 坐标语义不变；平台 sink 只做 presentation transform。
 - 定义 Preview buffer/pass、Canonical 首帧确认、handoff 和失败 fallback。
 - 定义 Web WASM Preview、Windows native preview、Android Native CanvasView preview 的平台能力。
 - 定义 backend 不可用、surface 重建、cancel、app background 和 device loss 行为。
@@ -315,7 +356,7 @@
 
 ### 目标
 
-将通过 POC 验证的接口重建为可维护的产品工程基础，而不是直接复制 POC 代码。
+将 POC-01～04 已验证的共享 Runtime、Ink、Scene 与 Text 接口重建为可维护的产品工程基础，而不是直接复制 POC 代码。POC-06 可并行完成并在接受后迁入；POC-05 是非 V1 future-capability risk proof。
 
 ### 设计
 
@@ -328,9 +369,9 @@
 
 ### 验证
 
-- Web/Windows/Android 从干净环境构建；公开头文件和 Bridge contract tests 100% 通过。
+- Product Tier A 从干净环境构建；公开头文件和 Bridge contract tests 100% 通过。core/public ABI 变更同时编译 Portability Tier B。
 - 核心依赖检查确保 Document 不依赖 Skia/platform/network/ResourceManager/Persistence，Renderer 无 Document 写接口或 native surface 类型。
-- POC-01～06 的固定语料在产品骨架中继续通过。
+- POC-01～04 的阻断语料在产品骨架中继续通过；POC-06 已完成时一并迁入，未完成时不得建立 FastInk 产品特例。POC-05 作为非 V1 risk proof 不阻塞 R1。
 - ASan/UBSan 或平台等价检查覆盖所有核心 smoke tests。
 
 ### 实现
@@ -348,8 +389,8 @@
 
 ### 退出条件
 
-- [ ] 三平台 clean build 和 contract tests 全部通过。
-- [ ] 六个 POC 的阻断语料在产品骨架中无回归。
+- [ ] Product Tier A clean build 和 contract tests 全部通过；core/public ABI 变更的 Tier B build/conformance 通过。
+- [ ] POC-01～04 的阻断语料在产品骨架中无回归；已接受的 POC-06 语料必须迁入，POC-05 不作为 V1/R1 门禁。
 - [ ] 核心依赖图符合架构不变量。
 - [ ] 没有 POC-only 平台特例进入公开 Runtime API。
 
@@ -363,7 +404,8 @@
 
 - 在实现前通过 schema/migration ADR 决定单 Page 还是 `DocumentRoot → Page*`，并冻结 Page、Shape、Image、VectorPath、RichText、VectorStroke、DabStroke schema；Page 不承担 Viewport 状态。
 - 定义层级、排序、变换、样式、资源引用、unknown capability 和扩展 registry。
-- 定义 command/operation/change-set、事务、撤销/重做和 crash recovery。
+- 定义 ResourceId、ResourceManifest、ResourceRevision、ContentHash、不可变 blob、资源替换与 Document digest；遵循 ADR-0013。
+- 定义 command/operation/change-set、事务、History/undo grouping、compensating undo/redo 和 crash recovery；遵循 ADR-0014。
 - 定义快照、操作日志、资源包和 migration；具体格式由本阶段前 ADR 接受。
 - 定义 semantic search index 边界，不在 V1 实现复杂搜索产品。
 
@@ -371,13 +413,15 @@
 
 - 每种节点覆盖 create/edit/delete/transform/style/serialize/undo/redo。
 - 随机合法 Document 的保存/加载/migrate 后 digest 100% 一致。
+- resource replace/dedup/missing/corrupt/offline/save/reopen 后 graph+manifest digest、blob availability 和 placeholder 结果符合 ADR-0013。
+- Undo/Redo 通过新 Operations 回放；create/edit/delete/move/style/text/resource 的补偿事务在故障和重启后原子一致。
 - full/incremental SceneCompiler 和 input/operation replay 语料全部通过。
 - parser、operation decoder、migration 和极端 geometry 运行 fuzz；发布候选前累计 ≥ 24 小时无未归类 crash。
 - 模拟写入中断、磁盘满、资源缺失和损坏文件，不覆盖最近有效快照。
 
 ### 实现
 
-- 实现 V1 Document schema、Operations、EditorSession 和 History。
+- 实现 V1 Document/ResourceManifest schema、Operations、EditorSession 和生成 compensating Operations 的 History。
 - 产品化 RichText、InkEngine、SceneCompiler、Resources 和 Persistence。
 - 实现原子保存、operation log、migration、document digest 和诊断工具。
 - 为扩展节点提供 capability/registry 边界，不实现其产品行为。
@@ -400,43 +444,44 @@
 
 ### 目标
 
-把 POC renderer、cache、FastInk 和三平台外壳提升到真实产品规模与生命周期。
+把 POC renderer、cache、FastInk 和 Product Tier A 三平台外壳提升到真实产品规模与生命周期；同时保持 Portability Tier B 的共享 Runtime conformance。
 
 ### 设计
 
 - 冻结 Ganesh backend matrix、颜色/DPI、device loss、资源预算和 golden tolerance。
+- 冻结 Tier A release/支持矩阵、Tier B portability conformance 和 Headless Utility Target 责任；不把 Apple harness 误作 V1 产品 Shell。
 - 冻结生产 FrameGraph、Compositor、L1 cache 和多视口策略。
 - 冻结 Human Performance Gate 的设备、动作 rubric、签署角色和 trace/录屏归档规则。
 - 冻结 React Web、React/Tauri、RN Native CanvasView 的 surface、input、IME、clipboard、file 和 accessibility contracts。
-- 冻结应用级 FastInk backend、Hybrid Surface Overlay 和 fallback。
+- 在 POC-06 Accepted 后冻结应用级 FastInk backend 和 fallback；Hybrid Surface 保持 POC-05 future-capability 结论，不在 R3 产品化。
 
 ### 验证
 
 - POC-03 100K 场景预算在 release 产品 target 中通过，不低于 POC 门禁。
 - 全视觉矩阵、CPU reference 与产品 GPU backend 在规定容差内通过。
-- 三平台完成核心用户流、生命周期、resize、前后台、device loss、低内存和 surface 重建。
+- Tier A 三平台完成核心用户流、生命周期、resize、前后台、device loss、低内存和 surface 重建；Tier B 完成 core conformance、Metal render/readback 和生命周期回归。
 - Input→Preview、Text/IME 和 FastInk handoff 不低于对应 POC 门禁。
-- 三平台在 Integrated Performance Playground 与核心真实编辑流上完成人工体验签署；主观缺陷必须关联量化 trace 并有处置结论。
-- 每个平台连续运行 2 小时混合编辑无 crash，稳定期内存增长 < 5%。
+- Tier A 在 Integrated Performance Playground 与核心真实编辑流上完成人工体验签署；主观缺陷必须关联量化 trace 并有处置结论。
+- 每个 Tier A 平台连续运行 2 小时混合编辑无 crash，稳定期内存增长 < 5%。
 
 ### 实现
 
 - 产品化 RuntimeScene、ViewQuery/FrameState、FrameBuilder、FrameGraph、Compositor、RendererBackend、L1 cache 和 resource upload。
-- 完成三平台 shell/bridge、native surfaces、输入、IME、clipboard、file 和 accessibility。
-- 产品化 FastInk app backend 和 Hybrid Surface Overlay。
+- 完成 Tier A shell/bridge、native surfaces、输入、IME、clipboard、file 和 accessibility。
+- 产品化 FastInk app backend；不实现 ExternalSurface/Hybrid Surface 产品功能。
 - 实现帧诊断、cache/dirty overlay、device recovery 和性能追踪导出。
 
 ### 交付物
 
-- 三平台内部产品版本、集成指南和 capability matrix。
+- Tier A 三平台内部产品版本、集成指南和 capability matrix；Tier B portability conformance 报告。
 - 全视觉、性能、内存、生命周期和可访问性报告。
-- FastInk/Hybrid Surface 产品限制与 fallback 手册。
+- FastInk 产品限制与 fallback 手册；POC-05 Hybrid Surface 报告继续作为未来版本的架构输入。
 
 ### 退出条件
 
-- [ ] 三平台 V1 用户流与生命周期测试全部通过。
+- [ ] Tier A V1 用户流与生命周期测试全部通过，Tier B core conformance 无回归。
 - [ ] 100K、视觉、输入、文本和 FastInk 门禁无回归。
-- [ ] 三平台 Human Ink/Integrated Performance Gate 已使用产品 target 签署，未关闭问题均有关联 trace、负责人和处置结论。
+- [ ] Tier A Human Ink/Integrated Performance Gate 已使用产品 target 签署，未关闭问题均有关联 trace、负责人和处置结论。
 - [ ] 2 小时稳定性测试无 crash，内存增长 < 5%。
 - [ ] Surface/device/cache 丢失均能恢复且不改变 Document。
 
@@ -487,11 +532,11 @@
 
 ### 目标
 
-形成可发布、可升级、可恢复、可观测和可回滚的 Canvas v2。
+形成可发布、可升级、可恢复、可观测和可回滚的 Canvas v2 Product Tier A；Tier B、Reuse 和 Utility targets 按各自责任保持 conformance，不构成额外产品发布承诺。
 
 ### 设计
 
-- 定义支持平台/设备、格式/协议兼容窗口、版本号和回滚策略。
+- 定义 Tier A 支持平台/设备、Tier B portability matrix、格式/协议兼容窗口、版本号和回滚策略。
 - 定义崩溃、卡顿、同步失败、数据恢复和性能回归指标。
 - 完成不可信文件、operation、资源解码、内存/CPU 滥用和系统 FastInk 的威胁建模。
 - 定义诊断导出、隐私、依赖清单、构建追溯和发布清单。
@@ -500,9 +545,9 @@
 
 - 运行全量回归、24 小时 fuzz、8 小时混合编辑 soak 和 5 客户端协作 soak。
 - 执行旧文件迁移、损坏文件、磁盘满、崩溃恢复、设备丢失、服务重启和客户端升级演练。
-- 真实基准设备上性能不得比 R3 accepted baseline 回归超过 5%，除非有到期豁免。
+- Tier A 真实基准设备上性能不得比 R3 accepted baseline 回归超过 5%，除非有到期豁免；Tier B core conformance 不得因 Tier A 特例分叉。
 - 执行 static analysis、sanitizer、依赖/许可证和不可信负载限制检查。
-- 发布候选完成安装、升级、兼容拒绝、诊断导出和回滚演练。
+- Tier A 发布候选完成安装、升级、兼容拒绝、诊断导出和回滚演练；Headless 公共 server/batch API 不在 V1 发布声明中。
 
 ### 实现
 

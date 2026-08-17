@@ -7,7 +7,7 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | ADR | 状态 | 决策 |
 | --- | --- | --- |
 | [0001](0001-visual-document-runtime.md) | Accepted | 项目定义为 C++20 Visual Document Runtime |
-| [0002](0002-replaceable-platform-shells.md) | Accepted | React Web、React/Tauri Windows、React Native Android Shell |
+| [0002](0002-replaceable-platform-shells.md) | Accepted | 当前 Tier A Shell 选择；长期边界由 ADR-0015 澄清 |
 | [0003](0003-semantic-document-runtime-scene.md) | Accepted | Semantic Document 与 RuntimeScene 分离 |
 | [0004](0004-dual-path-ink-fastink.md) | Accepted | Canonical 与 FastInk Preview 双路径 |
 | [0005](0005-skia-ganesh-v1.md) | Accepted | V1 使用 Skia Ganesh，Graphite 仅作未来 backend |
@@ -17,6 +17,10 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | [0009](0009-prebuilt-skia-sdk-supply-chain.md) | Accepted | Skia 以不可变、可验证的预编译 SDK 供普通构建消费 |
 | [0010](0010-renderer-platform-surface-ownership.md) | Accepted | RendererBackend 与 Platform Surface 生命周期分离 |
 | [0011](0011-shared-preview-model-fastink-sinks.md) | Accepted | Default/FastInk sink 消费共享 Preview Model |
+| [0012](0012-coordinate-spaces-dpi-transforms.md) | Accepted | 坐标空间、DPI、输入逆变换和 overlay placement 使用统一契约 |
+| [0013](0013-resource-identity-content-addressing.md) | Accepted | ResourceId、ContentHash、Manifest 和 blob identity 分离 |
+| [0014](0014-history-undo-compensating-operations.md) | Accepted | Undo/Redo 通过新的补偿 Operations 进入唯一写路径 |
+| [0015](0015-platform-support-tiers-shell-policy.md) | Accepted | Tier A 产品、Tier B 可移植性、Reuse 和 Headless 责任分级 |
 
 ## 必须后续建立的实验型 ADR
 
@@ -24,11 +28,12 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | --- | --- | --- |
 | 文档快照、操作日志与 migration 格式 | R2 | round-trip、损坏输入、规模、演进与恢复测试 |
 | Collaboration MVP 算法与协议 | R4 | 冲突语料、100K 随机 operations、断网/重连 |
-| L2/L3 cache 格式与压缩 | 实现 L2/L3 前 | 命中收益、IO/内存、版本失效、设备数据 |
+| L2/L3 cache 格式与压缩 | 实现 L2/L3 前 | 命中收益、IO/内存、版本失效、CacheSchema/Renderer/Skia SDK/backend compatibility namespace、设备数据 |
 | 产品线程拓扑与 WASM pthread | 引入 worker 前 | profiling、所有权、revision 失效和回归语料 |
 | 复杂 RichText 并发语义 | V1 MVP 后 | 字符级冲突、IME、undo intention 与收敛测试 |
 | 系统级 FastInk target | 设备产品化前 | 硬件/BSP、权限、光电延迟、plane/fallback 测试 |
 | DocumentRoot、单 Page/多 Page schema | R2 | 产品模型、导出/坐标语义、迁移与兼容测试 |
+| Headless 公共产品 API | 产品化前 | server/batch/export 用例、安全、资源预算、稳定性和兼容性 |
 
 ## ADR 格式
 
