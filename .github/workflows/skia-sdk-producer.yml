@@ -85,7 +85,7 @@ jobs:
         if: matrix.family == 'android'
         shell: bash
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.5" "ndk;27.2.12479018"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.5" "ndk;27.2.12479018" || [[ "${PIPESTATUS[1]}" -eq 0 ]]
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - name: Fetch locked source and build dependencies
         run: python tools/bootstrap_deps.py --core --skia --sync-skia --font-only
