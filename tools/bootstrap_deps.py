@@ -230,7 +230,7 @@ def bootstrap_font(lock: dict) -> None:
     skia = lock["dependencies"]["skia"]
     font = lock["dependencies"]["roboto_regular"]
     relative = font["source"].split("skia/", 1)[1]
-    destination = DEPS / "skia" / relative
+    destination = DEPS / "assets" / "Roboto-Regular.ttf"
     download(
         f"https://raw.githubusercontent.com/google/skia/{skia['commit']}/{relative}",
         destination,

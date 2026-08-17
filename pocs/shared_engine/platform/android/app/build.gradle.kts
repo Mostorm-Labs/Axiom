@@ -2,6 +2,15 @@ plugins {
     id("com.android.application")
 }
 
+val canvasPocAbi = providers.gradleProperty("canvasPocAbi").orElse("arm64-v8a")
+val canvasPocSdkTarget = canvasPocAbi.map {
+    when (it) {
+        "arm64-v8a" -> "android-arm64-v8a-gles3"
+        "x86_64" -> "android-x86_64-gles3"
+        else -> throw GradleException("Unsupported POC-01 ABI: $it")
+    }
+}
+
 android {
     namespace = "dev.mostorm.canvas"
     compileSdk = 35
@@ -18,12 +27,12 @@ android {
                 arguments += listOf(
                     "-DCANVAS_POC01_BUILD_TESTS=OFF",
                     "-DCANVAS_POC01_ENABLE_SKIA=ON",
-                    "-DCANVAS_POC01_ANDROID=ON"
+                    "-DCANVAS_POC01_ANDROID=ON",
+                    "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPocSdkTarget.get()}"
                 )
                 cppFlags += listOf("-std=c++20")
             }
         }
-        val canvasPocAbi = providers.gradleProperty("canvasPocAbi").orElse("arm64-v8a")
         ndk { abiFilters += listOf(canvasPocAbi.get()) }
     }
 
@@ -35,6 +44,6 @@ android {
     }
     sourceSets["main"].assets.srcDirs(
         "../../../fixtures",
-        "../../../../../.deps/skia/resources/fonts"
+        "../../../../../.deps/skia-sdk/${canvasPocSdkTarget.get()}/resources/fonts"
     )
 }

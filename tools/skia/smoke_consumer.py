@@ -32,15 +32,17 @@ def main() -> int:
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)
-    verify_archive(args.archive.resolve(), args.profile.resolve(), args.target, sdk_root)
+    verified = verify_archive(
+        args.archive.resolve(), args.profile.resolve(), args.target, sdk_root,
+    )
 
     configure = [
         "cmake", "-S", str(ROOT), "-B", str(build),
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCANVAS_POC01_BUILD_TESTS=OFF",
         "-DCANVAS_POC01_ENABLE_SKIA=ON",
-        f"-DCANVAS_POC01_SKIA_ROOT={sdk_root}",
-        f"-DCANVAS_POC01_SKIA_LIBRARY={sdk_root / 'lib' / target['libraries'][0]}",
+        f"-DCANVAS_SKIA_SDK_ROOT={sdk_root}",
+        f"-DCANVAS_SKIA_SDK_EXPECTED_ID={verified['sdk_id']}",
     ]
     probe_configure = [
         "cmake", "-S", str(ROOT / "tools/skia/cmake_probe"), "-B", str(probe_build),

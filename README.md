@@ -35,6 +35,7 @@ should bypass their documented exit gates.
 - [Vibe architecture findings](docs/research/VIBE_ARCHITECTURE_FINDINGS.md)
 - [Architecture decisions](docs/adr/README.md)
 - [POC-01 implementation](pocs/shared_engine/README.md)
+- [Prebuilt Skia SDK supply chain](docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md)
 
 ## Current sequence
 

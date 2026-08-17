@@ -23,6 +23,17 @@ the C ABI, a dependency-free software probe, lifecycle, and smoke tests. Only
 the pinned Skia raster target owns the visual reference. The native Apple
 harness validates Runtime portability without selecting a macOS product shell.
 
-Platform bootstrap, Skia GN arguments, demo usage, acceptance artifacts, and
-the manual GPU benchmark process are documented in
+Platform bootstrap, prebuilt SDK targets, Producer profile details, demo usage,
+acceptance artifacts, and the manual GPU benchmark process are documented in
 [`docs/POC01_RUNBOOK.md`](docs/POC01_RUNBOOK.md).
+
+GPU quick start on Apple silicon uses the immutable SDK rather than Skia
+source:
+
+```sh
+python3 tools/bootstrap_deps.py --core
+python3 tools/skia/fetch.py --target macos-arm64-metal
+cmake --preset macos-release
+cmake --build --preset macos-release
+ctest --preset macos-release
+```

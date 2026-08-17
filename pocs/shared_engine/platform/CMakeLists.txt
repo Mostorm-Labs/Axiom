@@ -1,100 +1,101 @@
-set(CANVAS_POC01_SKIA_ROOT "${PROJECT_SOURCE_DIR}/.deps/skia" CACHE PATH
-    "Pinned Skia source directory")
-
 if(EMSCRIPTEN)
-  set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-web/libskia.wasm.a")
+  set(CANVAS_POC01_SDK_TARGET "web-wasm-webgl2")
 elseif(WIN32)
-  set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-windows/skia.lib")
+  set(CANVAS_POC01_SDK_TARGET "windows-x64-d3d12")
 elseif(ANDROID)
-  if(CMAKE_ANDROID_ARCH_ABI STREQUAL "x86_64")
-    set(_poc01_android_skia_cpu "x64")
-  elseif(CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
-    set(_poc01_android_skia_cpu "arm64")
+  if(CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a")
+    set(CANVAS_POC01_SDK_TARGET "android-arm64-v8a-gles3")
+  elseif(CMAKE_ANDROID_ARCH_ABI STREQUAL "x86_64")
+    set(CANVAS_POC01_SDK_TARGET "android-x86_64-gles3")
   else()
-    message(FATAL_ERROR "POC-01 Android supports only x86_64 and arm64-v8a")
+    message(FATAL_ERROR "POC-01 Android supports only arm64-v8a and x86_64")
   endif()
-  set(_poc01_skia_default
-      "${CANVAS_POC01_SKIA_ROOT}/out/poc01-android-${_poc01_android_skia_cpu}/libskia.a")
 elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
   if(CMAKE_OSX_SYSROOT MATCHES "simulator")
-    set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-ios-simulator/libskia.a")
+    set(CANVAS_POC01_SDK_TARGET "ios-simulator-arm64-metal")
   else()
-    set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-ios/libskia.a")
+    set(CANVAS_POC01_SDK_TARGET "ios-arm64-metal")
   endif()
 elseif(APPLE)
-  set(_poc01_skia_default "${CANVAS_POC01_SKIA_ROOT}/out/poc01-macos/libskia.a")
+  set(CANVAS_POC01_SDK_TARGET "macos-arm64-metal")
 else()
-  message(FATAL_ERROR "POC-01 Skia platform is unsupported on this host")
+  message(FATAL_ERROR "POC-01 Skia SDK platform is unsupported on this host")
 endif()
 
-set(CANVAS_POC01_SKIA_LIBRARY "${_poc01_skia_default}" CACHE FILEPATH
-    "Pinned Skia static library")
-get_filename_component(_poc01_skia_output_dir
-  "${CANVAS_POC01_SKIA_LIBRARY}" DIRECTORY)
-if(WIN32)
-  set(_poc01_skia_transitive
-    "${_poc01_skia_output_dir}/skcms.lib"
-    "${_poc01_skia_output_dir}/freetype2.lib"
-    "${_poc01_skia_output_dir}/zlib.lib"
-  )
-elseif(EMSCRIPTEN)
-  set(_poc01_skia_transitive
-    "${_poc01_skia_output_dir}/libskcms.wasm.a"
-    "${_poc01_skia_output_dir}/libfreetype2.wasm.a"
-    "${_poc01_skia_output_dir}/libpng.wasm.a"
-    "${_poc01_skia_output_dir}/libzlib.wasm.a"
-  )
-else()
-  set(_poc01_skia_transitive
-    "${_poc01_skia_output_dir}/libskcms.a"
-    "${_poc01_skia_output_dir}/libfreetype2.a"
-    "${_poc01_skia_output_dir}/libpng.a"
-    "${_poc01_skia_output_dir}/libzlib.a"
-  )
+set(CANVAS_SKIA_SDK_ROOT
+    "${PROJECT_SOURCE_DIR}/.deps/skia-sdk/${CANVAS_POC01_SDK_TARGET}" CACHE PATH
+    "Verified Canvas Skia SDK root; run tools/skia/fetch.py when missing")
+
+if(NOT CANVAS_SKIA_SDK_ROOT OR
+   NOT EXISTS "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
+  message(FATAL_ERROR
+    "Missing verified Canvas Skia SDK. Run: python3 tools/skia/fetch.py --target "
+    "${CANVAS_POC01_SDK_TARGET}")
 endif()
-if(NOT EXISTS "${CANVAS_POC01_SKIA_ROOT}/include/core/SkCanvas.h")
-  message(FATAL_ERROR "Missing pinned Skia checkout. Run tools/bootstrap_deps.py --skia --sync-skia")
+
+set(_canvas_skia_manifest "${CANVAS_SKIA_SDK_ROOT}/manifest.json")
+if(NOT EXISTS "${_canvas_skia_manifest}")
+  message(FATAL_ERROR "Skia SDK manifest is missing; run the fetch command above")
 endif()
-if(NOT EXISTS "${CANVAS_POC01_SKIA_LIBRARY}")
-  message(FATAL_ERROR "Missing Skia library: ${CANVAS_POC01_SKIA_LIBRARY}. Run tools/build_skia.py for this target")
-endif()
-foreach(_poc01_dependency IN LISTS _poc01_skia_transitive)
-  if(NOT EXISTS "${_poc01_dependency}")
-    message(FATAL_ERROR "Missing Skia dependency: ${_poc01_dependency}")
+file(READ "${_canvas_skia_manifest}" _canvas_skia_manifest_json)
+string(JSON _canvas_skia_manifest_id ERROR_VARIABLE _canvas_skia_manifest_error
+  GET "${_canvas_skia_manifest_json}" sdk_id)
+string(JSON _canvas_skia_manifest_target ERROR_VARIABLE _canvas_skia_target_error
+  GET "${_canvas_skia_manifest_json}" identity target)
+set(CANVAS_SKIA_SDK_EXPECTED_ID "" CACHE STRING
+    "Producer-only expected SDK ID; normal consumers must leave this empty")
+if(NOT CANVAS_SKIA_SDK_EXPECTED_ID)
+  set(_canvas_skia_lock "${PROJECT_SOURCE_DIR}/skia-sdk.lock.json")
+  if(NOT EXISTS "${_canvas_skia_lock}")
+    message(FATAL_ERROR "Missing skia-sdk.lock.json; run the fetch command above")
   endif()
-endforeach()
+  file(READ "${_canvas_skia_lock}" _canvas_skia_lock_json)
+  string(JSON CANVAS_SKIA_SDK_EXPECTED_ID ERROR_VARIABLE _canvas_skia_lock_error
+    GET "${_canvas_skia_lock_json}" targets "${CANVAS_POC01_SDK_TARGET}" sdk_id)
+  if(_canvas_skia_lock_error)
+    message(FATAL_ERROR
+      "skia-sdk.lock.json does not contain ${CANVAS_POC01_SDK_TARGET}")
+  endif()
+endif()
+if(_canvas_skia_manifest_error OR _canvas_skia_target_error OR
+   NOT _canvas_skia_manifest_target STREQUAL CANVAS_POC01_SDK_TARGET OR
+   NOT _canvas_skia_manifest_id STREQUAL CANVAS_SKIA_SDK_EXPECTED_ID)
+  message(FATAL_ERROR
+    "Skia SDK manifest does not match skia-sdk.lock.json for "
+    "${CANVAS_POC01_SDK_TARGET}; run tools/skia/fetch.py again")
+endif()
+find_package(CanvasSkia CONFIG REQUIRED
+  PATHS "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia"
+  NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+if(NOT TARGET CanvasSkia::Skia)
+  message(FATAL_ERROR "Canvas Skia SDK did not define CanvasSkia::Skia")
+endif()
+if(NOT EXISTS "${CanvasSkia_FONT_PATH}")
+  message(FATAL_ERROR "Canvas Skia SDK font fixture is missing: ${CanvasSkia_FONT_PATH}")
+endif()
+set(CANVAS_POC01_SKIA_FONT_PATH "${CanvasSkia_FONT_PATH}" CACHE INTERNAL
+    "Verified Roboto fixture path exported by CanvasSkia")
 
 add_library(canvas_poc01_skia STATIC
   skia/skia_scene_renderer.cpp
 )
 target_include_directories(canvas_poc01_skia
-  PUBLIC skia ${CANVAS_POC01_SKIA_ROOT}
+  PUBLIC skia
   PRIVATE ${POC01_ROOT}/src
 )
 target_link_libraries(canvas_poc01_skia
-  PUBLIC canvas_poc01_core "${CANVAS_POC01_SKIA_LIBRARY}"
-         ${_poc01_skia_transitive}
+  PUBLIC canvas_poc01_core CanvasSkia::Skia
 )
-if(APPLE)
-  find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
-  find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
-  find_library(CORETEXT_FRAMEWORK CoreText REQUIRED)
-  target_link_libraries(canvas_poc01_skia PUBLIC
-    ${COREFOUNDATION_FRAMEWORK}
-    ${COREGRAPHICS_FRAMEWORK}
-    ${CORETEXT_FRAMEWORK}
-  )
-endif()
 
 if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
   add_executable(canvas_poc01_golden skia/skia_golden.cpp)
   target_include_directories(canvas_poc01_golden PRIVATE
-    skia ${POC01_ROOT}/src ${CANVAS_POC01_SKIA_ROOT}
+    skia ${POC01_ROOT}/src
   )
   target_link_libraries(canvas_poc01_golden PRIVATE canvas_poc01_skia)
   target_compile_definitions(canvas_poc01_golden PRIVATE
     CANVAS_POC01_FIXTURE_DIR="${POC01_ROOT}/fixtures"
-    CANVAS_POC01_FONT_PATH="${CANVAS_POC01_SKIA_ROOT}/resources/fonts/Roboto-Regular.ttf"
+    CANVAS_POC01_FONT_PATH="${CANVAS_POC01_SKIA_FONT_PATH}"
   )
 endif()
 

@@ -53,7 +53,7 @@ struct Options {
   fs::path fixture = fs::path(CANVAS_POC01_SOURCE_DIR) / "fixtures/scene.ndjson";
   fs::path checker = fs::path(CANVAS_POC01_SOURCE_DIR) / "fixtures/checker.png";
   fs::path font = fs::path(CANVAS_POC01_SOURCE_DIR).parent_path().parent_path() /
-                  ".deps/skia/resources/fonts/Roboto-Regular.ttf";
+                  ".deps/assets/Roboto-Regular.ttf";
   fs::path output;
   int lifecycle = 1;
   int smoke_seconds = 0;

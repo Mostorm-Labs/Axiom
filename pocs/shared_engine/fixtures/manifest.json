@@ -24,7 +24,7 @@
       "sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59"
     },
     "roboto.ttf": {
-      "source": ".deps/skia/resources/fonts/Roboto-Regular.ttf",
+      "source": ".deps/assets/Roboto-Regular.ttf",
       "sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f"
     }
   }
