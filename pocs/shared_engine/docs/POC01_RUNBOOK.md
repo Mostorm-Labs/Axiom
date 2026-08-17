@@ -217,19 +217,34 @@ the generated ZIP containing raw RGBA/log/diff evidence as a Release asset.
 Both native D3D12 and Chrome WebGL2 readbacks and visual-diff directories must
 be present in that single ZIP.
 
+The reviewed result is archived in the
+[Windows/Web physical report](../../../docs/quality/evidence/poc01/windows-web-physical-20260817.md)
+and its content-addressed
+[evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-physical-20260817-6a2bac2).
+
+The combined decision for the shared Runtime, six-platform CI, mobile devices,
+and Windows/Web machine is recorded in the
+[POC-01 final gate audit](../reports/poc01/FINAL_GATE_AUDIT_2026-08-18.md).
+The audit accepts the correctness evidence but keeps POC-01 `Validating` until
+the listed Release-build, memory-series, and environment-metadata evidence is
+captured. Historical subset reports retain the status they had when recorded.
+
 ## 8. Exit checklist
 
-- [ ] All six platform families clean-build from the lock file.
-- [ ] Web, Windows, macOS, iOS, iPadOS, and Android upload the reviewed digest.
-- [ ] Every GPU readback passes the 99.9%/±2 visual gate.
+- [x] All six platform families clean-build from the lock file.
+- [x] Web, Windows, macOS, iOS, iPadOS, and Android upload the reviewed digest.
+- [x] Every GPU readback passes the 99.9%/±2 visual gate.
 - [ ] Each platform passes 100 lifecycle iterations and a 1,000-node 60-second
-      smoke without crash, sustained growth, or a frame over 100 ms.
-- [ ] Web output contains no pthread/SharedArrayBuffer dependency.
+      smoke in an eligible build without crash, sustained growth, or a frame
+      over 100 ms. Android Release and missing memory series remain open.
+- [x] Web output contains no pthread/SharedArrayBuffer dependency.
 - [x] iPhone, iPadOS, and Android physical-device report is reviewed and
       committed with raw artifact hashes and reproduction commands.
 - [x] The privacy-filtered mobile raw evidence bundle is published as the
       content-addressed Release asset bound by the report manifest and covered
       by the repository's no-overwrite/no-delete retention policy.
-- [ ] Windows and Web physical benchmark bundle is archived.
-- [ ] Runtime sources contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit,
+- [x] Windows and Web physical benchmark bundle is archived.
+- [x] Runtime sources contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit,
       Android, EGL, or JNI types.
+- [ ] Physical performance manifests record thermal, power, refresh/frame
+      interval, VRR, and throttling state (or explicit unavailability).
