@@ -15,8 +15,8 @@ sys.path.insert(0, str(SKIA_TOOLS))
 
 from sdk import (  # noqa: E402
     DEFAULT_PROFILE, SDK_FORMAT, SchemaError, canonical_bytes,
-    canonical_sha256, load_profile, make_identity, validate_manifest,
-    validate_toolchain,
+    canonical_sha256, load_profile, make_identity, normalized_recipe_bytes,
+    validate_manifest, validate_toolchain,
 )
 from package import cmake_config, copy_file  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
@@ -49,6 +49,12 @@ class SdkMetadataTest(unittest.TestCase):
         self.assertEqual(canonical_sha256({"b": 2, "a": 1}), canonical_sha256({"a": 1, "b": 2}))
         with self.assertRaises(ValueError):
             canonical_bytes({"bad": float("nan")})
+
+    def test_recipe_hash_input_is_checkout_newline_independent(self) -> None:
+        self.assertEqual(
+            normalized_recipe_bytes(b"first\r\nsecond\rthird\n"),
+            b"first\nsecond\nthird\n",
+        )
 
     def test_unknown_profile_field_is_rejected(self) -> None:
         invalid = copy.deepcopy(self.profile)

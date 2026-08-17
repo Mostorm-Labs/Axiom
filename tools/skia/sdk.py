@@ -59,6 +59,11 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def normalized_recipe_bytes(data: bytes) -> bytes:
+    """Canonicalize text checkouts before hashing the portable recipe."""
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def require_fields(value: Any, required: set[str], where: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise SchemaError(f"{where} must be an object")
@@ -218,7 +223,7 @@ def recipe_hash(profile_path: Path = DEFAULT_PROFILE) -> str:
     ]
     for path in recipe_files:
         digest.update(path.relative_to(ROOT).as_posix().encode("utf-8") + b"\0")
-        digest.update(path.read_bytes())
+        digest.update(normalized_recipe_bytes(path.read_bytes()))
         digest.update(b"\0")
     return digest.hexdigest()
 
