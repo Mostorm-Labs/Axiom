@@ -19,8 +19,20 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
 11. Platform surface/context/device 丢失不得泄漏 native handle 到 Runtime Core，也不得改变 Document。
 12. 所有跨模块 geometry 声明 Node Local/Page-World/View Logical/Device Pixel/Platform Screen 空间；viewport revision 和 DPR 变化不能重解释历史输入。
 13. ResourceId 只经 versioned ResourceManifest 绑定不可变 ContentHash；manifest 改变影响 Document digest，资源暂时 missing 不改变语义。
-14. Undo/Redo 生成新的 compensating Operations；不能倒退 Document snapshot 或 operation sequence。
+14. Undo/Redo 生成新的 compensating Operations；不能倒退 DocumentSnapshot 或 operation sequence。
 15. Canonical layout 与 Stroke replay 只依赖已声明的 FontResource/BrushDescriptor version，不依赖偶然系统字体或当前算法版本。
+16. Canonical numeric values、serialization 与 digest 遵循 ADR-0016；视觉容差不能替代
+    Document/Stroke/Scene 语义逐字节一致。
+17. Runtime frame invalidation 与平台 VSync/present 分离；旧 target generation 不得 present，
+    每个最新 View revision 最终可见。
+18. 成功 Stroke 的 confirmed input 不得静默丢失、重复或重排；过载只能明确取消且不留下
+    部分 Document，Preview/prediction/frame 可以按契约合并。
+19. ChangeSet 的 InvalidationHints 可完全丢弃而不影响 Scene 正确性；只有 Operation 是持久/
+    协作事实。
+20. wall clock、平台 random、线程调度和容器迭代顺序不进入 semantic digest；版本化
+    deterministic clock/seed/PRNG 是 POC common oracle。
+21. `DocumentSnapshot@F + committed OperationContinuation F→T` 必须恢复相同 target
+    revision/frontier/digest；Snapshot 不能用于普通编辑或 Undo/Redo。
 
 ## 2. 结果 Oracle
 
@@ -53,7 +65,30 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
 
 坐标语料记录 Node Local→Page/World→View Logical→Device Pixel 的矩阵、ViewId、viewport revision、DPR、target generation 和舍入边界。Oracle 分别比较 world-space semantic geometry、per-view visible/hit-test、device-space placement；不能把不同空间的数值直接比较或放入同一 digest。
 
-### 2.6 视觉 oracle
+### 2.6 数值与确定性 oracle
+
+Canonical corpus 记录 storage type、field order、little-endian bit pattern、algorithm/version、
+中间精度/舍入边界、seed/PRNG 和预期错误。至少覆盖 `-0/+0`、subnormal、舍入中点、
+NaN/Infinity、极端 finite 值、退化/不可逆矩阵、checked overflow 和不同表达但语义等价的
+Operation。在 x64、arm64 和 WASM 上比较 canonical values 与 digest；非法值必须整笔/整
+transaction 拒绝。任何差异都不能用视觉 tolerance 放行。
+
+### 2.7 Snapshot 与恢复 oracle
+
+恢复语料同时保存 Snapshot identity/schema/capability/revision/RecoveryFrontier/digest、
+committed operation continuation、目标 revision/frontier/digest 和所需 ResourceManifest。
+Oracle 分别比较：纯 Operations 构建状态、Snapshot round-trip、Snapshot + continuation 和
+restart/crash recovery。资源 blob availability 单独记录；missing blob 不能改变合法 Snapshot
+的 Document digest。Revision 与 RecoveryFrontier 必须分别比较，不得相互代替；Snapshot/
+continuation 的 Document identity 和 base/target frontier 必须连续。`ViewportSnapshot` 与
+`DocumentReadView` 不得出现在 persistence codec。
+
+Checkpoint fault oracle 在 Snapshot bytes、ResourceManifest binding、continuation metadata、
+durability barrier、verification 和 prefix compaction 各步骤中断；恢复必须选择最近完整
+checkpoint。未证明 Snapshot 可读取/可验证前，旧 Operation prefix 不得被回收；blob GC
+必须保持所有可恢复 manifest 引用可达。
+
+### 2.8 视觉 oracle
 
 - 使用固定 Skia commit、固定字体/图片、viewport、DPI、颜色空间和 scene fixture。
 - Raster reference 保存 expected；产品 backend 输出 actual 与 diff。
@@ -61,16 +96,24 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
 - GPU/平台特有容差必须单独登记，不扩大通用阈值掩盖差异。
 - 每次失败输出 expected、actual、diff、scene revision 和 backend metadata。
 
-### 2.7 延迟 oracle
+### 2.9 延迟、队列与帧调度 oracle
 
 时间点至少包含：platform sample、InputRouter receipt、Ink processing、Preview submit、Preview visible、Canonical commit、Canonical visible、Preview removed。
 
-- App-level Preview：p95 ≤ 16.7 ms，p99 ≤ 33.3 ms。
+- App-level Preview absolute baseline：p95 ≤ 16.7 ms，p99 ≤ 33.3 ms。
 - Preview→Canonical handoff：≤ 2 帧，无空白或位置跳变 > 1 device pixel。
-- 性能分布记录 p50/p95/p99/max、样本数、warm-up 和异常值规则。
+- 性能分布记录 p50/p95/p99/max、样本数、warm-up、异常值规则、display refresh rate、
+  frame interval、sample-to-visible frame count、missed presentation、input/Preview queue
+  depth 与 oldest-sample age。16.7 ms 是跨设备 absolute baseline，不代表高刷设备的一帧
+  体验目标；90/120/144 Hz 还必须以 frame count 和 Human Performance Gate 判断。
+- Frame trace 至少记录 invalidation(reason/revision/generation)、platform callback、target
+  acquire、render submit、present、visible acknowledgement、cancel/drop。旧 generation
+  不得 present，同一 View 未决 callback 有界。
+- confirmed-input backlog 不得随书写时长增长；成功路径 sample 100% 完整，过载路径必须
+  明确 InputOverrun/cancel 且无部分 Document。Predicted/Preview/frame 合并分别统计。
 - 若具备光电设备，device FastInk 额外记录 raw input→scanout；不得与软件 timestamp 混为同一指标。
 
-### 2.8 Human Performance Gate
+### 2.10 Human Performance Gate
 
 人工体验是量化门禁的补充，不是替代。POC-02 的 Canvas Ink Playground 与 POC-03 的 Integrated Performance Playground 使用固定动作 rubric：慢写、快速长划、急转、画圈、压力渐变、连续书写，以及在 1K/10K/50K/100K objects 下 pan、zoom、write、select、drag。
 
@@ -114,14 +157,21 @@ tests/
 ### 4.2 单元测试
 
 - geometry、transform、极端数值和坐标空间。
+- canonical binary32/zero/finite/overflow/serialization、算法精度/舍入和 deterministic
+  clock/seed/PRNG domain separation。
 - command validation、transaction、ordering、undo grouping。
-- Pointer batch、resample、prediction rollback 和 StrokeSession 状态。
+- DocumentSnapshot identity/schema/capability/frontier/digest、continuation range 和原子 restore。
+- Pointer batch、confirmed queue、batch merge、Preview coalescing、backpressure/overrun、
+  resample、prediction rollback 和 StrokeSession 状态。
 - 坐标组合/逆变换、viewport revision、DPR/rounding、HitTest tolerance 和 ExternalSurface placement。
 - ResourceId/manifest/hash、immutable blob、missing/corrupt/replace/dedup 和 FontResource fallback。
 - History grouping、compensating undo/redo、no-op/rejected/conflicted 和 transaction atomicity。
 - BrushDescriptor version dispatch 与 Canonical candidate 增量处理。
 - Text selection、composition、logical positions 和 layout mapping。
-- Scene world invalidation、per-view visible/screen damage、cache key、spatial query、FrameBuilder/FrameGraph dependencies。
+- Scene world invalidation、SemanticChanges/InvalidationHints、per-view visible/screen damage、
+  cache key、spatial query、HitTest/Selection/Snap boundary、FrameBuilder/FrameGraph logical dependencies。
+- frame invalidation、PlatformFrameScheduler request merge、target generation、visible ack 和
+  multi-view callback lifecycle。
 - PreviewStrokeUpdate revision、confirmed/predicted replacement、buffer ownership 和 Default/FastInk sink 等价性。
 - operation envelope、去重和 Presence expiry。
 
@@ -131,8 +181,11 @@ tests/
 - 保存/加载/migration 保持 Document digest。
 - 任意资源 availability 变化不改变 graph+manifest digest；合法 manifest binding Operation 必须改变 digest。
 - 任意 Undo/Redo 仍通过正常 Operation replay；旧 sequence/history 不被改写。
+- 任意合法 Snapshot@F + continuation F→T 恢复 target T；切分 checkpoint 位置不改变目标 digest。
 - 任意 ChangeSet 序列与 full compile 的 Scene digest 等价。
+- 删除、扩大或损坏任意 InvalidationHints 仍保持 full/incremental Scene 等价，只允许性能/诊断变化。
 - 任意 Tool/Text/Stroke cancel 不产生 Document 部分修改。
+- 任意 queue overrun、过期 frame callback 或 View destroy 不产生部分 Stroke、错误 present 或共享 View 状态污染。
 - 相同 operation set 的 Collaboration replicas 最终收敛。
 
 失败必须保存 seed，并自动缩减到最小复现输入。
@@ -140,16 +193,25 @@ tests/
 ### 4.4 Replay
 
 - Operation replay 验证跨平台确定性与旧语料兼容。
+- Snapshot recovery replay 验证 round-trip、restart、frontier continuity 和 continuation 原子性。
 - Pointer replay 验证 batch、pressure、Vector/Dab、Preview/Canonical 和 FastInk。
+- 同一 deterministic seed/clock replay 验证 brush random streams、100K generator 和 algorithm version；失败保存 seed/domain/version。
 - Coordinate replay 验证同 world path 在不同 Viewport/DPR 下的 Canonical digest，以及 view/device placement 的独立 oracle。
 - Text replay 验证三平台 IME 转换后的共享行为。
 - Lifecycle replay 验证 surface、device loss、focus、background 和 backend fallback。
+- Scheduler replay 验证 burst invalidation、VSync callback、resize、target generation、visible ack 与多 View teardown。
 
 ### 4.5 Fuzz 与不可信输入
 
 - 快照、operation log、migration、资源索引和压缩边界。
+- Snapshot digest/schema/capability/frontier mismatch、continuation gap/duplicate/out-of-order、
+  截断与超限；失败不能暴露部分 Document。
+- checkpoint/manifest/continuation 写入、durability/verification 和 prefix/blob compaction
+  之间的 crash cut；不能过早回收最近可恢复状态。
 - collaboration envelope、batch size、unknown capability 和版本协商。
 - NaN/Infinity、退化 path、极大坐标和非法层级。
+- negative zero、subnormal、舍入边界、checked arithmetic overflow、损坏 InvalidationHints、
+  input queue/batch size 与 frame revision/generation。
 - 文本 runs、logical range 和 composition replacement。
 
 Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、transaction 原子性和最近有效数据保留。
@@ -160,8 +222,14 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 - History intention → compensating Operation → Document/Persistence/Collaboration → replay。
 - ResourceManifest Operation → verified blob/missing placeholder → Scene invalidation → digest。
 - Save → restart → recovery → digest。
+- Empty Document → Operations → A；A → DocumentSnapshot → B；Snapshot@F + continuation →
+  C/D，比较 identity/revision/frontier/digest 并验证 RuntimeScene 从恢复后 Document 重建。
 - FastInk Preview → Canonical visible → Preview cleanup。
+- Confirmed input burst → bounded queue/batch merge → Preview coalescing → frame invalidation/
+  VSync → visible ack；过载取消路径无部分 Document。
 - RuntimeScene + 两个 Viewport → 两个独立 FrameState/FrameGraph，无跨 view 污染。
+- Document transaction → SemanticChanges + optional InvalidationHints → incremental/full Scene
+  equivalence；persist/collaboration 只包含 Operation。
 - PlatformSurfaceAdapter acquire/resize/present/context loss → 新 generation RenderTarget → Canonical redraw。
 - ExternalSurface placement → focus/lifecycle → fallback placeholder。
 - Local Operation → network faults → remote replicas → convergence。
@@ -171,12 +239,12 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 
 | POC | 正确性门禁 | 性能/资源门禁 | 故障门禁 |
 | --- | --- | --- | --- |
-| POC-01 | Web/Windows/macOS/iOS/iPadOS/Android digest 一致；黄金图 99.9%/差值 2 | 各平台 1K 节点连续 60 秒；无单帧 >100 ms | 各平台 100 次 runtime/view 生命周期 |
-| POC-02 | Canonical Stroke/Brush version/world-coordinate digest 一致；预测点不入文档；Preview Model 跨 sink 一致 | Preview p95/p99 ≤16.7/33.3 ms；长笔迹 end p95 ≤16.7 ms；三平台 Human Ink Gate | cancel、transform revision、prediction rollback、handoff 无空白 |
-| POC-03 | full/incremental scene 等价；多 viewport/DPR FrameState 隔离；仅 simple Text/reserved external pass | 100K scene；Web ≤512 MiB、Windows ≤768 MiB；Android 真机集成报告 | cache clear、resize、device loss 恢复 |
+| POC-01 | Web/Windows/macOS/iOS/iPadOS/Android digest 一致；独立空 Document operation replay 一致；黄金图 99.9%/差值 2 | 各平台 1K 节点连续 60 秒；无单帧 >100 ms | 各平台 100 次 runtime/view 生命周期；不实现正式 Snapshot codec |
+| POC-02 | Canonical Stroke/Brush/seed/world-coordinate digest 一致；Pointer→AddStroke 与空 Document replay 一致；numeric corpus 通过；Preview Model 跨 sink 一致 | Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age；长笔迹 end p95 ≤16.7 ms；三平台 Human Ink Gate | cancel、InputOverrun、transform revision、prediction rollback、过期 target/handoff 无空白或部分 Stroke |
+| POC-03 | full/incremental 在正确/空/损坏 hints 下等价；多 viewport/DPR FrameState 隔离；logical pass 优化等价 | 100K scene；Web ≤512 MiB、Windows ≤768 MiB；Android 真机集成报告；callback/queue 有界 | cache clear、resize、旧 generation、device loss 恢复 |
 | POC-04 | 三平台 text digest/行为/font resource/fallback 一致 | 10K 字符输入/layout p95 ≤16.7/33.3 ms | missing/corrupt font；100 次 focus/composition lifecycle |
 | POC-05 | 非 V1 risk proof；ExternalSurfaceId/registry placement 误差 ≤1 px | overlay 同步 ≤2 帧；100 次后内存增长 <5% | surface/focus/load failure fallback；不进入 V1 schema |
-| POC-06 | FastInk/Canonical 最终 digest 一致；Default/FastInk sink 消费同一 Preview revision | Preview p95/p99 ≤16.7/33.3 ms；handoff ≤2 帧 | backend/device/surface failure 不丢 Stroke |
+| POC-06 | FastInk/Canonical 最终 digest 一致；Default/FastInk sink 消费同一 Preview revision | Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age；handoff ≤2 帧 | backend/device/surface/旧 generation failure 不丢 Stroke |
 
 POC 报告必须同时附原始结果、环境和复现命令；只给结论截图不算通过。
 
@@ -186,11 +254,15 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 
 - Product Tier A clean build、Bridge contract、module dependency 和 sanitizer smoke 全部通过；core/public ABI 变更同时编译 Portability Tier B。
 - POC-01～04 阻断语料迁入产品骨架后无回归；POC-06 Accepted 后必须迁入，POC-05 不作为 V1/R1 门禁。
+- numeric/clock/random、input backpressure、frame scheduling、ChangeSet/hints 和分层 capability contract tests 通过。
+- DocumentSnapshot/RecoveryFrontier 概念 contract 通过，且无 Snapshot mutation/Undo 旁路。
 
 ### R2
 
 - V1 节点行为、round-trip、migration、replay digest 全部通过。
+- Snapshot@F + continuation F→T 的 round-trip/restart/故障恢复全部得到相同 target frontier/digest。
 - ResourceManifest/blob、FontResource、BrushDescriptor 和 compensating Undo/Redo 语料全部通过。
+- ID/stable order、multi-view lifecycle 与 V1 color/Image EXIF/ICC ADR corpus 全部通过。
 - 文件/operation/migration fuzz 发布前累计 ≥24 小时无未归类 crash。
 - 写入中断、磁盘满、资源缺失和损坏输入无静默数据丢失。
 
@@ -198,6 +270,8 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 
 - Product Tier A 保持 POC-02/03/04/06 的延迟、规模、视觉和生命周期门禁；POC-05 Hybrid Surface 不进入 V1 产品 target。
 - Product Tier A 混合编辑 2 小时无 crash，稳定期内存增长 <5%。
+- Global Resource Budget 覆盖 decoded resources、Canvas/Skia cache、FrameGraph transient 和
+  surface memory；memory pressure 无未归因峰值、无无界增长或 OOM。
 - device/cache/surface 丢失恢复不改变 Document digest。
 - Product Tier A Human Ink/Integrated Performance Gate 使用正式产品 target 完成签署，主观问题均有关联 trace 和处置结论。
 
@@ -252,7 +326,11 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 - Debug 构建只做诊断，不作为性能结论。
 - 每组 benchmark 先 warm-up，再采集固定时长/次数；禁止只报告最好一次。
 - CPU、GPU、内存、cache、dirty/cull 和 input timestamps 使用统一 trace correlation ID。
-- 设备热状态、电源模式、刷新率和浏览器 throttling 必须记录。
+- 设备热状态、电源模式、刷新率、frame interval、VRR 状态和浏览器 throttling 必须记录。
+- 延迟同时使用 milliseconds 与 display-frame/sample-to-visible 指标；不得把 60 Hz 的
+  16.7/33.3 ms 直接解释为所有高刷设备的一/两帧体验。
+- 内存报告分别列出 decoded image/font、Canvas Raster/Tile、Skia GPU cache、FrameGraph
+  transient、surface/overlay 和 unknown/unattributed；只报告单模块预算不算通过。
 - CI 噪声较大时只提示趋势；硬门禁运行在固定设备/runner。
 - 修改阈值需要重复基准、原因和 ADR/阶段文档更新，不能以当前实现达不到为理由。
 - 人工体验问题不因量化指标通过而自动关闭；同样，主观“流畅”也不能豁免 digest、延迟、帧时间或内存门禁。
@@ -274,4 +352,8 @@ POC 报告必须同时附原始结果、环境和复现命令；只给结论截�
 - Markdown/Mermaid fence 成对和 Mermaid 图中关键模块名检查。
 - POC-01～06、R1～R5 均包含设计、验证、实现、交付物和退出条件。
 - Accepted ADR 索引与实际文件一致。
-- Visual Document Runtime、Coordinate Spaces、ResourceManifest、compensating Undo/Redo、platform support tiers、RichText、InkEngine、SceneCompiler、FrameGraph、TileCache、FastInkBridge、Native CanvasView 和 Collaboration MVP 均有定义而非只出现名称。
+- Visual Document Runtime、Coordinate Spaces、Numeric Determinism、DocumentSnapshot/
+  RecoveryFrontier、ResourceManifest、
+  compensating Undo/Redo、platform support tiers、PlatformFrameScheduler、Input backpressure、
+  SemanticChanges/InvalidationHints、RichText、InkEngine、SceneCompiler、FrameGraph、TileCache、
+  FastInkBridge、Native CanvasView 和 Collaboration MVP 均有定义而非只出现名称。

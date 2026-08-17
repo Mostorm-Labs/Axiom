@@ -95,6 +95,7 @@ flowchart TB
     Pointer["PointerAdapter<br/>PointerSampleBatch"]
     IME["TextInputAdapter"]
     SurfaceAdapter["PlatformSurfaceAdapter"]
+    FrameScheduler["PlatformFrameScheduler"]
   end
 
   subgraph Runtime["C++20 Visual Document Runtime"]
@@ -112,10 +113,12 @@ flowchart TB
     Scene["RuntimeScene"]
     View["ViewQuery / FrameState"]
     Builder["FrameBuilder"]
+    FrameInvalidation["FrameInvalidationSink"]
     Graph["FrameGraph"]
     Comp["Compositor"]
     Renderer["RendererBackend"]
     Cache["RasterCache / TileCache / TileStore"]
+    Budget["ResourceBudgetCoordinator"]
     Resources["Resources"]
     Persistence["Persistence"]
     Collaboration["Collaboration"]
@@ -141,6 +144,10 @@ flowchart TB
   Win --> SurfaceAdapter
   Android --> SurfaceAdapter
   Apple --> SurfaceAdapter
+  Web --> FrameScheduler
+  Win --> FrameScheduler
+  Android --> FrameScheduler
+  Apple --> FrameScheduler
   AppAPI --> Facade
   Pointer --> Input
   IME --> Text
@@ -153,6 +160,7 @@ flowchart TB
   Geometry --> Layout
   Geometry --> HitTest
   Editor --> Ops
+  Text --> Ops
   Ops --> Doc
   Doc --> Compiler
   Compiler --> Scene
@@ -163,8 +171,16 @@ flowchart TB
   View --> Builder
   Scene --> Builder
   Builder --> Graph
+  Editor --> FrameInvalidation
+  Ink --> FrameInvalidation
+  Compiler --> FrameInvalidation
+  FrameScheduler -.->|implements / consumes| FrameInvalidation
+  FrameScheduler -.->|frame callback| Facade
   Graph --> Comp
   Cache <--> Comp
+  Budget --> Cache
+  Budget --> Resources
+  Budget --> Renderer
   Comp --> Renderer
   Renderer --> Skia
   Skia --> Target
@@ -176,7 +192,8 @@ flowchart TB
   FastBridge --> FastPlatform
   Resources --> Compiler
   Resources --> Renderer
-  Persistence -.->|reads immutable snapshot| Doc
+  Doc -.->|exports DocumentSnapshot| Persistence
+  Persistence -.->|verified restore input| Facade
   Ops -.->|committed operations| Persistence
   Collaboration <--> Ops
 ```
@@ -205,6 +222,7 @@ Semantic Document
 | --- | --- | --- |
 | RuntimeFacade | Application API 的命令、查询、能力与生命周期入口 | 高频 Pointer/IME 数据面、平台 UI |
 | InputRouter | Pointer batch 的顺序、设备/手势路由和 Editor/Ink 分发 | Application commands、IME 文本状态 |
+| FrameInvalidationSink | Runtime 定义、host 实现的帧请求边界；携带 View/revision/generation | 平台 VSync 实现、Document 写入 |
 | Geometry | 坐标/矩阵、bounds、path 与稳健几何 primitives | Viewport ownership、渲染或文档写入 |
 | Document | 语义节点、层级、样式、资源引用、版本 | Skia 对象、选区、GPU 缓存 |
 | Operations | 唯一持久写入口、事务、回放、协作操作 | 平台输入与绘制 |
@@ -221,6 +239,7 @@ Semantic Document
 | Compositor | Background/Content/Ink/Overlay/Selection/HUD 合成 | 文档操作 |
 | RendererBackend | 将帧计划通过 Ganesh 绘制到调用方提供的 RenderTarget | HWND/ANativeWindow/CAMetalLayer 生命周期 |
 | TileCache | L1/L2/L3 缓存契约、预算、失效 | 权威内容存储 |
+| ResourceBudgetCoordinator | 统一协调 decoded resource、Canvas/Skia cache、transient 和 surface 内存预算/压力 | Document 语义、假装完全拥有 Skia 内部 cache |
 | Resources | 图片、字体、外部资源加载与版本 | 平台文件对话框 |
 | Persistence | 快照、操作日志、迁移、崩溃恢复 | 网络 transport |
 | Collaboration | Operations envelope/merge、离线队列、重连与 Presence channel | EditorSession History、平台 transport UI |
@@ -240,6 +259,11 @@ Semantic Document
 
 任何缓存或 GPU 设备丢失都不得改变 Document。Presence 不进入文件，EditorSession 不成为协作事实，Document 不保存 Skia 或平台句柄。
 
+多个 View 可以共享同一 Document、RuntimeScene 和受 revision 约束的 resource cache；每个
+View 的 EditorSession、History intention、Text composition、Active Stroke、FrameState 和
+未决 frame callback 独立。View 销毁只清理本 View 的临时状态，不得连带销毁其他 View
+仍在使用的共享状态。GPU context/cache 是否共享由 Renderer/Platform policy 决定。
+
 ## 7. 核心接口基线
 
 ### 7.1 Pointer 与 Ink
@@ -253,7 +277,12 @@ Semantic Document
 - `Preview Stroke`：允许预测和临时质量，用于最低延迟反馈。
 - `Canonical Stroke`：稳定、可编辑、可持久化并进入 Document。
 
-二者共享 Stroke ID 和版本化 `BrushDescriptor` 语义；descriptor 至少包含 brush type/version、semantic parameters 和所需 ResourceId/ContentHash。`push()` 允许持续增量构建 Canonical candidate，`end()` 只负责将最终 Canonical Stroke 作为一次原子 Operation 提交；不得把长笔迹的全部 Canonical 计算推迟到 pointer up。Preview 结束后必须能无闪烁交接到 Canonical。
+二者共享 Stroke ID 和版本化 `BrushDescriptor` 语义；descriptor 至少包含 brush type/version、semantic parameters 和所需 ResourceId/ContentHash。Dab/texture 随机流必须使用按 algorithm、brush version、StrokeId 与 stream 分域的 deterministic seed/PRNG，不得依赖 wall clock 或全局 random。`push()` 允许持续增量构建 Canonical candidate，`end()` 只负责将最终 Canonical Stroke 作为一次原子 Operation 提交；不得把长笔迹的全部 Canonical 计算推迟到 pointer up。Preview 结束后必须能无闪烁交接到 Canonical。
+
+Confirmed samples 不得静默删除、重复或重排；兼容 batch 可以合并。Predicted tail、可完全
+替换的 Preview update 和 frame invalidation 可按 revision coalesce。队列必须有容量和延迟
+诊断；资源不足时明确 `InputOverrun` 并原子取消 Stroke，不提交部分笔迹。Platform Adapter
+报告 pen/touch/hover/eraser/palm capability，InputRouter 统一产品级 arbitration。
 
 ### 7.2 FastInk
 
@@ -265,17 +294,41 @@ Semantic Document
 - Windows/Android：实现应用级 native low-latency preview。
 - 自有设备：条件式评估 Raw Input、FastInk Service、DMA-BUF/GBM 与 DRM atomic overlay，不阻塞普通应用产品路线。
 
+Runtime 只通过 FrameInvalidationSink 发布带 View/revision/generation 的 frame invalidation。PlatformFrameScheduler 拥有
+rAF、Choreographer、DisplayLink、DXGI 或 Headless pump，合并请求并在 VSync callback 中
+执行 acquire/render/present；过期 target 不得 present，Preview→Canonical handoff 以实际
+visible acknowledgement 为准。
+
 ### 7.3 Scene 与缓存
 
-`SceneCompiler` 接收 Document revision/ChangeSet，生成可完整重建、可增量更新的 RuntimeScene。全量编译和相同变更序列的增量编译必须等价。
+`SceneCompiler` 接收 Document revision/ChangeSet，生成可完整重建、可增量更新的 RuntimeScene。ChangeSet 的 `SemanticChanges` 是 transaction 派生的确定变化，`InvalidationHints` 是可丢弃、可扩大、可重算的优化提示，不进入持久化、协作或 digest。全量编译和相同变更序列的增量编译必须等价。
 
-Document 节点只保存稳定、不可复用的 `ResourceId`，不调用 ResourceManager 或 Persistence。版本化 `ResourceManifest` 将 ResourceId 映射到 ResourceRevision、`sha256:<content-hash>` 和不可变 blob；manifest binding 属于可保存/协作的语义状态并进入 Document digest，下载 URL、本地路径和 decode/GPU 状态不进入。Resources 独立负责 resolve/verify/decode/version，Persistence 通过受控服务原子保存 snapshot、operation log、resource manifest 和 blob；两者都不得反向修改节点语义。
+Document 节点只保存稳定、不可复用的 `ResourceId`，不调用 ResourceManager 或 Persistence。版本化 `ResourceManifest` 将 ResourceId 映射到 ResourceRevision、`sha256:<content-hash>` 和不可变 blob；manifest binding 属于可保存/协作的语义状态并进入 Document digest，下载 URL、本地路径和 decode/GPU 状态不进入。Resources 独立负责 resolve/verify/decode/version，Persistence 通过受控服务原子保存 `DocumentSnapshot`、committed operation continuation、resource manifest 和 blob；两者都不得反向修改节点语义。
+
+恢复关系固定为 `DocumentSnapshot@RecoveryFrontier F + committed Operations F→T =
+Document@T`。Document revision 是 Runtime 实例内的发布/失效标记，RecoveryFrontier 是
+持久/同步恢复位置；二者一起校验但不能互换。Snapshot 和 continuation 都绑定 Document
+identity 与 base/target frontier。Snapshot 只在已提交 transaction 边界创建，并在发布恢复后的 Document 前
+原子校验 identity/schema/capability/frontier/digest；它不包含 EditorSession、Presence、
+Viewport/Preview、RuntimeScene、GPU/cache 或 blob bytes。运行期编辑与 Undo/Redo 不能通过
+恢复旧 Snapshot 绕过 Operation。`ViewportSnapshot`、`DocumentReadView` 与可持久化
+`DocumentSnapshot` 是三个不同概念。具体 codec/log/compaction 留给 R2/R4，语义遵循 ADR-0020。
+
+ResourceManifest 在逻辑上属于 DocumentSnapshot/Digest，物理分包不能破坏同一 checkpoint
+绑定。任何 log compaction 都必须先证明 Snapshot、manifest、continuation 起点和恢复元数据
+已持久、可校验、可读取，之后才能回收 frontier 之前的 Operation prefix；blob GC 仍按内容
+可达性独立处理。
 
 缓存接口从首版存在，能力按阶段展开：
 
 - L1：GPU/当前进程快速缓存，V1 产品化实现。
 - L2：RAM cache，性能数据证明需要时启用。
 - L3：SSD/eMMC 持久 tile，仅自有设备或大文档需求驱动。
+
+FrameGraph 中 Background/Content/Ink/ExternalSurface/Overlay/Selection/HUD 是 logical passes；
+backend 可在依赖和视觉等价性不变时 merge、elide 或 reuse。R3 的全局资源预算需要统一观察
+decoded resources、Canvas cache、Skia GPU cache、transient allocations 和 surface memory，
+不能由各模块分别宣称未超预算。
 
 ### 7.4 RichText
 
@@ -292,6 +345,13 @@ History 属于 EditorSession，只选择本地 intention 和 undo grouping。Und
 - 坐标、DPI、输入逆变换、HitTest tolerance 和 ExternalSurface placement 遵循 ADR-0012。
 - ResourceId、ResourceManifest、ContentHash、missing/corrupt handling 和 Document digest 遵循 ADR-0013。
 - History/Undo/Redo ownership 与 compensating Operation 遵循 ADR-0014。
+- canonical binary32、finite-only、canonical zero、checked overflow、版本化算法精度和
+  little-endian digest encoding 遵循 ADR-0016；视觉容差不代替语义确定性。
+- frame invalidation/VSync、input backpressure/coalescing、ChangeSet/hints 分别遵循
+  ADR-0017、ADR-0018、ADR-0019。
+- DocumentSnapshot、RecoveryFrontier 和 committed Operation continuation 遵循 ADR-0020。
+- HitTest 返回 geometry candidates；SelectionPolicy 和 SnapEngine 属于 Editor subsystem。
+  ID/stable order、V1 color/Image EXIF/ICC 在 R2/R3 前通过实验型 ADR 冻结。
 
 ## 8. 工程原则
 
@@ -306,6 +366,10 @@ History 属于 EditorSession，只选择本地 intention 和 undo grouping。Und
 9. **所有跨模块 geometry 都声明坐标空间与 revision；DPR 不污染 Document。**
 10. **ResourceId 是语义身份，ContentHash 是不可变内容版本。**
 11. **Undo/Redo 产生新 Operations，不回拨 Document。**
+12. **数值、时钟和随机性必须可回放；wall clock 不进入语义摘要。**
+13. **Runtime 请求帧，平台拥有 VSync；confirmed input 与 render cadence 解耦。**
+14. **语义变化是事实，dirty/cache hints 只是可重算优化。**
+15. **Snapshot 是恢复检查点，不是普通编辑、Undo/Redo 或任意状态替换的旁路。**
 
 ## 9. 目标仓库结构
 
@@ -401,15 +465,17 @@ R1 acceptance 的最低架构证据是 POC-01～04；POC-05 不阻塞 V1，POC-0
 
 ## 11. 已接受与待验证决策
 
-已经接受：Visual Document Runtime 定位、可替换 Shell 与平台支持分级、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权、共享 Preview Model/FastInk sink、坐标/DPI、资源身份和 Undo 补偿 Operation 边界。
+已经接受：Visual Document Runtime 定位、可替换 Shell 与平台支持分级、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权、共享 Preview Model/FastInk sink、坐标/DPI、资源身份、Undo 补偿 Operation、数值确定性、平台帧调度、输入背压、ChangeSet/hints 和 DocumentSnapshot/Operation continuation 恢复边界。
 
 仍需实验型 ADR：
 
-- 文档快照与操作日志格式。
+- DocumentSnapshot、Operation Log 与 migration 的具体编码/存储/compaction 格式；恢复语义已由 ADR-0020 固定。
 - Collaboration MVP 的具体合并算法和协议。
 - L2/L3 缓存格式与压缩策略。
 - POC 后的线程拓扑和 WASM pthread 启用时机。
 - `DocumentRoot`/单 Page/多 Page 的产品 schema 与迁移规则。
+- Entity/Operation/Actor ID 与 stable order/z-order schema；R4 再冻结并发排序算法。
+- V1 color space 与 Image EXIF/ICC canonicalization。
 
 “待验证”是明确的阶段输出，不允许实现人员在没有 ADR 和证据时自行选择。
 

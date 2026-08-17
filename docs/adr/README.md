@@ -21,12 +21,17 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | [0013](0013-resource-identity-content-addressing.md) | Accepted | ResourceId、ContentHash、Manifest 和 blob identity 分离 |
 | [0014](0014-history-undo-compensating-operations.md) | Accepted | Undo/Redo 通过新的补偿 Operations 进入唯一写路径 |
 | [0015](0015-platform-support-tiers-shell-policy.md) | Accepted | Tier A 产品、Tier B 可移植性、Reuse 和 Headless 责任分级 |
+| [0016](0016-numeric-geometry-determinism.md) | Accepted | canonical 数值存储、舍入、非法值和摘要编码遵循跨平台确定性契约 |
+| [0017](0017-platform-frame-scheduling.md) | Accepted | Runtime invalidation 与平台 VSync/frame scheduler 分离 |
+| [0018](0018-input-backpressure-coalescing.md) | Accepted | confirmed input、Preview 更新与帧请求采用分级背压/合并规则 |
+| [0019](0019-semantic-changes-invalidation-hints.md) | Accepted | ChangeSet 的语义变化与非权威失效提示分离 |
+| [0020](0020-document-snapshot-operation-recovery.md) | Accepted | DocumentSnapshot + committed Operation continuation 确定性恢复目标 Document |
 
 ## 必须后续建立的实验型 ADR
 
 | 建议主题 | 阻断阶段 | 必须提供的证据 |
 | --- | --- | --- |
-| 文档快照、操作日志与 migration 格式 | R2 | round-trip、损坏输入、规模、演进与恢复测试 |
+| DocumentSnapshot、Operation Log 与 migration 具体格式 | R2 | 遵循 ADR-0020 的 round-trip、损坏输入、规模、演进与恢复测试；不重新决定恢复语义或将 Runtime revision 等同 RecoveryFrontier |
 | Collaboration MVP 算法与协议 | R4 | 冲突语料、100K 随机 operations、断网/重连 |
 | L2/L3 cache 格式与压缩 | 实现 L2/L3 前 | 命中收益、IO/内存、版本失效、CacheSchema/Renderer/Skia SDK/backend compatibility namespace、设备数据 |
 | 产品线程拓扑与 WASM pthread | 引入 worker 前 | profiling、所有权、revision 失效和回归语料 |
@@ -34,6 +39,8 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | 系统级 FastInk target | 设备产品化前 | 硬件/BSP、权限、光电延迟、plane/fallback 测试 |
 | DocumentRoot、单 Page/多 Page schema | R2 | 产品模型、导出/坐标语义、迁移与兼容测试 |
 | Headless 公共产品 API | 产品化前 | server/batch/export 用例、安全、资源预算、稳定性和兼容性 |
+| Entity/Operation/Actor ID 与 stable order/z-order schema | R2；协作扩展在 R4 | domain/collision/replay、离线创建、中间插入、并发排序、迁移和收敛语料 |
+| V1 color/image canonicalization | R2/R3 | sRGB/P3 产品范围、ICC/EXIF、派生 decode metadata identity、export/golden 与跨平台 codec 语料；不改变 ADR-0013 blob ContentHash |
 
 ## ADR 格式
 

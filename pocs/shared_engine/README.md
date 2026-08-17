@@ -9,6 +9,12 @@ All C ABI, replay schema, handles, scene structures, and fixtures in this
 directory are **Experimental**. R1 will replace them using the evidence
 collected by this POC; no source or binary compatibility is promised.
 
+POC-01 is also the minimal operation-driven Document proof: two independent
+empty Documents that consume the same transactional create/move/delete replay
+must end at the same sequence and digest. It does not implement or stabilize a
+`DocumentSnapshot` codec, persistent operation log, compaction, undo/redo, or
+collaboration protocol; those follow ADR-0020 and later R1/R2/R4 evidence.
+
 ## Host-core quick start
 
 ```sh

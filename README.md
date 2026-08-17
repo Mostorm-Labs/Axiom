@@ -26,13 +26,21 @@ should bypass their documented exit gates.
 - Runtime: C++20 modules for RuntimeFacade, InputRouter, Document, Operations,
   EditorSession, RichText, InkEngine, Geometry, Layout, HitTest, SceneCompiler,
   shared RuntimeScene, per-view FrameState, FrameBuilder, FrameGraph,
-  Compositor, RendererBackend, TileCache, Resources, Persistence, and
-  Collaboration.
+  Compositor, RendererBackend, FrameInvalidationSink, TileCache,
+  ResourceBudgetCoordinator, Resources, Persistence, and Collaboration.
 - Renderer: Skia Ganesh for v1; Graphite/WebGPU is a future backend.
 - Surfaces: platform adapters own native window/surface/context lifecycles and
   provide generation-bound RenderTargets; RendererBackend does not own them.
 - Ink: canonical document rendering and low-latency preview are separate paths
   connected through one shared Preview Model and `FastInkBridge`.
+- Determinism: canonical numeric storage/encoding, deterministic clock/random,
+  semantic ChangeSets, and cross-platform replay are explicit contracts.
+- Recovery: an immutable DocumentSnapshot plus committed operation continuation
+  deterministically restores a target frontier; snapshots never bypass the
+  normal Operation path for editing or undo/redo.
+- Scheduling: the Runtime emits revision-bound frame invalidations; platform
+  schedulers own VSync/present, while bounded input queues preserve confirmed
+  samples independently of render cadence.
 
 ## Documents
 

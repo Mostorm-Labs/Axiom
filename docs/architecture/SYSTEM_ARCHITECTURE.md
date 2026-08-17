@@ -24,6 +24,7 @@ flowchart TB
     Pointer["PointerAdapter"]
     TextInput["TextInputAdapter"]
     SurfaceAdapter["PlatformSurfaceAdapter"]
+    FrameScheduler["PlatformFrameScheduler"]
   end
 
   subgraph Core["C++20 Canvas Runtime"]
@@ -41,10 +42,12 @@ flowchart TB
     Scene["RuntimeScene"]
     ViewState["ViewQuery / FrameState"]
     FrameBuilder["FrameBuilder"]
+    FrameInvalidation["FrameInvalidationSink"]
     Frame["FrameGraph"]
     Compositor["Compositor"]
     Renderer["RendererBackend"]
     Cache["RasterCache / TileCache / TileStore"]
+    Budget["ResourceBudgetCoordinator"]
     Resources["Resources"]
     Persistence["Persistence"]
     Collab["Collaboration"]
@@ -69,6 +72,10 @@ flowchart TB
   Tauri --> SurfaceAdapter
   RN --> SurfaceAdapter
   Apple --> SurfaceAdapter
+  ReactWeb --> FrameScheduler
+  Tauri --> FrameScheduler
+  RN --> FrameScheduler
+  Apple --> FrameScheduler
   Wasm --> Facade
   CAbi --> Facade
   Jni --> Facade
@@ -96,15 +103,24 @@ flowchart TB
   Scene --> FrameBuilder
   ViewState --> FrameBuilder
   FrameBuilder --> Frame
+  Editor --> FrameInvalidation
+  Ink --> FrameInvalidation
+  Compiler --> FrameInvalidation
+  FrameScheduler -.->|implements / consumes| FrameInvalidation
+  FrameScheduler -.->|frame callback| Facade
   Frame --> Compositor
   Cache <--> Compositor
+  Budget --> Cache
+  Budget --> Resources
+  Budget --> Renderer
   Compositor --> Renderer
   Renderer --> Ganesh
   Ganesh --> Target
   SurfaceAdapter --> Target
   Resources --> Compiler
   Resources --> Renderer
-  Persistence -.->|reads immutable snapshot| Doc
+  Doc -.->|exports DocumentSnapshot| Persistence
+  Persistence -.->|verified restore input| Facade
   Ops -.->|committed operations| Persistence
   Ink --> FastInk
 ```
@@ -162,7 +178,7 @@ flowchart TB
 
 Document 是唯一可保存、迁移和协作同步的业务真相，包含：
 
-- Document/Page identity、schema version 和 capability flags。
+- Document/Page identity、schema version 和带命名空间的 DocumentCapability requirements。
 - V1 节点、稳定 ID、层级、z-order、几何、样式和资源引用。
 - RichText 内容、Vector/Dab Stroke 的语义数据。
 - 操作与迁移需要的最小版本/因果元数据。
@@ -180,6 +196,21 @@ Document semantic state 同时包含版本化 ResourceManifest；节点只保存
 EditorSession 可根据产品需要局部恢复，但不作为 Document collaboration state。
 
 History/Undo intention 属于 EditorSession。Undo/Redo 选择本地 intention，并针对当前 Document revision 产生新的 compensating Operation transaction；不能倒退 Document state pointer、operation sequence 或改写旧 Operation。
+
+同一 Document 可被多个 View/EditorSession 同时观察，但生命周期不能隐式共享：
+
+| 状态/资源 | 默认 ownership |
+| --- | --- |
+| Viewport、Selection、Hover、Tool、Text composition、Active Stroke | 每个 EditorSession/View 独立 |
+| History/Undo intention、Clipboard session | 每个 EditorSession 独立；平台 clipboard 通过 adapter 访问 |
+| Document 与 committed Operations | Document 级共享 |
+| RuntimeScene、Resource decode cache | Runtime/Document context 共享，以 revision 隔离 |
+| FrameState、screen damage、Preview/HUD | 每个 View/frame 独立 |
+| GPU context/cache | 由 Renderer/Platform target sharing policy 决定，不进入 Document |
+
+销毁 View 必须取消其 composition、Active Stroke、未决 frame callback 和 Preview sink，但不
+销毁仍被其他 View 使用的 Document/RuntimeScene/resource；同一节点在多个 View 同时编辑的
+产品策略由 R2 Editor contract 冻结，不能靠共享临时 state 偶然串行化。
 
 ### 3.3 Collaboration Presence
 
@@ -219,7 +250,18 @@ Page
 └── DabStroke
 ```
 
-所有节点具有稳定 ID、局部变换、可见/锁定状态、稳定排序键和版本化属性集合。V1 的 `Page` 是语义内容根，可声明内容/导出边界，但不是 Viewport。Viewport 始终属于 `EditorSession`。V1 不允许一般节点拥有跨 Page 的隐式父子引用；`Document` 长期采用单 Page 还是 `DocumentRoot → Page*`，由 R2 schema/migration ADR 在产品语义明确后决定。
+所有节点具有稳定 ID、局部变换、可见/锁定状态、稳定排序键和版本化属性集合。ID 保持
+强类型和 domain separation：Node/Stroke、Operation、Actor、Resource、View/Surface 不得
+互换或由裸整数偶然共享命名空间。R1 冻结编码、离线生成、collision/reuse、serialization
+与 replay 属性；R2 schema 在实现前决定实体范围，R4 再用协作语料冻结 Actor/Operation
+及离线冲突规则。
+
+稳定排序键必须支持层级内中间插入、确定遍历/摘要及不修改无关节点；不能把容器迭代顺序
+或每次插入后全量重新编号当作语义。R2 前用实验型 ADR 冻结本地 order schema 和 migration，
+R4 再决定并发插入/移动的合并算法；当前基线不预选 fractional indexing、RGA、LSEQ 或其他
+CRDT。V1 的 `Page` 是语义内容根，可声明内容/导出边界，但不是 Viewport。Viewport 始终
+属于 `EditorSession`。V1 不允许一般节点拥有跨 Page 的隐式父子引用；`Document` 长期采用
+单 Page 还是 `DocumentRoot → Page*`，由 R2 schema/migration ADR 在产品语义明确后决定。
 
 ### 4.2 扩展类别
 
@@ -241,6 +283,13 @@ V1 不实现这些节点，但 extension registry、资源引用、SceneCompiler
 - **Operation**：已规范化、可回放、可持久化、可同步的确定性变化。
 - **ChangeSet**：Operation 应用结果，描述受影响节点、字段、资源、布局和 dirty hints。
 
+`ChangeSet` 不是第二种持久化事实。它由一次成功的 Document transaction 针对明确的
+before/after revision 派生，并逻辑上分为 `SemanticChanges` 与 `InvalidationHints`：前者
+描述创建/删除、字段、层级/order 和 ResourceManifest 等语义变化，后者描述 dirty bounds、
+layout、spatial 或 cache 优化提示。Hints 可丢弃、扩大或重算，不进入 Document digest、
+operation log 或 collaboration envelope；SceneCompiler 缺少可信 hints 时必须扩大失效或
+回退 full compile，不能因 hints 缺失产生错误结果。详见 [ADR-0019](../adr/0019-semantic-changes-invalidation-hints.md)。
+
 本地写路径：
 
 ```text
@@ -249,14 +298,48 @@ Normalized Input
   → command validation
   → deterministic Operation
   → Document transaction
-  → ChangeSet
-  → persistence/collaboration queue
-  → SceneCompiler incremental update
+      ├→ committed Operation → persistence/collaboration queue
+      └→ ChangeSet → SceneCompiler incremental update
 ```
 
 远端写路径从 operation validation 开始，不能进入 Tool state machine。Document 只提供一个有序写入口；同一初始快照和 operation sequence 必须得到相同逻辑摘要。
 
 Undo/Redo 不构成第二写路径：History 只选择 local intention/undo group，随后生成新的原子 compensating Operations。并发导致补偿不再适用时必须返回明确 applied/no-op/rejected/conflicted 结果，不能通过恢复旧 snapshot 覆盖当前 Document。
+
+### 5.1 DocumentSnapshot 与 Operation continuation
+
+Operation-driven Document 的恢复关系固定为：
+
+```text
+DocumentSnapshot at RecoveryFrontier F
+    + committed OperationContinuation F → T
+    = Document state at target frontier T
+```
+
+`DocumentSnapshot` 是已提交 transaction 边界上的完整、不可变语义检查点，包含 Document
+identity/schema/capability、语义 graph、RichText/Canonical Stroke、ResourceManifest、
+Document revision、版本化 `RecoveryFrontier` 和可验证 digest。它不包含 EditorSession/
+History UI、Presence、Viewport、composition/Preview、RuntimeScene、GPU/cache、平台句柄、
+decode 状态或 blob bytes。
+
+Snapshot 从同一 revision/frontier 的不可变 `DocumentReadView` 导出。ResourceManifest 在
+逻辑上属于 Snapshot/Digest，即使物理包分开保存也必须由同一原子 checkpoint 绑定。只有
+Snapshot、manifest、continuation 起点和恢复元数据已经持久化、校验且可读取后，才允许
+compaction 删除 frontier 之前的 Operation prefix；资源 blob 的 GC 继续按 manifest/content
+reachability 决定。
+
+`RecoveryFrontier` 是不透明版本化位置；单机 POC/V1 可用连续 sequence 实现，但 Core
+契约不假设未来永远只有全局线性序号。Document revision 是当前 Runtime 实例的单调发布/
+失效标记，RecoveryFrontier 是持久/同步恢复位置，二者必须一起校验但不能互换。Snapshot
+和 continuation 均绑定 Document identity 与明确 base/target frontier。Snapshot restore
+只用于创建/恢复 Document、显式
+migration 或 collaboration bootstrap，不能作为普通编辑、Undo/Redo 或远端更新的第二写
+入口。Snapshot 和 continuation 必须在发布 Document 前原子验证；gap、duplicate、乱序、
+frontier mismatch、未知 required capability 或 digest 损坏不能暴露部分恢复状态。
+
+术语必须区分：可持久化语义检查点叫 `DocumentSnapshot`；输入变换快照叫
+`ViewportSnapshot`；executor 内不可变读取视图叫 `DocumentReadView`。后两者不是保存格式。
+完整契约见 [ADR-0020](../adr/0020-document-snapshot-operation-recovery.md)。
 
 ## 6. 坐标空间、Pointer 与 Ink 接口
 
@@ -283,7 +366,18 @@ Platform Screen
 - HitTest 使用 Page/World point 与由 View Logical tolerance 转换的 world tolerance。ExternalSurface placement 由 FrameBuilder 从 world 变换到 device，再由平台 registry 映射到 screen/view。
 - 像素取整只在 raster/overlay adapter 边界发生；bounds/clip 在此前保持连续值并采用 half-open extent 语义。
 
-### 6.2 PointerSampleBatch
+### 6.2 数值与几何确定性
+
+Document geometry、Canonical Stroke geometry 和进入 canonical Scene digest 的几何标量以
+IEEE-754 binary32 作为 canonical storage；这不限制算法使用经过声明的 binary64 中间值。
+进入 Document transaction、Canonical commit 或 canonical Scene record 前必须是 finite，
+`-0` 规范化为 `+0`；NaN、Infinity、不可逆矩阵、checked arithmetic 溢出和超出 schema/
+algorithm version 声明范围的结果必须整笔/整事务拒绝。Canonical serialization 使用版本化
+字段顺序和 little-endian bit pattern，不得 hash C++ 对象布局或依赖 locale 十进制格式。
+FMA、fast-math、flush-to-zero、libm 和算法 quantization 规则必须由算法版本声明；视觉
+golden 容差不能替代语义 digest 一致性。完整边界见 [ADR-0016](../adr/0016-numeric-geometry-determinism.md)。
+
+### 6.3 PointerSampleBatch
 
 以下是必须保持的语义接口；具体二进制布局由 POC-02 固定。
 
@@ -315,6 +409,13 @@ struct PointerSampleBatch {
 - 历史点批量传递，不逐点跨 WASM/C ABI/JNI。
 - batch 内位置在进入 InputRouter 时使用 View Logical space，并通过同 batch 的不可变 `view_to_world` 生成 canonical Page/World samples；矩阵失效或不可逆时整 batch 明确拒绝。
 
+InputRouter 对 confirmed samples 保持每个 pointer stream 的顺序，不得静默删除、重复或
+重排；兼容 batch 可以合并。Predicted tail 是可替换派生状态，可以丢弃后从 confirmed
+prefix 重算。Preview update 和 frame invalidation 可以按 revision 合并，但 begin/end/
+cancel、Canonical commit 与 visible/handoff acknowledgement 不可丢弃。所有跨线程/ABI
+队列都有容量、字节上限、最大 batch 与 oldest-sample-age 诊断；无法背压时以明确
+`InputOverrun` 取消受影响 StrokeSession，不提交部分 Document。详见 [ADR-0018](../adr/0018-input-backpressure-coalescing.md)。
+
 `StrokeSession` 生命周期：
 
 ```cpp
@@ -330,6 +431,10 @@ class StrokeSession {
 - Preview 可以包含预测点，Canonical 只能提交确认样本派生的稳定语义。
 - `push()` 允许持续增量维护 Canonical candidate；`end()` 只把已经验证完成的 Canonical Stroke 作为一次原子 Operation 提交，不能把超长笔迹的全部计算推迟到 pointer up。`cancel()` 不留下 Document 修改。
 - Preview 与 Canonical 共享 Stroke ID、transform 和版本化 `BrushDescriptor`。Descriptor 至少包含 brush type/version、semantic parameters 及所需 ResourceId/ContentHash；同一 descriptor/version 的跨平台 replay 必须产生等价结果。
+- Dab/texture 等涉及 jitter、rotation、spacing 或 variation 的算法不得使用不可控的全局
+  random。随机流必须使用 algorithm/brush-version/StrokeId/stream 等 domain-separated
+  deterministic seed，并将 PRNG/seed 规则纳入 BrushDescriptor algorithm version；随机性
+  不得依赖 wall clock 或平台线程调度。
 
 ## 7. FastInk 双路径
 
@@ -365,6 +470,20 @@ class FastInkBackend {
 - Canonical 首帧可见后，Preview 才能移除；失败时保留或安全淡出，不出现空白帧。
 - 通用 Runtime 不引用 DirectComposition、SurfaceControl、DRM、HWC、DMA-BUF 或 plane 类型。
 
+### 7.1 输入设备与编辑策略边界
+
+Platform Adapter 报告 pointer/tool capability，包括 pen、touch、hover、barrel button、
+eraser tip、pressure/tilt 是否真实可用及平台已有的 palm 判定；InputRouter 负责跨平台
+的 pen/touch priority、gesture arbitration 和事件 taxonomy，不在各个 Shell 复制产品
+行为。完整 palm classifier 不是 POC-02 的前置条件。
+
+`HitTest` 只提供 Page/World geometry candidates、稳定 ID、命中顺序和必要 local geometry。
+locked/invisible、group-vs-child、透明对象、Text character position 等属于
+EditorSession 的 SelectionPolicy/Tool 语义。SnapEngine 属于 Editor subsystem，使用
+RuntimeScene/SpatialIndex 的 query primitives；Document 和 SceneCompiler 不知道当前
+selection 或 snap 策略。Eraser 在 POC-02 冻结为扩展语义（whole-stroke、segment、pixel/
+dab 的边界及其 Operation/ID 影响），不因本轮审查扩大最小实现。
+
 设备级预研分层为 `RawInputSource → FastInk Service → PreviewStrokeRenderer → ScanoutBuffer → DisplayPlane`。该 target 需要受控硬件、系统权限和 BSP，不是普通 App fallback。
 
 ## 8. RichText 与 IME
@@ -393,7 +512,7 @@ Web、Windows、Android 运行同一文本行为语料；平台只能适配 IME�
 
 ## 9. SceneCompiler 与渲染管线
 
-`SceneCompiler` 提供两个逻辑入口：全量 `compile(DocumentSnapshot)` 与增量 `apply(ChangeSet)`。二者输出相同 revision 的 RuntimeScene 时，render records、bounds、hit-test 和视觉结果必须等价。Document 节点只携带稳定 ResourceId；versioned ResourceManifest 将其映射到 ResourceRevision、ContentHash 与 blob metadata。SceneCompiler 通过只读 `ResourceResolver` 获取并校验内容，不让 Document 调用或拥有 ResourceManager。
+`SceneCompiler` 提供两个逻辑入口：全量 `compile(DocumentReadView)` 与增量 `apply(ChangeSet)`。二者输出相同 revision 的 RuntimeScene 时，render records、bounds、hit-test 和视觉结果必须等价。这里的 `DocumentReadView` 是 executor 内不可变读取视图，不是 ADR-0020 的持久化 `DocumentSnapshot`。Document 节点只携带稳定 ResourceId；versioned ResourceManifest 将其映射到 ResourceRevision、ContentHash 与 blob metadata。SceneCompiler 通过只读 `ResourceResolver` 获取并校验内容，不让 Document 调用或拥有 ResourceManager。
 
 共享 Scene 和单视口/临时状态进入以下管线：
 
@@ -401,17 +520,29 @@ Web、Windows、Android 运行同一文本行为语料；平台只能适配 IME�
 2. Visibility、clip、LOD 和 screen-space damage 过滤本帧内容。
 3. Render Tree 解析层级、opacity、mask 和 effect 边界。
 4. `FrameBuilder` 合并 RuntimeScene、FrameState、Editor/Presence overlays、Active Preview 和 ExternalSurface placement，生成不可变 frame plan。
-5. FrameGraph 构建 Background、Content、Ink、ExternalSurface、Overlay、Selection、HUD passes。
+5. FrameGraph 构建 Background、Content、Ink、ExternalSurface、Overlay、Selection、HUD
+   logical passes。
 6. Compositor 分配 pass 资源并应用 cache。
 7. RendererBackend 使用 Skia Ganesh 绘制到调用方提供的 `RenderTarget`。
 
-FrameGraph 管理 pass 依赖和临时资源，不拥有文档语义。RendererBackend 接口要允许未来 Graphite，但 V1 只验收 Ganesh。
+FrameGraph 管理 pass 依赖和临时资源，不拥有文档语义。上述是 logical pass，不要求 backend
+每帧创建七个物理 render pass；在依赖、clip/blend、资源生命周期和视觉等价性不变时，
+backend 可以 merge、elide、reuse 或按依赖安全重排。RendererBackend 接口要允许未来
+Graphite，但 V1 只验收 Ganesh。
 
 ### 9.1 RenderTarget 与 PlatformSurfaceAdapter
 
 `PlatformSurfaceAdapter` 位于平台边界，拥有 HTML Canvas/WebGL context、HWND/DXGI swapchain、Android Surface/ANativeWindow/EGLSurface、CAMetalLayer/Metal drawable 或 Headless surface。它负责 acquire/resize/present/recover，并为每帧提供带尺寸、DPR、颜色空间、backend capability 和 generation 的 `RenderTarget`。
 
 `RendererBackend` 属于 C++ Runtime 渲染能力，只消费 frame plan 和有效 RenderTarget。它不能缓存或销毁 native window/view handle，也不能假设 target 跨 resize、device/context loss 后仍有效。具体平台类型只允许出现在 platform adapter 实现中。
+
+Runtime 不拥有平台 VSync/event loop。它通过 Runtime 定义、host 实现的
+`FrameInvalidationSink` 发布带 ViewId、reason、revision 和 target generation 的 frame
+invalidation；PlatformFrameScheduler 对接 Web rAF、Android
+Choreographer、Apple DisplayLink、Windows DXGI scheduler 或 Headless deterministic pump，
+合并同一 View 的未决请求，并在 callback 中执行 generation-bound acquire → render → present。
+过期 target、resize、后台和 device loss 必须丢弃并重约；跨线程交接使用 revision、generation、
+cancel 和 visible acknowledgement。详见 [ADR-0017](../adr/0017-platform-frame-scheduling.md)。
 
 ## 10. Cache 接口
 
@@ -429,6 +560,12 @@ L1 cache key 至少覆盖内容 revision、渲染参数、scale bucket、颜色�
 
 演进顺序：POC-03 验证接口与 L1 原型；R3 产品化 L1；L2/L3 只有在性能证据和 ADR 通过后实现。
 
+R3 由 `ResourceBudgetCoordinator` 作为单一 Global Resource Budget owner，至少可观察并归因 decoded image/font
+resources、Canvas Raster/Tile cache、Skia Ganesh GPU resource cache、FrameGraph transient
+allocations 和 platform surface/overlay。Runtime 可以驱动自己的 cache eviction，并通过
+Skia cache budget/telemetry 协调而不是假设完全拥有 Skia 内部 cache；soft/hard limit、
+eviction order、memory-pressure fallback 和计费归属必须在真实设备数据后冻结。
+
 ## 11. Hybrid Surface
 
 POC-05 固定使用 Overlay 做未来能力的 architecture risk proof；ExternalSurface/Video/Embed 不进入 V1 产品实现：
@@ -440,12 +577,31 @@ POC-05 固定使用 Overlay 做未来能力的 architecture risk proof；Externa
 
 Texture import、zero-copy、复杂 mask/effect 与跨平台一致混合留给未来 ADR。
 
+### 11.1 Capability namespaces
+
+能力协商至少区分 `DocumentCapability`（schema/node/resource 要求）、`RendererCapability`
+（Ganesh/backend/feature）、`PlatformCapability`（surface/input/IME/FastInk/font）和
+`ProductCapability`（当前 Shell 是否暴露功能）。每个命名空间分别声明 required/optional、
+version、fallback/reject 和 diagnostic；不得把不同层级无命名空间地塞进一个 capabilities
+bitset。具体编码由 R1 contract 冻结。
+
 ## 12. Resources 与 Persistence
 
 - 节点只保存稳定、不可复用的 ResourceId。ResourceManifest 是版本化 Document semantic state，将 ResourceId 映射到 ResourceRevision、`sha256:<content-hash>`、kind、长度和必要语义元数据；manifest binding 改变必须改变 Document digest。
 - Blob 按 ContentHash 不可变寻址。Resources 负责 resolve、hash verify、decode、版本、placeholder、CPU/GPU upload 协调；资源 missing/corrupt 只能产生诊断和派生状态，不能反向修改 Document。
-- Persistence 作为服务原子保存 Document snapshot、operation log、resource manifest 和 blobs，并负责 migration/crash recovery；Document 本身不发起 IO。下载 URL、本地路径、decode/GPU/cache state 不进入 Document digest。
+- Persistence 作为服务原子保存 `DocumentSnapshot`、committed operation continuation、
+  resource manifest 和 blobs，并负责 migration/crash recovery；Document 本身不发起 IO。
+  Snapshot 具体编码、log 分段/compaction 与 migration 格式由 R2 前实验型 ADR 决定，但
+  必须保持 ADR-0020 的 frontier、原子验证和恢复关系。下载 URL、本地路径、decode/GPU/
+  cache state 不进入 Document digest。
 - Resources 与 Persistence 可以共享 blob/content-addressed storage 接口，但生命周期和模块所有权保持独立。
+
+图片 decoder 必须在进入 canonical Image semantics 前提供一致的 decoded metadata。POC-01
+固定 fixture 不引入 EXIF/ICC 变量；R2/R3 的实验型 ADR 需要决定 EXIF orientation 是否在
+decode 归一化、logical width/height 的含义、ICC 保留/转换/丢弃，以及哪些派生 metadata
+进入 ResourceManifest/Document digest。`ContentHash` 继续按 ADR-0013 表示原始不可变 blob
+bytes；若需要 canonical decoded-content digest，必须使用独立、版本化的派生身份。平台
+codec 不得静默作出互不一致的 Document 语义。
 
 ## 13. Collaboration MVP
 
@@ -460,7 +616,7 @@ Collaboration 只传输 Operation 和独立 Presence：
 
 ## 14. 线程模型
 
-POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序执行 Document write、SceneCompiler 和 Canonical Renderer，以建立确定性参考结果。接口需传递 document/view/viewport/resource/target revision、不可变 snapshot 和任务取消信息，但不提前创建 Runtime worker。
+POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序执行 Document write、SceneCompiler 和 Canonical Renderer，以建立确定性参考结果。接口需传递 document/view/viewport/resource/target revision、不可变 `DocumentReadView` 和任务取消信息，但不提前创建 Runtime worker。POC common foundation 同时提供可注入的 deterministic clock、seed/PRNG 和 task executor；wall clock、平台随机源和线程调度不得进入 digest。
 
 平台原始输入采集、OS compositor、GPU driver，以及 POC-06 FastInkBackend 必需的平台 presentation thread 不属于该 executor。它们与 canonical Runtime 的通信必须通过显式 queue、revision、generation、ack/fence、cancel 和销毁契约；这项豁免不代表产品线程拓扑已经确定。
 
@@ -498,5 +654,8 @@ POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序�
 - BrushDescriptor 是版本化、可回放的语义，不是未标版本的运行时参数。
 - Undo/Redo 通过新 compensating Operations 进入唯一 Document 写入口。
 - Android 高频 pen path 不经过 RN JS。
+- Runtime 只发布 frame invalidation，平台 scheduler 拥有 VSync 和 present 时机；confirmed input 不因 render 频率降低而静默丢失。
+- canonical geometry 的数值边界、ChangeSet 语义变化与失效提示遵循 ADR-0016/0019。
+- DocumentSnapshot 只用于 restore/migration/bootstrap；运行期语义变化、Undo/Redo 和远端编辑继续通过 Operations。
 - POC 参考结果在引入多线程后继续作为等价性 oracle。
 - 所有平台共享 operation、input replay、text behavior 和 golden scene 语料。
