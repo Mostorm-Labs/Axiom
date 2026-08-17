@@ -6,6 +6,7 @@ on:
       - "CMakeLists.txt"
       - "CMakePresets.json"
       - "deps.lock.json"
+      - "skia-sdk.lock.json"
       - "cmake/**"
       - "pocs/shared_engine/**"
       - "tools/**"
@@ -34,6 +35,8 @@ jobs:
       - name: Documentation and repository validation
         run: |
           python3 tools/check_docs.py
+          python3 tools/skia/check_consumer_ci.py
+          python3 -m unittest discover -s tools/skia/tests -v
           git diff --check
       - name: Configure and build
         run: cmake --preset host-debug && cmake --build --preset host-debug --parallel
@@ -59,22 +62,17 @@ jobs:
           cache: npm
           cache-dependency-path: pocs/shared_engine/platform/web/package-lock.json
       - name: Bootstrap locked dependencies
-        run: python3 tools/bootstrap_deps.py --core --skia --sync-skia --web
-      - uses: actions/cache@v4
-        with:
-          path: .deps/skia/out/poc01-web
-          key: skia-web-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
-      - name: Build Skia WebGL2
-        shell: bash
-        run: |
-          source .deps/emsdk/emsdk_env.sh
-          python3 tools/build_skia.py web
+        run: python3 tools/bootstrap_deps.py --core --web
+      - name: Fetch verified Web Skia SDK
+        run: >-
+          python3 tools/skia/fetch.py --target web-wasm-webgl2
+          --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Build WASM runtime
         shell: bash
         run: |
           source .deps/emsdk/emsdk_env.sh
-          cmake --preset web-release
-          cmake --build --preset web-release --parallel
+          python3 tools/ci_time.py --label "Canvas Web configure" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --preset web-release
+          python3 tools/ci_time.py --label "Canvas Web build" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --build --preset web-release --parallel
       - name: Assert single-threaded Web artifact
         run: >-
           python3 pocs/shared_engine/tools/check_web_artifact.py
@@ -85,8 +83,8 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-          npm run build
-          npm run test:e2e
+          python3 ../../../../tools/ci_time.py --label "Canvas Web demo build" --summary-file "$GITHUB_STEP_SUMMARY" -- npm run build
+          python3 ../../../../tools/ci_time.py --label "Canvas Web acceptance" --summary-file "$GITHUB_STEP_SUMMARY" -- npm run test:e2e
       - name: Visual gate
         run: >-
           python3 pocs/shared_engine/tools/visual_compare.py
@@ -114,30 +112,33 @@ jobs:
       - name: Bootstrap locked dependencies and LLVM
         shell: pwsh
         run: |
-          python tools/bootstrap_deps.py --core --skia --sync-skia --font-only --windows-llvm
+          python tools/bootstrap_deps.py --core --windows-llvm
           $installer = Resolve-Path .deps/downloads/LLVM-22.1.8-win64.exe
           $installDir = Join-Path $PWD ".deps/llvm"
           Start-Process $installer -ArgumentList "/S", "/D=$installDir" -Wait
           $installDir | Out-File -FilePath $env:GITHUB_PATH -Append
           (Join-Path $installDir "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
-      - uses: actions/cache@v4
-        with:
-          path: .deps/skia/out/poc01-windows
-          key: skia-windows-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
-      - name: Build Skia D3D12
+      - name: Fetch verified Windows Skia SDK
         shell: pwsh
-        run: python tools/build_skia.py windows --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
+        run: python tools/skia/fetch.py --target windows-x64-d3d12 --summary-file "$env:GITHUB_STEP_SUMMARY"
       - name: Build Windows runtime and demo
         shell: pwsh
         run: |
-          cmake --preset windows-release -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe"
-          cmake --build --preset windows-release --parallel
+          python tools/ci_time.py --label "Canvas Windows configure" --summary-file "$env:GITHUB_STEP_SUMMARY" -- cmake --preset windows-release -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe"
+          python tools/ci_time.py --label "Canvas Windows build" --summary-file "$env:GITHUB_STEP_SUMMARY" -- cmake --build --preset windows-release --parallel
       - name: Unit and WARP acceptance
         shell: pwsh
         run: |
-          ctest --preset windows-release --output-on-failure
+          python tools/ci_time.py --label "Canvas Windows tests" --summary-file "$env:GITHUB_STEP_SUMMARY" -- ctest --preset windows-release --output-on-failure
           New-Item -ItemType Directory -Force out/results | Out-Null
-          & out/windows-release/pocs/shared_engine/platform/windows/canvas_poc01_windows.exe --offscreen --lifecycle=100 --smoke=60 --output=out/results/windows-actual.rgba | Tee-Object -FilePath out/results/windows-result.json
+          $started = Get-Date
+          try {
+            & out/windows-release/pocs/shared_engine/platform/windows/canvas_poc01_windows.exe --offscreen --lifecycle=100 --smoke=60 --output=out/results/windows-actual.rgba | Tee-Object -FilePath out/results/windows-result.json
+            if ($LASTEXITCODE -ne 0) { throw "Windows acceptance failed with exit code $LASTEXITCODE" }
+          } finally {
+            $elapsed = ((Get-Date) - $started).TotalSeconds
+            "- Canvas Windows acceptance: $([math]::Round($elapsed, 3)) s" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
       - name: Clang-cl ASan core check
         shell: pwsh
         run: |
@@ -165,17 +166,16 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Bootstrap locked dependencies
-        run: python3 tools/bootstrap_deps.py --core --skia --sync-skia --font-only
-      - uses: actions/cache@v4
-        with:
-          path: .deps/skia/out/poc01-macos
-          key: skia-macos-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
-      - name: Build Skia Metal and runtime
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Fetch verified macOS Skia SDK
+        run: >-
+          python3 tools/skia/fetch.py --target macos-arm64-metal
+          --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Build macOS Metal runtime
         run: |
-          python3 tools/build_skia.py macos
-          cmake --preset macos-release
-          cmake --build --preset macos-release --parallel
-          ctest --preset macos-release --output-on-failure
+          python3 tools/ci_time.py --label "Canvas macOS configure" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --preset macos-release
+          python3 tools/ci_time.py --label "Canvas macOS build" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --build --preset macos-release --parallel
+          python3 tools/ci_time.py --label "Canvas macOS tests" --summary-file "$GITHUB_STEP_SUMMARY" -- ctest --preset macos-release --output-on-failure
       - name: Reproduce reviewed raster golden
         run: |
           out/macos-release/pocs/shared_engine/platform/canvas_poc01_golden --update-golden --output=out/reference.rgba
@@ -183,7 +183,7 @@ jobs:
       - name: Metal lifecycle and result
         run: |
           mkdir -p out/results
-          (cd out/results && ../macos-release/pocs/shared_engine/platform/apple/canvas_poc01_macos_runner --lifecycle=100 --smoke=60 > macos-result.json)
+          (cd out/results && python3 ../../tools/ci_time.py --label "Canvas macOS acceptance" --summary-file "$GITHUB_STEP_SUMMARY" -- ../macos-release/pocs/shared_engine/platform/apple/canvas_poc01_macos_runner --lifecycle=100 --smoke=60 > macos-result.json)
       - name: Visual gate
         run: >-
           python3 pocs/shared_engine/tools/visual_compare.py
@@ -205,27 +205,23 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Bootstrap locked dependencies
-        run: python3 tools/bootstrap_deps.py --core --skia --sync-skia --font-only
-      - uses: actions/cache@v4
-        with:
-          path: |
-            .deps/skia/out/poc01-ios-simulator
-            .deps/skia/out/poc01-ios
-          key: skia-apple-mobile-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Fetch verified Apple mobile Skia SDKs
+        run: |
+          python3 tools/skia/fetch.py --target ios-arm64-metal --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --target ios-simulator-arm64-metal --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Clean-build iOS/iPadOS device target
         run: |
-          python3 tools/build_skia.py ios
-          cmake --preset ios-device-release
-          cmake --build --preset ios-device-release --config Release --parallel
-      - name: Build universal iOS/iPadOS simulator runner
+          python3 tools/ci_time.py --label "Canvas iOS device configure" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --preset ios-device-release
+          python3 tools/ci_time.py --label "Canvas iOS device build" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --build --preset ios-device-release --config Release --parallel
+      - name: Build iOS/iPadOS simulator runner
         run: |
-          python3 tools/build_skia.py ios-simulator
-          cmake --preset ios-simulator-release
-          cmake --build --preset ios-simulator-release --config Release --parallel
+          python3 tools/ci_time.py --label "Canvas iOS simulator configure" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --preset ios-simulator-release
+          python3 tools/ci_time.py --label "Canvas iOS simulator build" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --build --preset ios-simulator-release --config Release --parallel
       - name: Run on iPhone and iPad simulators
         run: |
           app=$(find out/ios-simulator-release -name canvas_poc01_ios_runner.app -type d | head -1)
-          python3 pocs/shared_engine/tools/run_apple_simulators.py --app "$app" --output out/results
+          python3 tools/ci_time.py --label "Canvas Apple mobile acceptance" --summary-file "$GITHUB_STEP_SUMMARY" -- python3 pocs/shared_engine/tools/run_apple_simulators.py --app "$app" --output out/results
       - name: Visual gates
         run: |
           python3 pocs/shared_engine/tools/visual_compare.py --expected pocs/shared_engine/goldens/reference.rgba --actual out/results/ios-actual.rgba --artifacts out/results/ios-visual --backend ganesh-metal-ios-simulator --skia-commit "$SKIA_COMMIT"
@@ -251,21 +247,23 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.30.5" "ndk;27.2.12479018" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
       - name: Bootstrap locked dependencies
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Fetch verified Android Skia SDKs
         run: |
-          python3 tools/bootstrap_deps.py --core --skia --sync-skia --font-only
-      - uses: actions/cache@v4
-        with:
-          path: .deps/skia/out/poc01-android-*
-          key: skia-android-arm64-x64-${{ hashFiles('deps.lock.json', 'tools/build_skia.py') }}
+          python3 tools/skia/fetch.py --target android-arm64-v8a-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --target android-x86_64-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Clean-build Android arm64 target
-        run: |
-          python3 tools/build_skia.py android --cpu arm64 --ndk "$ANDROID_HOME/ndk/27.2.12479018"
-          (cd pocs/shared_engine/platform/android && gradle :app:assembleDebug -PcanvasPocAbi=arm64-v8a --no-daemon)
-      - name: Build Skia Android x64
-        run: python3 tools/build_skia.py android --cpu x64 --ndk "$ANDROID_HOME/ndk/27.2.12479018"
+        working-directory: pocs/shared_engine/platform/android
+        run: >-
+          python3 ../../../../tools/ci_time.py --label "Canvas Android arm64 build"
+          --summary-file "$GITHUB_STEP_SUMMARY" -- gradle :app:assembleDebug
+          -PcanvasPocAbi=arm64-v8a --no-daemon
       - name: Build Android Native CanvasView demo
         working-directory: pocs/shared_engine/platform/android
-        run: gradle :app:assembleDebug -PcanvasPocAbi=x86_64 --no-daemon
+        run: >-
+          python3 ../../../../tools/ci_time.py --label "Canvas Android x86_64 build"
+          --summary-file "$GITHUB_STEP_SUMMARY" -- gradle :app:assembleDebug
+          -PcanvasPocAbi=x86_64 --no-daemon
       - name: Enable Android emulator hardware acceleration
         run: sudo chmod 0666 /dev/kvm
       - name: Emulator acceptance
@@ -278,6 +276,7 @@ jobs:
           disable-linux-hw-accel: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
+            acceptance_started=$(date +%s)
             adb install -r pocs/shared_engine/platform/android/app/build/outputs/apk/debug/app-debug.apk
             adb shell wm size 800x600
             adb logcat -c
@@ -286,6 +285,8 @@ jobs:
             mkdir -p out/results
             adb shell run-as dev.mostorm.canvas.poc01 cat files/android-actual.rgba > out/results/android-actual.rgba
             adb logcat -d -s CanvasPOC01:I | sed -n 's/.*CANVAS_POC01_RESULT //p' | tail -1 > out/results/android-result.json
+            acceptance_finished=$(date +%s)
+            echo "- Canvas Android acceptance: $((acceptance_finished - acceptance_started)) s" >> "$GITHUB_STEP_SUMMARY"
       - name: Visual gate
         run: >-
           python3 pocs/shared_engine/tools/visual_compare.py

@@ -23,11 +23,10 @@ if(TARGET canvas_poc01_skia AND NOT EMSCRIPTEN AND NOT ANDROID AND
   target_include_directories(canvas_poc01_skia_tests PRIVATE
     ${POC01_ROOT}/src
     ${POC01_ROOT}/platform/skia
-    ${CANVAS_POC01_SKIA_ROOT}
   )
   target_compile_definitions(canvas_poc01_skia_tests PRIVATE
     CANVAS_POC01_FIXTURE_DIR="${POC01_ROOT}/fixtures"
-    CANVAS_POC01_FONT_PATH="${CANVAS_POC01_SKIA_ROOT}/resources/fonts/Roboto-Regular.ttf"
+    CANVAS_POC01_FONT_PATH="${CANVAS_POC01_SKIA_FONT_PATH}"
   )
   target_link_libraries(canvas_poc01_skia_tests PRIVATE
     canvas_poc01_skia GTest::gtest_main

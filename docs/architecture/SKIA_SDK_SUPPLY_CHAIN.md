@@ -76,5 +76,34 @@ index 生成 provenance，然后创建
 `skia-sdk-poc01-minimal-v1-<set_id 前 16 位>` prerelease。若同名 Release 已存在，
 只有 target commit、资产集合和每个字节都一致才成功；任何差异都失败且不会覆盖资产。
 
-Consumer lock 与下载器在后续独立 PR 落地。被 lock 引用的 Release 永不删除，回滚只
-恢复旧 lock。
+首个不可变 prerelease 已发布为
+`skia-sdk-poc01-minimal-v1-debcbb7b9376806c`，完整 set ID 为
+`debcbb7b9376806c94ffb9af5950ebd8a6de0547833f9b57df96a20531ca7817`。
+[`skia-sdk.lock.json`](../../skia-sdk.lock.json) 固定 Release repository/tag、profile、
+Skia commit，以及七个资产的 SDK ID、大小、SHA-256 和 toolchain identity。被任何
+lock 引用的 Release 永不删除；回滚只恢复旧 lock。
+
+## Consumer 下载与 CMake 边界
+
+[`fetch.py`](../../tools/skia/fetch.py) 默认从 lock 指定的精确 GitHub Release tag
+下载。设置 `CANVAS_SKIA_SDK_BASE_URL` 时，镜像必须暴露
+`<base>/<tag>/<asset>`；无论来源，下载器都执行相同的大小、SHA-256、ZIP 安全、
+manifest、文件级 hash、target、toolchain、profile 与规范化 GN identity 校验。
+验证在临时目录完成，成功后才原子替换 `.deps/skia-sdk/<target>`；已有安装在复用前
+也会重新验证。
+
+普通构建通过 `CANVAS_SKIA_SDK_ROOT` 和
+`find_package(CanvasSkia CONFIG REQUIRED)` 只链接 `CanvasSkia::Skia`。CMake 同时
+比对安装 manifest 与 committed lock；缺包或不匹配直接失败并给出 `fetch.py` 命令，
+没有源码回退。普通 POC-01 workflow 的静态检查拒绝 Skia source bootstrap、sync、
+`skia/out` cache 和 producer builder。七个 SDK 的 ID/下载字节/耗时与 Canvas 构建、
+测试耗时写入 job summary；当前只收集数据，不设总耗时门禁。
+
+更新 lock 只能显式运行：
+
+```sh
+python3 tools/skia/update_lock.py --tag <immutable-prerelease-tag>
+```
+
+该命令会核对 prerelease、target commit、index、`SHA256SUMS`、GitHub 资产 digest 和
+精确七包资产集合后才改写 lock。

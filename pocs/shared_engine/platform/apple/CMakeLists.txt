@@ -41,7 +41,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   foreach(resource
       ${POC01_ROOT}/fixtures/scene.ndjson
       ${POC01_ROOT}/fixtures/checker.png
-      ${CANVAS_POC01_SKIA_ROOT}/resources/fonts/Roboto-Regular.ttf)
+      ${CANVAS_POC01_SKIA_FONT_PATH})
     target_sources(canvas_poc01_ios_runner PRIVATE ${resource})
     set_source_files_properties(${resource} PROPERTIES
       MACOSX_PACKAGE_LOCATION Resources
@@ -58,6 +58,6 @@ else()
   )
   target_compile_definitions(canvas_poc01_macos_runner PRIVATE
     CANVAS_POC01_FIXTURE_DIR="${POC01_ROOT}/fixtures"
-    CANVAS_POC01_FONT_PATH="${CANVAS_POC01_SKIA_ROOT}/resources/fonts/Roboto-Regular.ttf"
+    CANVAS_POC01_FONT_PATH="${CANVAS_POC01_SKIA_FONT_PATH}"
   )
 endif()

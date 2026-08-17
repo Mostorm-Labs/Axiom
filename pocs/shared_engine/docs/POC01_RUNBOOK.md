@@ -25,39 +25,36 @@ pthread, and a production ABI.
 
 ## 2. Locked environment
 
-[`deps.lock.json`](../../../deps.lock.json) is the source of truth for Skia,
-Emscripten/LLVM, Windows LLVM, Node, Web packages, GoogleTest, JSON, xxHash,
-Android NDK, and the Roboto fixture. Dependencies are materialized only below
-the ignored `.deps/` directory.
+[`deps.lock.json`](../../../deps.lock.json) locks source/tool dependencies, and
+[`skia-sdk.lock.json`](../../../skia-sdk.lock.json) locks the seven immutable
+prebuilt Skia SDK assets. Dependencies are materialized only below the ignored
+`.deps/` directory. Ordinary Canvas builds never check out Skia source or run
+GN/Ninja for Skia.
 
 ```sh
-python3 tools/bootstrap_deps.py --core --font-only
-python3 tools/bootstrap_deps.py --skia --sync-skia
+python3 tools/bootstrap_deps.py --core
+python3 tools/skia/fetch.py --target macos-arm64-metal
 ```
 
-`--github-api-archives`, `--raw-core-fallback`, and `--skia-archive` exist only
-for development hosts whose HTTPS Git transport is blocked. Immutable commit
-markers are still verified. CI uses normal Git checkouts.
+Use the matching target ID for Web, Windows, iOS/iPadOS device or simulator,
+and either Android ABI. `CANVAS_SKIA_SDK_BASE_URL` may select a mirror with the
+same `<tag>/<asset>` layout; all lock and manifest checks remain mandatory.
+CMake consumes only `CanvasSkia::Skia` from `CANVAS_SKIA_SDK_ROOT`, fails with
+the exact fetch command when absent, and has no automatic source fallback.
 
-Skia is built separately with official GN/Ninja:
-
-```sh
-python3 tools/build_skia.py macos
-python3 tools/build_skia.py ios
-python3 tools/build_skia.py ios-simulator
-python3 tools/build_skia.py web
-python3 tools/build_skia.py windows --cc clang-cl --cxx clang-cl
-python3 tools/build_skia.py android --cpu arm64 --ndk "$ANDROID_NDK_ROOT"
-python3 tools/build_skia.py android --cpu x64 --ndk "$ANDROID_NDK_ROOT"
-```
-
-The source-build commands above remain the active consumer path until the
-separate SDK-lock cutover lands. The producer path is defined by
-[`poc01-minimal-v1`](../../../tools/skia/profiles/poc01-minimal-v1.json) and
+Skia source and GN/Ninja are restricted to the Producer workflow documented in
 [`SKIA_SDK_SUPPLY_CHAIN.md`](../../../docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md).
-It builds seven immutable SDK targets on PRs without publish permission. A
-manual run from `main` is the only publication path. Merging this producer does
-not change POC-01 from `Validating` or waive either physical-device report.
+Producer maintenance uses the seven profile targets; these commands are not a
+Canvas build prerequisite. A manual Producer run from `main` is the only
+publication path, and `update_lock.py` is the only supported lock update path:
+
+```sh
+python3 tools/skia/update_lock.py --tag <immutable-prerelease-tag>
+```
+
+The current lock points to
+`skia-sdk-poc01-minimal-v1-debcbb7b9376806c`. This Consumer cutover does not
+change POC-01 from `Validating` or waive either physical-device report.
 
 ## 3. Fixture and semantic acceptance
 
@@ -109,8 +106,8 @@ macOS product target.
 
 ## 5. Golden ownership and visual gate
 
-Only the Skia raster tool may create the baseline, and the update flag is
-mandatory:
+Only the Skia raster tool built against the locked SDK may create the baseline,
+and the update flag is mandatory:
 
 ```sh
 out/macos-release/pocs/shared_engine/platform/canvas_poc01_golden \
@@ -137,7 +134,7 @@ Skia revision.
 
 ### Web
 
-Build Skia/WASM with the `web-release` preset, copy assets with
+Fetch `web-wasm-webgl2`, build WASM with the `web-release` preset, copy assets with
 `prepare_web_assets.py`, then run the Playwright Chromium/SwiftShader suite.
 The generated JS/WASM is scanned for pthread, `SharedArrayBuffer`, and
 COOP/COEP requirements. The browser suite recreates Runtime, Document, and

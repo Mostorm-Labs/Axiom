@@ -2,6 +2,7 @@
 """Copy reviewed POC assets and CMake-produced WASM into Vite public/."""
 
 from pathlib import Path
+import os
 import shutil
 
 
@@ -20,7 +21,11 @@ def copy(source: Path, destination: Path) -> None:
 def main() -> int:
     copy(ROOT / "fixtures" / "checker.png", WEB / "fixtures" / "checker.png")
     copy(ROOT / "fixtures" / "scene.ndjson", WEB / "fixtures" / "scene.ndjson")
-    copy(REPO / ".deps" / "skia" / "resources" / "fonts" / "Roboto-Regular.ttf",
+    sdk_root = Path(os.environ.get(
+        "CANVAS_SKIA_SDK_ROOT",
+        REPO / ".deps/skia-sdk/web-wasm-webgl2",
+    ))
+    copy(sdk_root / "resources/fonts/Roboto-Regular.ttf",
          WEB / "fixtures" / "Roboto-Regular.ttf")
     copy(REPO / "out" / "web-release" / "pocs" / "shared_engine" / "platform" / "web" / "canvas_poc01_web.js",
          WEB / "wasm" / "canvas_poc01_web.js")
