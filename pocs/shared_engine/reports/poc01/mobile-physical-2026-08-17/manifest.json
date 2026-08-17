@@ -163,8 +163,19 @@
     "member_count": 26,
     "sha256": "62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7",
     "internal_sha256s_sha256": "0fbd18514c88344b8f31abcc27811cdc695329ef3c2266090312fbf8273e379a",
-    "retention": "immutable GitHub prerelease asset",
-    "publication": "pending"
+    "retention": "content-addressed GitHub prerelease; referenced asset must not be overwritten or deleted",
+    "publication": {
+      "status": "published",
+      "repository": "Mostorm-Labs/canvas",
+      "release_tag": "poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd",
+      "release_url": "https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd",
+      "target_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+      "prerelease": true,
+      "github_release_immutable": false,
+      "published_at": "2026-08-17T15:07:13Z",
+      "asset_url": "https://github.com/Mostorm-Labs/canvas/releases/download/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd/poc01-mobile-physical-2026-08-17.zip",
+      "github_asset_digest": "sha256:62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7"
+    }
   },
   "remaining_gate": "same-machine Windows D3D12 and Chrome Web physical-GPU benchmark bundle"
 }

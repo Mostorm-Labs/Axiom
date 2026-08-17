@@ -183,10 +183,15 @@ The Git report intentionally excludes large RGBA files, generated PNGs,
 diagnostic logs, signed Apple bundles, APKs, and device-identity records. The
 privacy-filtered evidence asset is named
 `poc01-mobile-physical-2026-08-17.zip`; its exact SHA-256 and contents are
-recorded in [`manifest.json`](manifest.json). The asset must be attached to an
-immutable GitHub prerelease and the manifest publication fields updated before
-this report branch is deleted. Actions artifacts alone are not sufficient
-long-term retention.
+recorded in [`manifest.json`](manifest.json). It is archived in the
+content-addressed GitHub prerelease
+[`poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd`](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd),
+which targets the tested source commit. The Release asset digest reported by
+GitHub exactly matches the manifest SHA-256. Actions artifacts alone are not
+sufficient long-term retention. GitHub currently reports the Release itself as
+not server-locked; repository policy therefore forbids overwriting or deleting
+this referenced tag or asset, and any correction must use a new
+content-addressed tag.
 
 This report closes only the three mobile physical-device gates. It does not
 close POC-01 or replace the pending same-machine Windows D3D12 and Chrome Web

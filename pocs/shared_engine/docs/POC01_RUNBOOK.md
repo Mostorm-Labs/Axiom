@@ -185,8 +185,9 @@ The reviewed iPhone, iPad, and Android physical-device report is recorded in
 It binds the structured results to the tested source commit, immutable Skia SDK
 IDs, fixtures, golden, environment, reproduction commands, and an external
 privacy-filtered evidence bundle. The structured report is committed; the raw
-bundle must still be published to an immutable prerelease and its manifest
-updated with the publication identity.
+bundle is published as the content-addressed retained prerelease
+[`poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd`](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd),
+and its manifest records the release, asset, target commit, and GitHub digest.
 It closes no non-mobile gate and does not change POC-01 from `Validating`.
 
 ## 7. Manual Windows benchmark bundle
@@ -207,8 +208,9 @@ this hardware performance gate.
 - [ ] Web output contains no pthread/SharedArrayBuffer dependency.
 - [x] iPhone, iPadOS, and Android physical-device report is reviewed and
       committed with raw artifact hashes and reproduction commands.
-- [ ] The privacy-filtered mobile raw evidence bundle is published as the
-      immutable Release asset bound by the report manifest.
+- [x] The privacy-filtered mobile raw evidence bundle is published as the
+      content-addressed Release asset bound by the report manifest and covered
+      by the repository's no-overwrite/no-delete retention policy.
 - [ ] Windows and Web physical benchmark bundle is archived.
 - [ ] Runtime sources contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit,
       Android, EGL, or JNI types.
