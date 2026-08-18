@@ -74,11 +74,19 @@ def main() -> int:
             cwd=ROOT, check=True,
         )
         if platform == "windows":
-            subprocess.run([
+            report = build / "windows-producer-smoke.json"
+            completed = subprocess.run([
                 str(build / "canvas_poc04_canonical_behavior_report.exe"),
                 "--platform=windows-producer-smoke",
-                f"--output={build / 'windows-producer-smoke.json'}",
-            ], cwd=build, check=True)
+                f"--output={report}",
+            ], cwd=build, check=False)
+            if report.is_file():
+                print(report.read_text(encoding="utf-8"), end="")
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    "Windows canonical behavior recorder rejected the source-free SDK "
+                    f"with exit code {completed.returncode}"
+                )
         elif platform == "web":
             javascript = build / "platform/web/canvas_poc04_web.js"
             wasm = build / "platform/web/canvas_poc04_web.wasm"
