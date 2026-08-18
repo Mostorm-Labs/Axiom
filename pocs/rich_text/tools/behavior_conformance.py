@@ -41,10 +41,14 @@ def main() -> int:
         if set(behavior) != REQUIRED_BEHAVIOR or not all(behavior.values()):
             raise RuntimeError(f"{value['platform']}: behavior matrix failed")
         layout = value["layout"]
-        if set(layout) != {"height", "lines", "clusters", "selection"} or not all(
+        if set(layout) != {
+            "height", "lines", "clusters", "selection", "diagnostics",
+        } or not all(
             layout[field] for field in ("lines", "clusters", "selection")
         ):
             raise RuntimeError(f"{value['platform']}: canonical layout is incomplete")
+        if layout["diagnostics"]:
+            raise RuntimeError(f"{value['platform']}: canonical layout has diagnostics")
         if lifecycle.get("cycles") != 100 or lifecycle.get("failures") != 0:
             raise RuntimeError(f"{value['platform']}: lifecycle gate failed")
         if performance.get("input_caret_p95_ms", 1e9) > 16.7:

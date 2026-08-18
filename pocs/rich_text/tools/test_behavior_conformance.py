@@ -27,6 +27,7 @@ class BehaviorConformanceTest(unittest.TestCase):
                 "lines": [{"start": [0, 0], "end": [0, 1]}],
                 "clusters": [{"start": [0, 0], "end": [0, 1]}],
                 "selection": [[0, 0, 1, 1]],
+                "diagnostics": [],
             },
             "lifecycle": {"cycles": 100, "failures": 0},
             "performance": {
@@ -62,6 +63,12 @@ class BehaviorConformanceTest(unittest.TestCase):
         records = [self.record("web"), self.record("windows"), self.record("android")]
         for record in records:
             record["layout"]["clusters"] = []
+        result = self.run_records(records)
+        self.assertNotEqual(result.returncode, 0)
+
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        for record in records:
+            record["layout"]["diagnostics"] = ["unresolved-glyphs"]
         result = self.run_records(records)
         self.assertNotEqual(result.returncode, 0)
 

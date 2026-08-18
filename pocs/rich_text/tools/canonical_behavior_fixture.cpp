@@ -68,6 +68,11 @@ std::string GeometryJson(const TextLayoutResult& layout) {
     output << '[' << rect.x << ',' << rect.y << ',' << rect.width << ','
            << rect.height << ']';
   }
+  output << "],\"diagnostics\":[";
+  for (size_t index = 0; index < layout.diagnostics.size(); ++index) {
+    if (index) output << ',';
+    output << '\"' << layout.diagnostics[index] << '\"';
+  }
   output << "]}";
   return output.str();
 }
@@ -153,8 +158,17 @@ CanonicalBehaviorArtifact BuildCanonicalBehaviorArtifact(
   const BehaviorResults behavior = ExerciseBehavior(document.get(), &session);
   SkParagraphTextLayout layout(std::move(latin_font_path),
                                std::move(cjk_font_path));
+
+  // Skia's pinned CJK fixture is intentionally a one-glyph subset containing
+  // U+662F. Keep the full Chinese/pinyin edit corpus above, but constrain the
+  // cross-platform shaping oracle to glyphs that the locked font actually
+  // contains so unresolved-glyph diagnostics remain meaningful.
+  auto layout_document = std::make_shared<TextDocument>();
+  TextEditSession layout_session(layout_document);
+  layout_session.Focus();
+  layout_session.InsertText(u"English\n是 mixed runs");
   const TextLayoutResult fixture =
-      layout.Layout(*document, 320.0F, {{0, 0}, {0, 7}});
+      layout.Layout(*layout_document, 320.0F, {{0, 0}, {0, 7}});
   const uint32_t lifecycle_failures = ExerciseLifecycle();
 
   auto performance_document = std::make_shared<TextDocument>();

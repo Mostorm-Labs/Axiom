@@ -72,8 +72,11 @@ deterministic diagnostic and resolver generation so layout cache invalidation
 cannot be missed.
 
 The fixed POC corpus uses the pinned Roboto and Skia's pinned Noto Sans CJK
-subset. These are test oracles, not a claim that the V1 product font set is
-complete. SkParagraph + SkShaper + bundled HarfBuzz/ICU supplies line,
+subset. That CJK test font contains only U+662F (`是`), so canonical geometry
+uses that glyph while the edit/IME corpus still exercises `中文拼音`. These are
+test oracles, not a claim that the V1 product font set is complete. Layout
+artifacts include an explicit diagnostics array and fail on any unresolved
+glyph. SkParagraph + SkShaper + bundled HarfBuzz/ICU supplies line,
 grapheme/cluster, caret, and selection geometry. The lightweight host probe is
 explicitly non-canonical.
 

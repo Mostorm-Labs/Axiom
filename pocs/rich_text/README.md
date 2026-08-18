@@ -24,6 +24,8 @@ contract shared with POC-02 or POC-03.
 - A committed `TextStyle` carries an ordered content-addressed fallback chain.
   The POC fixture binds Roboto to the pinned Noto Sans CJK subset so the
   fallback decision is part of snapshot, replay, and digest semantics.
+  Skia's subset contains only `是`; canonical geometry uses that glyph, while
+  the independent edit/IME behavior corpus continues to use `中文拼音`.
 - `SkParagraphTextLayout` is the canonical layout backend. The
   `DeterministicTextLayout` host probe only exercises edit geometry while the
   RichText SDK is being produced and is never a shaping oracle.
