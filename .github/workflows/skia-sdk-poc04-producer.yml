@@ -5,7 +5,8 @@ on:
     paths:
       - "deps.lock.json"
       - "tools/skia/**"
-      - "pocs/rich_text/platform/skia/**"
+      - "pocs/rich_text/**"
+      - "!pocs/rich_text/skia-sdk.lock.json"
       - ".github/workflows/skia-sdk-poc04-producer.yml"
   workflow_dispatch:
 
