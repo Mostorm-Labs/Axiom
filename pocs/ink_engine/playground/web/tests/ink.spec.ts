@@ -100,9 +100,6 @@ test("multi-pointer interleaving preserves the owner and accepts the next pen st
       emit("pointermove", 21, "touch", 140, 160, 0.5, 1);
       emit("pointerup", 22, "touch", 210, 140, 0, 0);
       emit("pointerup", 21, "touch", 140, 160, 0, 0);
-      // The previous Canonical stroke is waiting for its rAF acknowledgement.
-      // This competing pointer must stay outside both the JS owner and C++ Runtime.
-      emit("pointerdown", 23, "pen", 240, 120, 0.7, 1);
     });
     await expect(page.getByTestId("latency")).toContainText("p95");
     const firstDigest = await page.getByTestId("document-digest").textContent();
@@ -130,4 +127,70 @@ test("multi-pointer interleaving preserves the owner and accepts the next pen st
       .not.toBe(firstDigest);
     await expect(page.getByTestId("status"))
       .toContainText("Canonical AddStroke committed");
+  });
+
+test("rapid short strokes inside chained handoff windows are queued, not dropped",
+  async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("status")).toContainText("coalesced input stays in C++");
+    const canvas = page.locator("#ink-canvas");
+    await canvas.evaluate((element) => {
+      element.setPointerCapture = () => {};
+      const stroke = (pointerId: number, x: number) => {
+        element.dispatchEvent(new PointerEvent("pointerdown", {
+          bubbles: true,
+          pointerId,
+          pointerType: "pen",
+          clientX: x,
+          clientY: 180,
+          pressure: 0.5,
+          buttons: 1,
+          isPrimary: true,
+        }));
+        element.dispatchEvent(new PointerEvent("pointerup", {
+          bubbles: true,
+          pointerId,
+          pointerType: "pen",
+          clientX: x + 40,
+          clientY: 210,
+          pressure: 0,
+          buttons: 0,
+          isPrimary: true,
+        }));
+      };
+      // All six strokes complete in one JS task, so five full down/up pairs
+      // arrive before the first stroke's requestAnimationFrame visible ack.
+      for (let index = 0; index < 6; ++index) {
+        stroke(31 + index, 100 + index * 80);
+      }
+    });
+    await expect.poll(async () => page.evaluate(
+      () => window.__canvasPoc02Trace?.length ?? 0)).toBe(6);
+    const sixthDigest = await page.getByTestId("document-digest").textContent();
+    expect(sixthDigest).toMatch(/^[0-9a-f]{32}$/);
+
+    await canvas.evaluate((element) => {
+      element.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerId: 37,
+        pointerType: "pen",
+        clientX: 360,
+        clientY: 240,
+        pressure: 0.6,
+        buttons: 1,
+        isPrimary: true,
+      }));
+      element.dispatchEvent(new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 37,
+        pointerType: "pen",
+        clientX: 410,
+        clientY: 270,
+        pressure: 0,
+        buttons: 0,
+        isPrimary: true,
+      }));
+    });
+    await expect.poll(async () => page.getByTestId("document-digest").textContent())
+      .not.toBe(sixthDigest);
   });

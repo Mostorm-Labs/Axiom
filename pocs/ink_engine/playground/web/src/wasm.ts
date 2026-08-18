@@ -48,6 +48,13 @@ export interface LatencySample {
   frameCount: number;
 }
 
+export interface PointerSampleInput {
+  clientX: number;
+  clientY: number;
+  pressure: number;
+  timeStamp: number;
+}
+
 export async function createModule(): Promise<InkModule> {
   const factory = window.__canvasPoc02Factory ??
     await window.__canvasPoc02FactoryReady;
@@ -84,7 +91,7 @@ export function withBytes<T>(module: InkModule, value: Uint8Array,
 }
 
 export function withSamples<T>(module: InkModule, canvas: HTMLCanvasElement,
-  samples: PointerEvent[], baseTimestamp: number,
+  samples: readonly PointerSampleInput[], baseTimestamp: number,
   use: (packed: number, timestamps: number, count: number) => T): T {
   const packedPointer = module._malloc(samples.length * 3 * 4);
   const timestampsPointer = module._malloc(samples.length * 4);

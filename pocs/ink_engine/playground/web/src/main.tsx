@@ -1,12 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  check, createModule, InkModule, LatencySample, readDigest, withBytes,
-  withSamples, withUtf8,
+  check, createModule, InkModule, LatencySample, PointerSampleInput, readDigest,
+  withBytes, withSamples, withUtf8,
 } from "./wasm";
 import "./styles.css";
 
 type Brush = "vector" | "dab";
+const MAX_QUEUED_STROKES = 8;
+
+interface QueuedPointerBatch {
+  samples: PointerSampleInput[];
+  final: boolean;
+}
+
+interface QueuedStroke {
+  pointerId: number;
+  canvas: HTMLCanvasElement;
+  strokeId: number;
+  brush: Brush;
+  timestampBase: number;
+  firstSamples: PointerSampleInput[];
+  batches: QueuedPointerBatch[];
+}
 
 function percentile(values: number[], fraction: number): number {
   if (values.length === 0) return 0;
@@ -47,6 +63,7 @@ function App() {
   const [golden, setGolden] = useState("Not compared");
   const activePointerId = useRef<number | null>(null);
   const pendingVisible = useRef(false);
+  const queuedStrokes = useRef<QueuedStroke[]>([]);
   const nextStrokeId = useRef(3000);
   const activeStrokeId = useRef(0);
   const lastSampleTimestamp = useRef(0);
@@ -99,69 +116,148 @@ function App() {
     requestAnimationFrame(() => recordVisible(strokeId, timestamp));
   }
 
-  function pointerSamples(event: React.PointerEvent<HTMLCanvasElement>): PointerEvent[] {
+  function pointerSamples(
+    event: React.PointerEvent<HTMLCanvasElement>,
+  ): PointerSampleInput[] {
     const native = event.nativeEvent;
     const coalesced = native.getCoalescedEvents?.() ?? [];
-    return coalesced.length > 0 ? coalesced : [native];
+    return (coalesced.length > 0 ? coalesced : [native]).map((sample) => ({
+      clientX: sample.clientX,
+      clientY: sample.clientY,
+      pressure: sample.pressure,
+      timeStamp: sample.timeStamp,
+    }));
+  }
+
+  function beginStroke(wasm: InkModule, stroke: QueuedStroke) {
+    withSamples(wasm, stroke.canvas, stroke.firstSamples, stroke.timestampBase,
+      (packed, timestamps, count) =>
+      check(wasm._canvas_poc02_begin(stroke.strokeId,
+        stroke.brush === "dab" ? 2 : 1, stroke.brush === "dab" ? 16 : 8,
+        packed, timestamps, count, 1), "begin stroke"));
+    activeStrokeId.current = stroke.strokeId;
+    strokeTimestampBase.current = stroke.timestampBase;
+    lastSampleTimestamp.current = stroke.firstSamples.at(-1)?.timeStamp ??
+      performance.now();
+  }
+
+  function pushStrokeBatch(wasm: InkModule, canvas: HTMLCanvasElement,
+    batch: QueuedPointerBatch) {
+    lastSampleTimestamp.current = batch.samples.at(-1)?.timeStamp ??
+      performance.now();
+    withSamples(wasm, canvas, batch.samples, strokeTimestampBase.current,
+      (packed, timestamps, count) =>
+      check(wasm._canvas_poc02_push_batch(packed, timestamps, count,
+        batch.final ? 1 : 0, 1),
+      batch.final ? "push final batch" : "push historical batch"));
+  }
+
+  function scheduleVisibleAcknowledgement(wasm: InkModule, strokeId: number,
+    sampleTimestamp: number) {
+    requestAnimationFrame(() => {
+      check(wasm._canvas_poc02_visible(), "canonical visible acknowledgement");
+      pendingVisible.current = false;
+      recordVisible(strokeId, sampleTimestamp);
+      refreshMetrics(wasm);
+      flushQueuedStroke(wasm);
+    });
+  }
+
+  function commitStroke(wasm: InkModule) {
+    check(wasm._canvas_poc02_end(), "commit AddStroke");
+    check(wasm._canvas_poc02_render(), "render canonical");
+    const committedStrokeId = activeStrokeId.current;
+    const committedSampleTimestamp = lastSampleTimestamp.current;
+    activePointerId.current = null;
+    pendingVisible.current = true;
+    scheduleVisibleAcknowledgement(
+      wasm, committedStrokeId, committedSampleTimestamp);
+    setMessage("Canonical AddStroke committed; Preview retires only after visible ack.");
+  }
+
+  function flushQueuedStroke(wasm: InkModule) {
+    const queued = queuedStrokes.current.shift();
+    if (!queued) return;
+    beginStroke(wasm, queued);
+    let final = false;
+    for (const batch of queued.batches) {
+      pushStrokeBatch(wasm, queued.canvas, batch);
+      final = batch.final;
+    }
+    if (final) {
+      commitStroke(wasm);
+    } else {
+      renderPreview(wasm, queued.strokeId, lastSampleTimestamp.current);
+      setMessage(`Active ${queued.brush} stroke ${queued.strokeId}`);
+    }
   }
 
   function onPointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!module || activePointerId.current !== null || pendingVisible.current) {
-      return;
-    }
+    if (!module || activePointerId.current !== null) return;
     const batch = pointerSamples(event);
-    const strokeId = nextStrokeId.current++;
-    const sampleTimestamp = batch.at(-1)?.timeStamp ?? performance.now();
-    const timestampBase = batch[0]?.timeStamp ?? event.timeStamp;
-    withSamples(module, event.currentTarget, batch, timestampBase,
-      (packed, timestamps, count) =>
-      check(module._canvas_poc02_begin(strokeId, brush === "dab" ? 2 : 1,
-        brush === "dab" ? 16 : 8, packed, timestamps, count, 1), "begin stroke"));
     event.currentTarget.setPointerCapture(event.pointerId);
     activePointerId.current = event.pointerId;
-    activeStrokeId.current = strokeId;
-    lastSampleTimestamp.current = sampleTimestamp;
-    strokeTimestampBase.current = timestampBase;
-    renderPreview(module, strokeId, lastSampleTimestamp.current);
-    setMessage(`Active ${brush} stroke ${strokeId}`);
+    const stroke: QueuedStroke = {
+      pointerId: event.pointerId,
+      canvas: event.currentTarget,
+      strokeId: nextStrokeId.current++,
+      brush,
+      timestampBase: batch[0]?.timeStamp ?? event.timeStamp,
+      firstSamples: batch,
+      batches: [],
+    };
+    if (pendingVisible.current || queuedStrokes.current.length > 0) {
+      if (queuedStrokes.current.length >= MAX_QUEUED_STROKES) {
+        setMessage("Handoff queue is full; the new stroke was rejected explicitly.");
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        activePointerId.current = null;
+        return;
+      }
+      queuedStrokes.current.push(stroke);
+      setMessage(`Queued ${brush} stroke ${stroke.strokeId} behind Canonical handoff.`);
+      return;
+    }
+    beginStroke(module, stroke);
+    renderPreview(module, stroke.strokeId, lastSampleTimestamp.current);
+    setMessage(`Active ${brush} stroke ${stroke.strokeId}`);
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!module || event.pointerId !== activePointerId.current) return;
     const batch = pointerSamples(event);
-    lastSampleTimestamp.current = batch.at(-1)?.timeStamp ?? performance.now();
-    withSamples(module, event.currentTarget, batch, strokeTimestampBase.current,
-      (packed, timestamps, count) =>
-      check(module._canvas_poc02_push_batch(packed, timestamps, count, 0, 1),
-        "push historical batch"));
+    const queued = queuedStrokes.current.at(-1);
+    if (queued?.pointerId === event.pointerId) {
+      queued.batches.push({samples: batch, final: false});
+      return;
+    }
+    pushStrokeBatch(module, event.currentTarget, {samples: batch, final: false});
     renderPreview(module, activeStrokeId.current, lastSampleTimestamp.current);
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!module || event.pointerId !== activePointerId.current) return;
     const batch = pointerSamples(event);
-    lastSampleTimestamp.current = batch.at(-1)?.timeStamp ?? performance.now();
-    withSamples(module, event.currentTarget, batch, strokeTimestampBase.current,
-      (packed, timestamps, count) =>
-      check(module._canvas_poc02_push_batch(packed, timestamps, count, 1, 1),
-        "push final batch"));
-    check(module._canvas_poc02_end(), "commit AddStroke");
-    check(module._canvas_poc02_render(), "render canonical");
-    const committedStrokeId = activeStrokeId.current;
-    const committedSampleTimestamp = lastSampleTimestamp.current;
-    activePointerId.current = null;
-    pendingVisible.current = true;
-    requestAnimationFrame(() => {
-      check(module._canvas_poc02_visible(), "canonical visible acknowledgement");
-      pendingVisible.current = false;
-      recordVisible(committedStrokeId, committedSampleTimestamp);
-      refreshMetrics(module);
-    });
-    setMessage("Canonical AddStroke committed; Preview retires only after visible ack.");
+    const queued = queuedStrokes.current.at(-1);
+    if (queued?.pointerId === event.pointerId) {
+      queued.batches.push({samples: batch, final: true});
+      activePointerId.current = null;
+      return;
+    }
+    pushStrokeBatch(module, event.currentTarget, {samples: batch, final: true});
+    commitStroke(module);
   }
 
   function onPointerCancel(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!module || event.pointerId !== activePointerId.current) return;
+    const queued = queuedStrokes.current.at(-1);
+    if (queued?.pointerId === event.pointerId) {
+      queuedStrokes.current.pop();
+      activePointerId.current = null;
+      setMessage("Queued stroke cancelled before entering the C++ Runtime.");
+      return;
+    }
     check(module._canvas_poc02_cancel(), "cancel stroke");
     check(module._canvas_poc02_render(), "clear preview");
     activePointerId.current = null;
@@ -170,6 +266,13 @@ function App() {
 
   function onLostPointerCapture(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!module || event.pointerId !== activePointerId.current) return;
+    const queued = queuedStrokes.current.at(-1);
+    if (queued?.pointerId === event.pointerId) {
+      queuedStrokes.current.pop();
+      activePointerId.current = null;
+      setMessage("Queued stroke discarded after pointer capture was lost.");
+      return;
+    }
     check(module._canvas_poc02_cancel(), "cancel stroke after lost pointer capture");
     check(module._canvas_poc02_render(), "clear preview after lost pointer capture");
     activePointerId.current = null;
