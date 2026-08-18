@@ -8,9 +8,9 @@ target_link_libraries(canvas_poc04_windows_ime PUBLIC canvas_poc04_core imm32)
 
 add_executable(canvas_poc04_windows_demo windows_demo.cpp)
 target_link_libraries(canvas_poc04_windows_demo PRIVATE canvas_poc04_windows_ime user32)
-if(TARGET canvas_poc04_skparagraph AND CanvasSkia_ICU_DATA_PATH)
+if(TARGET canvas_poc04_skparagraph AND CANVAS_POC04_ICU_DATA_PATH)
   add_custom_command(TARGET canvas_poc04_windows_demo POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-      "${CanvasSkia_ICU_DATA_PATH}"
+      "${CANVAS_POC04_ICU_DATA_PATH}"
       "$<TARGET_FILE_DIR:canvas_poc04_windows_demo>/icudtl.dat")
 endif()

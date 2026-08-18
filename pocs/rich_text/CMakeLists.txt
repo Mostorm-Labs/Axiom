@@ -100,10 +100,10 @@ if(CANVAS_POC04_ENABLE_SKPARAGRAPH AND NOT EMSCRIPTEN AND NOT ANDROID)
   target_compile_definitions(canvas_poc04_canonical_behavior_report PRIVATE
     CANVAS_POC04_FONT_PATH="${CANVAS_POC04_FONT_PATH}"
     CANVAS_POC04_CJK_FONT_PATH="${CANVAS_POC04_CJK_FONT_PATH}")
-  if(WIN32 AND CanvasSkia_ICU_DATA_PATH)
+  if(WIN32 AND CANVAS_POC04_ICU_DATA_PATH)
     add_custom_command(TARGET canvas_poc04_canonical_behavior_report POST_BUILD
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CanvasSkia_ICU_DATA_PATH}"
+        "${CANVAS_POC04_ICU_DATA_PATH}"
         "$<TARGET_FILE_DIR:canvas_poc04_canonical_behavior_report>/icudtl.dat")
   endif()
 endif()

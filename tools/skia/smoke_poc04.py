@@ -80,8 +80,8 @@ def main() -> int:
                 f"--output={build / 'windows-producer-smoke.json'}",
             ], cwd=build, check=True)
         elif platform == "web":
-            javascript = build / "canvas_poc04_web.js"
-            wasm = build / "canvas_poc04_web.wasm"
+            javascript = build / "platform/web/canvas_poc04_web.js"
+            wasm = build / "platform/web/canvas_poc04_web.wasm"
             if not javascript.is_file() or not wasm.is_file():
                 raise RuntimeError("Web source-free smoke did not produce JS and WASM")
         elif platform == "android":

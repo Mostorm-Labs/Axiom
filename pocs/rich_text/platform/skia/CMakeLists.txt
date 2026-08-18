@@ -63,3 +63,7 @@ target_link_libraries(canvas_poc04_canonical_behavior_fixture PUBLIC
   canvas_poc04_skparagraph canvas_poc04_core)
 set(CANVAS_POC04_FONT_PATH "${CanvasSkia_FONT_PATH}" CACHE INTERNAL "POC-04 font")
 set(CANVAS_POC04_CJK_FONT_PATH "${CanvasSkia_CJK_FONT_PATH}" CACHE INTERNAL "POC-04 CJK font")
+if(CanvasSkia_ICU_DATA_PATH)
+  set(CANVAS_POC04_ICU_DATA_PATH "${CanvasSkia_ICU_DATA_PATH}"
+      CACHE INTERNAL "POC-04 Windows ICU data")
+endif()
