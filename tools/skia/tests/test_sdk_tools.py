@@ -19,7 +19,7 @@ from sdk import (  # noqa: E402
     canonical_sha256, load_profile, make_identity, normalized_recipe_bytes,
     validate_manifest, validate_toolchain,
 )
-from package import cmake_config, copy_file, download_locked_file  # noqa: E402
+from package import cmake_config, copy_file, download_locked_file, role  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
 
 
@@ -225,6 +225,9 @@ class SdkMetadataTest(unittest.TestCase):
             windows_config.index("CanvasSkia_ICU_DATA_PATH"),
             windows_config.index("unset(_CANVAS_SKIA_PREFIX)"),
         )
+
+    def test_private_sdk_header_has_header_role(self) -> None:
+        self.assertEqual(role("src/core/SkUTF.h"), "header")
 
 
 if __name__ == "__main__":

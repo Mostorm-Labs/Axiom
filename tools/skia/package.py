@@ -131,7 +131,7 @@ def copy_library(source: Path, destination: Path, platform: str) -> None:
 
 
 def role(path: str) -> str:
-    if path.startswith(("include/", "modules/")):
+    if path.startswith(("include/", "modules/", "src/")):
         return "header"
     if path.startswith("lib/cmake/"):
         return "cmake"
