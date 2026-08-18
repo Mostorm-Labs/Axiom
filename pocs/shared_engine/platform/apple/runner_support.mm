@@ -1,12 +1,23 @@
 #include "runner_support.h"
 
+#import <Foundation/Foundation.h>
+#import <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+#import <UIKit/UIKit.h>
+#else
+#import <CoreGraphics/CoreGraphics.h>
+#endif
+#include <mach/mach.h>
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -138,6 +149,83 @@ void WriteRgba(const std::filesystem::path& path,
                static_cast<std::streamsize>(rgba.size()));
 }
 
+uint64_t ProcessFootprintBytes() {
+  task_vm_info_data_t info{};
+  mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  const kern_return_t status = task_info(
+      mach_task_self(), TASK_VM_INFO, reinterpret_cast<task_info_t>(&info),
+      &count);
+  if (status != KERN_SUCCESS) {
+    throw std::runtime_error("task_info(TASK_VM_INFO) failed");
+  }
+  return static_cast<uint64_t>(info.phys_footprint);
+}
+
+std::string ThermalState() {
+  switch (NSProcessInfo.processInfo.thermalState) {
+    case NSProcessInfoThermalStateNominal:
+      return "nominal";
+    case NSProcessInfoThermalStateFair:
+      return "fair";
+    case NSProcessInfoThermalStateSerious:
+      return "serious";
+    case NSProcessInfoThermalStateCritical:
+      return "critical";
+  }
+  return "unknown";
+}
+
+std::string EscapeJson(std::string_view value) {
+  std::ostringstream escaped;
+  for (const unsigned char character : value) {
+    switch (character) {
+      case '\\':
+        escaped << "\\\\";
+        break;
+      case '"':
+        escaped << "\\\"";
+        break;
+      case '\b':
+        escaped << "\\b";
+        break;
+      case '\f':
+        escaped << "\\f";
+        break;
+      case '\n':
+        escaped << "\\n";
+        break;
+      case '\r':
+        escaped << "\\r";
+        break;
+      case '\t':
+        escaped << "\\t";
+        break;
+      default:
+        if (character < 0x20U) {
+          constexpr char kHex[] = "0123456789abcdef";
+          escaped << "\\u00" << kHex[character >> 4U]
+                  << kHex[character & 0x0FU];
+        } else {
+          escaped << static_cast<char>(character);
+        }
+    }
+  }
+  return escaped.str();
+}
+
+std::optional<double> MaximumRefreshRateHz() {
+#if TARGET_OS_IPHONE
+  return static_cast<double>(UIScreen.mainScreen.maximumFramesPerSecond);
+#else
+  CGDisplayModeRef mode = CGDisplayCopyDisplayMode(CGMainDisplayID());
+  if (mode == nullptr) return std::nullopt;
+  const double refresh_rate = CGDisplayModeGetRefreshRate(mode);
+  CGDisplayModeRelease(mode);
+  if (refresh_rate <= 0.0) return std::nullopt;
+  return refresh_rate;
+#endif
+}
+
 }  // namespace
 
 std::string RunAppleAcceptance(
@@ -146,7 +234,8 @@ std::string RunAppleAcceptance(
     const std::filesystem::path& rgba_output,
     std::string platform,
     int lifecycle_iterations,
-    int smoke_seconds) {
+    int smoke_seconds,
+    const std::function<void(bool)>& smoke_phase) {
   if (lifecycle_iterations <= 0 || smoke_seconds < 0) {
     throw std::runtime_error("Apple acceptance counts are invalid");
   }
@@ -177,6 +266,10 @@ std::string RunAppleAcceptance(
 
   uint64_t smoke_frames = 0;
   double max_frame_ms = 0.0;
+  std::vector<std::pair<int64_t, uint64_t>> memory_samples;
+  const std::string thermal_state_before = ThermalState();
+  const bool low_power_mode = NSProcessInfo.processInfo.lowPowerModeEnabled;
+  const std::optional<double> maximum_refresh_hz = MaximumRefreshRateHz();
   if (smoke_seconds > 0) {
     std::unique_ptr<Session> smoke =
         CreateSession(fixture_directory, font_path, true);
@@ -190,8 +283,11 @@ std::string RunAppleAcceptance(
     std::vector<uint8_t> warmup_drain;
     Check(adapter.Render(*document, &warmup_drain),
           "Metal smoke warmup drain");
-    const auto deadline = std::chrono::steady_clock::now() +
-                          std::chrono::seconds(smoke_seconds);
+    if (smoke_phase) smoke_phase(true);
+    const auto smoke_started = std::chrono::steady_clock::now();
+    const auto deadline = smoke_started + std::chrono::seconds(smoke_seconds);
+    auto next_memory_sample = smoke_started + std::chrono::seconds(5);
+    memory_samples.emplace_back(0, ProcessFootprintBytes());
     const auto frame_interval = std::chrono::microseconds(16667);
     auto next_frame = std::chrono::steady_clock::now();
     while (std::chrono::steady_clock::now() < deadline) {
@@ -204,8 +300,28 @@ std::string RunAppleAcceptance(
           std::chrono::duration<double, std::milli>(completed - start).count();
       max_frame_ms = std::max(max_frame_ms, frame_ms);
       ++smoke_frames;
+      if (completed >= next_memory_sample) {
+        const int64_t elapsed_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                completed - smoke_started)
+                .count();
+        memory_samples.emplace_back(elapsed_ms, ProcessFootprintBytes());
+        do {
+          next_memory_sample += std::chrono::seconds(5);
+        } while (next_memory_sample <= completed);
+      }
       next_frame = std::max(next_frame + frame_interval, completed);
     }
+    const auto smoke_completed = std::chrono::steady_clock::now();
+    const int64_t completed_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(smoke_completed -
+                                                               smoke_started)
+            .count();
+    if (memory_samples.empty() ||
+        completed_ms - memory_samples.back().first >= 1000) {
+      memory_samples.emplace_back(completed_ms, ProcessFootprintBytes());
+    }
+    if (smoke_phase) smoke_phase(false);
     std::vector<uint8_t> smoke_drain;
     Check(adapter.Render(*document, &smoke_drain), "Metal smoke drain");
     if (max_frame_ms > 100.0) {
@@ -213,17 +329,43 @@ std::string RunAppleAcceptance(
                                std::to_string(max_frame_ms));
     }
   }
+  const std::string thermal_state_after = ThermalState();
   const CoreConformanceResult conformance = RunCoreConformance();
   std::ostringstream result;
   result << "{\"platform\":\"" << platform
          << "\",\"backend\":\"ganesh-metal\","
             "\"digest\":\""
          << digest << "\",\"pixel_hash\":\"" << reference_pixels_hash
-         << "\",\"device\":\"" << device_name
+         << "\",\"device\":\"" << EscapeJson(device_name)
          << "\",\"lifecycle\":" << lifecycle_iterations
          << ",\"smoke_seconds\":" << smoke_seconds
          << ",\"smoke_frames\":" << smoke_frames
-         << ",\"max_frame_ms\":" << max_frame_ms << ","
+         << ",\"max_frame_ms\":" << max_frame_ms
+         << ",\"memory_scope\":\"process-physical-footprint\","
+            "\"memory_sampling_interval_ms\":5000,\"memory_samples\":[";
+  for (size_t index = 0; index < memory_samples.size(); ++index) {
+    if (index != 0) result << ',';
+    result << "{\"elapsed_ms\":" << memory_samples[index].first
+           << ",\"bytes\":" << memory_samples[index].second << '}';
+  }
+  result << "],\"performance_environment\":{\"thermal_state_before\":\""
+         << thermal_state_before << "\",\"thermal_state_after\":\""
+         << thermal_state_after << "\",\"low_power_mode\":"
+         << (low_power_mode ? "true" : "false")
+         << ",\"power_observation_method\":\"NSProcessInfo.lowPowerModeEnabled\","
+            "\"display_refresh\":{";
+  if (maximum_refresh_hz) {
+    result << "\"maximum_hz\":" << *maximum_refresh_hz
+           << ",\"availability\":\"maximum-only\"";
+  } else {
+    result << "\"maximum_hz\":null,\"availability\":\"unavailable\"";
+  }
+  result << ",\"observation_method\":\"platform display API\"},"
+            "\"target_frame_interval_ms\":16.667,"
+            "\"vrr\":{\"status\":\"unavailable\","
+            "\"observation_method\":\"no public API exposes active VRR state\"},"
+            "\"browser_throttling\":{\"status\":\"not_applicable\","
+            "\"observation_method\":\"native Metal runner\"}},"
          << CoreConformanceJsonFields(conformance) << "}";
   return result.str();
 }

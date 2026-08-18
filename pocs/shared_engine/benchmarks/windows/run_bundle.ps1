@@ -47,6 +47,47 @@ foreach ($record in @($nativeResult, $webResult)) {
     }
 }
 
+$nativeMemoryAnalysis = Join-Path $output "windows-memory-analysis.json"
+python (Join-Path $repoRoot "pocs/shared_engine/tools/memory_series.py") `
+    $nativeJson --output $nativeMemoryAnalysis
+if ($LASTEXITCODE -ne 0) { throw "Native working-set series shows sustained growth" }
+
+function Observation($value, [string]$method, [string]$unavailableReason = "") {
+    if ($null -eq $value -or "$value" -eq "") {
+        return @{ status = "unavailable"; value = $null; observation_method = $method; reason = $unavailableReason }
+    }
+    return @{ status = "observed"; value = $value; observation_method = $method }
+}
+
+$powerPlan = (powercfg /GETACTIVESCHEME 2>&1 | Out-String).Trim()
+$videoControllers = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue)
+$currentRefreshRates = @($videoControllers | ForEach-Object { $_.CurrentRefreshRate } | Where-Object { $null -ne $_ -and $_ -gt 0 } | Sort-Object -Unique)
+$displayControllers = Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorListedSupportedSourceModes -ErrorAction SilentlyContinue
+$supportedRefreshRates = @($displayControllers | ForEach-Object { $_.MonitorSourceModes } | ForEach-Object { $_.VerticalRefreshRate } | Sort-Object -Unique)
+$thermalZones = Get-CimInstance -Namespace root\wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue
+$thermalValues = @($thermalZones | ForEach-Object { [math]::Round(($_.CurrentTemperature / 10) - 273.15, 1) })
+$environment = @{
+    thermal = Observation $thermalValues "WMI MSAcpi_ThermalZoneTemperature" "firmware exposes no ACPI thermal zone"
+    power_mode = Observation $powerPlan "powercfg /GETACTIVESCHEME"
+    display_refresh = @{
+        current_hz = Observation $currentRefreshRates "CIM Win32_VideoController.CurrentRefreshRate" "display driver exposes no current refresh rate"
+        supported_hz = Observation $supportedRefreshRates "WMI WmiMonitorListedSupportedSourceModes" "display driver exposes no source modes"
+    }
+    target_frame_interval = @{
+        status = "unbounded-submit-loop"
+        value_ms = $null
+        observation_method = "POC-01 native/Web benchmark loops measure draw-submit throughput, not presentation cadence"
+    }
+    vrr = Observation $null "Windows public user-mode query not implemented by this POC harness" "active VRR state unavailable"
+    browser_throttling = @{
+        status = $webResult.browser_throttling.status
+        flags = $webResult.browser_throttling.flags
+        visibility_state = $webResult.browser_throttling.visibility_state
+        document_has_focus = $webResult.browser_throttling.document_has_focus
+        observation_method = $webResult.browser_throttling.observation_method
+    }
+}
+
 $skiaLockPath = Join-Path $repoRoot "skia-sdk.lock.json"
 $skiaLock = Get-Content $skiaLockPath -Raw | ConvertFrom-Json
 $device = @{
@@ -58,10 +99,11 @@ $device = @{
     skia_commit = $skiaLock.skia_commit
     os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
     cpu = Get-CimInstance Win32_Processor | Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors
-    gpu = Get-CimInstance Win32_VideoController | Select-Object Name, AdapterCompatibility, DriverVersion, AdapterRAM
+    gpu = $videoControllers | Select-Object Name, AdapterCompatibility, DriverVersion, AdapterRAM, CurrentRefreshRate
     chrome = (Get-Item $chrome).VersionInfo.ProductVersion
     native = $nativeResult
     web = $webResult
+    performance_environment = $environment
     reproduction = @{
         native = "canvas_poc01_windows.exe --hardware --offscreen --lifecycle=100 --smoke=$DurationSeconds --output=windows-hardware-actual.rgba"
         web = "node hardware_benchmark.mjs --url <local-url> --chrome <chrome-stable> --seconds $DurationSeconds --output=web-hardware-result.json --rgba-output=web-hardware-actual.rgba"

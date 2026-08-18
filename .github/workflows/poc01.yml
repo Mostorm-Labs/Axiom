@@ -37,6 +37,7 @@ jobs:
           python3 tools/check_docs.py
           python3 tools/skia/check_consumer_ci.py
           python3 -m unittest discover -s tools/skia/tests -v
+          python3 -m unittest discover -s pocs/shared_engine/tools -p 'test_*.py' -v
           git diff --check
       - name: Configure and build
         run: cmake --preset host-debug && cmake --build --preset host-debug --parallel
@@ -283,7 +284,7 @@ jobs:
             adb shell am start -n dev.mostorm.canvas.poc01/dev.mostorm.canvas.CanvasPocActivity
             timeout 180 bash -c 'until adb logcat -d -s CanvasPOC01:I | grep -q CANVAS_POC01_RESULT; do sleep 1; done'
             mkdir -p out/results
-            adb shell run-as dev.mostorm.canvas.poc01 cat files/android-actual.rgba > out/results/android-actual.rgba
+            adb pull /sdcard/Android/data/dev.mostorm.canvas.poc01/files/android-actual.rgba out/results/android-actual.rgba
             adb logcat -d -s CanvasPOC01:I | sed -n 's/.*CANVAS_POC01_RESULT //p' | tail -1 > out/results/android-result.json
             acceptance_finished=$(date +%s)
             echo "- Canvas Android acceptance: $((acceptance_finished - acceptance_started)) s" >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,7 @@
 find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
 find_library(METAL_FRAMEWORK Metal REQUIRED)
 find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
 
 add_library(canvas_poc01_apple_adapter STATIC
   apple_metal_adapter.mm
@@ -16,6 +17,7 @@ target_link_libraries(canvas_poc01_apple_adapter PUBLIC
   ${FOUNDATION_FRAMEWORK}
   ${METAL_FRAMEWORK}
   ${QUARTZCORE_FRAMEWORK}
+  ${COREGRAPHICS_FRAMEWORK}
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")

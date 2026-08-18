@@ -36,6 +36,17 @@ android {
         ndk { abiFilters += listOf(canvasPocAbi.get()) }
     }
 
+    buildTypes {
+        getByName("release") {
+            // Physical performance evidence must come from an explicitly
+            // non-debuggable build. Keep shrinking off so Release does not
+            // introduce an unreviewed bytecode transformation.
+            isDebuggable = false
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path = file("../../../../../CMakeLists.txt")

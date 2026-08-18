@@ -4,6 +4,7 @@ build/
 out/
 node_modules/
 .gradle/
+.cxx/
 dist/
 test-results/
 playwright-report/

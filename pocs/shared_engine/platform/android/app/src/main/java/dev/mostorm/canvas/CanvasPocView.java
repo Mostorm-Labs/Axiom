@@ -52,8 +52,13 @@ public final class CanvasPocView extends SurfaceView implements SurfaceHolder.Ca
         if (acceptanceStarted) return;
         acceptanceStarted = true;
         Surface surface = holder.getSurface();
+        java.io.File evidenceDirectory = getContext().getExternalFilesDir(null);
+        if (evidenceDirectory == null) {
+            Log.e("CanvasPOC01", "FAIL app-specific external files directory unavailable");
+            return;
+        }
         String output = new java.io.File(
-                getContext().getFilesDir(), "android-actual.rgba").getAbsolutePath();
+                evidenceDirectory, "android-actual.rgba").getAbsolutePath();
         new Thread(() -> {
             String result = nativeRunAcceptance(
                     surface, width, height, checker, font, replay, output, 100, 60);
