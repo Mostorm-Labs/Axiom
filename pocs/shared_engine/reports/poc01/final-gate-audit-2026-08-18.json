@@ -2,8 +2,10 @@
   "schema_version": 1,
   "audit_id": "poc01-final-gate-audit-2026-08-18",
   "audit_timezone": "Asia/Shanghai",
-  "decision": "validating",
-  "accepted": false,
+  "decision": "accepted",
+  "accepted": true,
+  "corrected_runtime_merge_commit": "2ecdd0ec40e067988a16c0777d1dc8db870c0393",
+  "windows_evidence_merge_commit": "3a9905dac2618e7b69aa11e8bc8468b34f173605",
   "common_runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
   "reviewed_digest": "47826449b895ac4f4a57b4f386379775",
   "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
@@ -45,6 +47,22 @@
       "runtime_code_changed_from_integrated_main": false,
       "attempt_1_observations": [
         "macOS xxHash clone failed with GitHub HTTP 500 before build"
+      ]
+    },
+    "fixed_source_full_regression": {
+      "pull_request": 15,
+      "head_commit": "f932044aca67e89d1ebb66c1e25b9cfe194b789a",
+      "run_id": 32103105209,
+      "accepted_attempt": 1,
+      "result": "passed",
+      "platform_jobs": [
+        "host-core",
+        "web",
+        "windows",
+        "macos",
+        "apple-mobile",
+        "android",
+        "cross-platform-acceptance"
       ]
     }
   },
@@ -124,6 +142,26 @@
       "visual_passed": true,
       "historical_failures_retained": true,
       "result": "passed"
+    },
+    "windows_web_revalidation": {
+      "pull_request": 16,
+      "runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+      "harness_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+      "report": "../../../../docs/quality/evidence/poc01/windows-web-revalidation-20260818.json",
+      "release_tag": "poc01-windows-web-revalidation-20260818-a11899ca",
+      "asset": "poc01-windows-web-revalidation-20260818-a11899ca.zip",
+      "asset_sha256": "a11899ca261429ab0890db6b9fd5a39cd904150caf7dac762e5d2470c4e10549",
+      "attempt": 1,
+      "rerun_performed": false,
+      "windows_maximum_frame_ms": 28.0954,
+      "web_maximum_frame_ms": 3.9000000953674316,
+      "windows_memory_sample_count": 13,
+      "windows_memory_span_ms": 60000,
+      "windows_memory_tail_growth_ratio": -0.10002073163836483,
+      "windows_memory_series_passed": true,
+      "environment_metadata": "passed-with-explicit-unavailability",
+      "bundle_payload_hashes_verified": 14,
+      "result": "passed"
     }
   },
   "gates": {
@@ -133,19 +171,18 @@
     "visual": "passed",
     "lifecycle_100": "passed",
     "smoke_frame_threshold": "passed-current-source-historical-failures-retained",
-    "no_sustained_memory_growth": "incomplete-windows",
-    "performance_environment_metadata": "incomplete",
+    "no_sustained_memory_growth": "passed-current-source-historical-failures-retained",
+    "performance_environment_metadata": "passed-with-explicit-unavailability",
     "web_single_threaded": "passed",
     "runtime_platform_type_isolation": "passed"
   },
-  "blocking_evidence": [
-    {
-      "id": "windows-revised-physical-evidence",
-      "reason": "the Windows/Web physical bundle must be regenerated with the revised run_bundle.ps1 to retain a Windows working-set series and complete performance-environment metadata"
-    },
-    {
-      "id": "final-review-and-publication",
-      "reason": "the revised Windows/Web record must be published immutably and reviewed before acceptance"
-    }
-  ]
+  "retained_failures": [
+    "148.524167 ms earlier macOS maximum frame",
+    "104.214750 ms clean Release macOS maximum frame before the lifecycle fix",
+    "10.635462% bounded-rerun macOS memory growth before the lifecycle fix",
+    "183.159625 ms unchanged iOS simulator boundary-regression frame",
+    "123.233167 ms hosted iPad simulator frame on the first six-platform CI attempt",
+    "1127.365600 ms hosted Windows WARP frame on the first integrated-main CI attempt"
+  ],
+  "blocking_evidence": []
 }

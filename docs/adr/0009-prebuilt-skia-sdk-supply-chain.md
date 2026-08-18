@@ -31,8 +31,9 @@ Canvas consumer 只接受提交到仓库的 SDK lock。普通构建下载并严�
 - 普通 Canvas CI 不再承担 Skia source checkout、sync、GN 和 Ninja 成本。
 - Release 资产成为供应链的一部分；被任何 lock 引用的 prerelease 必须永久保留。
 - 第一版仅发布 Apple arm64、官方 Release 静态库，不包含 Debug、符号包或新增 Skia 功能。
-- POC-01 合并和 SDK 预编译都不替代物理 Windows GPU 与移动真机报告；状态保持
-  `Validating`。
+- POC-01 合并和 SDK 预编译都不替代物理 Windows GPU 与移动真机报告；本 ADR
+  采纳时状态继续为 `Validating`。后续只有聚合审计可在独立证据齐全后改为
+  `Accepted`。
 
 ## Validation
 
