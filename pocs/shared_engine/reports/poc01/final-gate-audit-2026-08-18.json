@@ -80,6 +80,36 @@
       "maximum_frame_ms": 17.2159,
       "memory_series_passed": true,
       "result": "android-release-physical-passed"
+    },
+    "apple_macos_supplemental": {
+      "source_pull_request": 12,
+      "tested_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+      "report": "apple-macos-supplemental-2026-08-18/manifest.json",
+      "release_tag": "poc01-apple-macos-supplemental-2026-08-18-55b28935b59bbef2",
+      "asset": "poc01-apple-macos-supplemental-2026-08-18.zip",
+      "asset_sha256": "55b28935b59bbef2325218133f9e686f6e67d2a09bc2b90f96075fa7c49c86a8",
+      "build_configuration": "Release",
+      "ios": {
+        "maximum_frame_ms": 6.93175,
+        "memory_series_passed": true,
+        "result": "passed"
+      },
+      "ipados": {
+        "maximum_frame_ms": 4.98487,
+        "memory_series_passed": true,
+        "result": "passed"
+      },
+      "macos": {
+        "first_attempt_maximum_frame_ms": 104.21475,
+        "first_attempt_frame_gate_passed": false,
+        "bounded_rerun_maximum_frame_ms": 49.3456,
+        "bounded_rerun_memory_tail_growth_ratio": 0.10635462238515674,
+        "bounded_rerun_memory_series_passed": false,
+        "historical_failed_maximum_frame_ms": 148.524167,
+        "further_reruns_allowed": false,
+        "result": "failed"
+      },
+      "result": "ios-and-ipados-passed-macos-failed"
     }
   },
   "gates": {
@@ -88,20 +118,24 @@
     "numeric_and_replay_conformance": "passed",
     "visual": "passed",
     "lifecycle_100": "passed",
-    "smoke_frame_threshold": "passed",
-    "no_sustained_memory_growth": "incomplete",
+    "smoke_frame_threshold": "failed",
+    "no_sustained_memory_growth": "failed",
     "performance_environment_metadata": "incomplete",
     "web_single_threaded": "passed",
     "runtime_platform_type_isolation": "passed"
   },
   "blocking_evidence": [
     {
-      "id": "memory-time-series",
-      "reason": "Windows and Apple physical evidence does not yet quantify post-warm-up memory throughout the smoke; Android Release now does"
+      "id": "macos-performance-and-memory-stability",
+      "reason": "the first clean Release macOS physical run exceeded 100 ms and the only bounded rerun exceeded the unchanged 5% tail-window memory-growth ceiling; no third rerun is permitted"
     },
     {
-      "id": "performance-environment-metadata",
-      "reason": "thermal, power, refresh/frame interval, VRR, and throttling metadata is incomplete"
+      "id": "windows-revised-physical-evidence",
+      "reason": "the Windows/Web physical bundle must be regenerated with the revised run_bundle.ps1 to retain a Windows working-set series and complete performance-environment metadata"
+    },
+    {
+      "id": "final-review-and-publication",
+      "reason": "fresh evidence after resolving the macOS blocker and the revised Windows/Web record must be published immutably and reviewed before acceptance"
     }
   ]
 }
