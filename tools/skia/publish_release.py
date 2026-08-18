@@ -28,14 +28,15 @@ def main() -> int:
     args = parser.parse_args()
     directory = args.directory.resolve()
     release = json.loads((directory / "release.json").read_text(encoding="utf-8"))
+    index = json.loads((directory / "skia-sdk-index.json").read_text(encoding="utf-8"))
     tag = release["tag"]
     assets = sorted([
         *directory.glob("skia-sdk-*.zip"),
         directory / "skia-sdk-index.json",
         directory / "SHA256SUMS",
     ], key=lambda path: path.name)
-    if len(list(directory.glob("skia-sdk-*.zip"))) != 7:
-        raise RuntimeError("release must contain exactly seven target SDK archives")
+    if len(list(directory.glob("skia-sdk-*.zip"))) != len(index["targets"]):
+        raise RuntimeError("release archive count must match the profile target set")
 
     exists = subprocess.run(
         ["gh", "release", "view", tag, "--repo", args.repository],
@@ -70,7 +71,7 @@ def main() -> int:
 
     notes = (
         f"Immutable prebuilt Skia SDK set `{release['set_id']}` for the "
-        "POC-01 minimal Ganesh profile. This is a dependency prerelease, not "
+        f"{index['profile']} profile. This is a dependency prerelease, not "
         "a Canvas product release."
     )
     command = [

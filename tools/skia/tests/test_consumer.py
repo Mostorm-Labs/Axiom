@@ -15,7 +15,7 @@ SKIA_TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKIA_TOOLS))
 
 import fetch  # noqa: E402
-from consumer import EXPECTED_TARGETS, validate_lock  # noqa: E402
+from consumer import POC01_EXPECTED_TARGETS, validate_lock  # noqa: E402
 from sdk import (  # noqa: E402
     canonical_sha256, file_sha256, load_profile, make_identity,
     normalized_args_text, profile_hash,
@@ -31,7 +31,7 @@ class ConsumerTest(unittest.TestCase):
         self.payload = normalized_args_text(self.profile, self.target).encode("utf-8")
         self.archive_bytes = b"locked archive bytes"
         target_metadata = {}
-        for index, target in enumerate(sorted(EXPECTED_TARGETS), start=1):
+        for index, target in enumerate(sorted(POC01_EXPECTED_TARGETS), start=1):
             sdk_id = (
                 canonical_sha256(self.identity)
                 if target == self.target else hashlib.sha256(target.encode()).hexdigest()
@@ -104,12 +104,12 @@ class ConsumerTest(unittest.TestCase):
             for path in root.rglob("*") if path.is_file()
         }
 
-    def test_lock_schema_requires_exact_seven_target_contract(self) -> None:
+    def test_poc01_fixture_has_seven_targets_and_generic_lock_allows_profiles(self) -> None:
         validate_lock(self.lock)
+        self.assertEqual(set(self.lock["targets"]), POC01_EXPECTED_TARGETS)
         invalid = json.loads(json.dumps(self.lock))
-        invalid["targets"].pop(self.target)
-        invalid["targets"]["unexpected"] = self.lock["targets"][self.target]
-        with self.assertRaisesRegex(RuntimeError, "seven-target contract"):
+        invalid["targets"] = {}
+        with self.assertRaisesRegex(RuntimeError, "at least one target"):
             validate_lock(invalid)
 
     def test_existing_install_is_fully_verified_before_reuse(self) -> None:

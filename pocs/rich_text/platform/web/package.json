@@ -1,0 +1,19 @@
+{
+  "name": "@mostorm/canvas-poc04-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.18.0"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "playwright test tests/text_input_adapter.spec.ts",
+    "record:wasm": "playwright test tests/wasm_behavior.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.3.0",
+    "typescript": "7.0.2"
+  }
+}

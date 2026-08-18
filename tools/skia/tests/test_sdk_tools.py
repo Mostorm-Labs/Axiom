@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 
 SKIA_TOOLS = Path(__file__).resolve().parents[1]
@@ -18,7 +19,7 @@ from sdk import (  # noqa: E402
     canonical_sha256, load_profile, make_identity, normalized_recipe_bytes,
     validate_manifest, validate_toolchain,
 )
-from package import cmake_config, copy_file  # noqa: E402
+from package import cmake_config, copy_file, download_locked_file  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
 
 
@@ -64,6 +65,21 @@ class SdkMetadataTest(unittest.TestCase):
             path.write_text(json.dumps(invalid), encoding="utf-8")
             with self.assertRaisesRegex(SchemaError, "unknown fields"):
                 load_profile(path)
+
+    def test_unsafe_or_unlocked_fixture_font_is_rejected(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/poc04-richtext-v1.json"
+        profile = load_profile(profile_path)
+        for destination, dependency in (
+            ("../escape.ttf", "noto_sans_cjk_subset"),
+            ("resources/fonts/test.ttf", "missing_dependency"),
+        ):
+            invalid = copy.deepcopy(profile)
+            invalid["fixture_fonts"] = {destination: dependency}
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "poc04-richtext-v1.json"
+                path.write_text(json.dumps(invalid), encoding="utf-8")
+                with self.assertRaisesRegex(SchemaError, "fixture_fonts"):
+                    load_profile(path)
 
     def test_manifest_sdk_id_and_unknown_fields_are_rejected(self) -> None:
         manifest = self.manifest()
@@ -115,6 +131,15 @@ class SdkMetadataTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "required SDK input is missing"):
                 copy_file(root / "missing.a", root / "sdk/lib/missing.a")
 
+    def test_locked_license_checksum_is_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch("urllib.request.urlopen") as urlopen:
+            urlopen.return_value.__enter__.return_value.read.return_value = b"license"
+            destination = Path(temporary) / "license.txt"
+            with self.assertRaisesRegex(RuntimeError, "checksum"):
+                download_locked_file("https://example.invalid/license", "0" * 64, destination)
+            self.assertFalse(destination.exists())
+
     def test_cmake_target_owns_platform_link_dependencies(self) -> None:
         android = cmake_config(["libskia.a"], "android")
         self.assertIn(
@@ -125,6 +150,8 @@ class SdkMetadataTest(unittest.TestCase):
         self.assertIn("find_library(_CANVAS_SKIA_CORETEXT CoreText REQUIRED)", apple)
         windows = cmake_config(["skia.lib"], "windows")
         self.assertIn("d3d12;dxgi;d3dcompiler;ole32", windows)
+        self.assertNotIn("CanvasSkia_CJK_FONT_PATH", windows)
+        self.assertNotIn("CanvasSkia_ICU_DATA_PATH", windows)
 
     def test_checksum_drift_is_rejected_before_extraction(self) -> None:
         manifest = self.manifest()
@@ -154,6 +181,50 @@ class SdkMetadataTest(unittest.TestCase):
 
         archive = b"!<arch>\n" + member(b"wasm.o/", wasm) + member(b"coff.obj/", coff_bigobj)
         self.assertEqual(archive_architectures(archive), {"wasm32", "x64"})
+
+    def test_richtext_profile_freezes_four_targets_modules_fonts_and_runtime(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/poc04-richtext-v1.json"
+        profile = load_profile(profile_path)
+        self.assertEqual(set(profile["targets"]), {
+            "windows-x64-d3d12", "web-wasm-webgl2",
+            "android-arm64-v8a-gles3", "android-x86_64-gles3",
+        })
+        self.assertEqual(profile["build_targets"], [
+            "skia", "modules/skparagraph:skparagraph",
+            "modules/skshaper:skshaper", "modules/skunicode:skunicode",
+        ])
+        self.assertEqual(
+            profile["licenses"],
+            {
+                "HarfBuzz.txt": "third_party/externals/harfbuzz/COPYING",
+                "ICU.txt": "third_party/externals/icu/LICENSE",
+            },
+        )
+        self.assertEqual(profile["fixture_fonts"], {
+            "resources/fonts/NotoSansCJK-VF-subset.otf.ttc":
+                "noto_sans_cjk_subset",
+        })
+        self.assertIn("src/core/SkUTF.h", profile["module_headers"])
+        self.assertEqual(profile["runtime_files"], [{
+            "target": "windows-x64-d3d12",
+            "source": "icudtl.dat",
+            "destination": "runtime/windows/icudtl.dat",
+        }])
+        for target in profile["targets"].values():
+            self.assertNotIn("libharfbuzz.a", target["libraries"])
+            self.assertNotIn("libicu.a", target["libraries"])
+            self.assertNotIn("harfbuzz.lib", target["libraries"])
+            self.assertNotIn("icu.lib", target["libraries"])
+        windows_config = cmake_config(
+            profile["targets"]["windows-x64-d3d12"]["libraries"], "windows",
+            cjk_font=True, icu_data=True,
+        )
+        self.assertIn("CanvasSkia_CJK_FONT_PATH", windows_config)
+        self.assertIn("CanvasSkia_ICU_DATA_PATH", windows_config)
+        self.assertLess(
+            windows_config.index("CanvasSkia_ICU_DATA_PATH"),
+            windows_config.index("unset(_CANVAS_SKIA_PREFIX)"),
+        )
 
 
 if __name__ == "__main__":

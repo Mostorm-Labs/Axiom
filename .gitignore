@@ -17,3 +17,4 @@ __pycache__/
 .DS_Store
 pocs/shared_engine/platform/web/public/
 pocs/ink_engine/playground/web/public/
+pocs/rich_text/platform/android/app/src/main/assets/fonts/

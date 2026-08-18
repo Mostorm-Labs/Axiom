@@ -23,7 +23,7 @@ INDEX_FIELDS = {
     "skia_commit", "source_repository", "source_commit", "targets",
 }
 INDEX_TARGET_FIELDS = LOCK_TARGET_FIELDS
-EXPECTED_TARGETS = {
+POC01_EXPECTED_TARGETS = {
     "windows-x64-d3d12", "web-wasm-webgl2", "macos-arm64-metal",
     "ios-arm64-metal", "ios-simulator-arm64-metal",
     "android-arm64-v8a-gles3", "android-x86_64-gles3",
@@ -51,9 +51,8 @@ def validate_index(value: Any) -> dict[str, Any]:
     if not isinstance(index["source_repository"], str) or \
        index["source_repository"].count("/") != 1:
         raise SchemaError("index source_repository must be owner/name")
-    if not isinstance(index["targets"], dict) or \
-       set(index["targets"]) != EXPECTED_TARGETS:
-        raise SchemaError("SDK index target set does not match the seven-target contract")
+    if not isinstance(index["targets"], dict) or not index["targets"]:
+        raise SchemaError("SDK index must contain at least one target")
     sdk_ids: dict[str, str] = {}
     for target_name, target in index["targets"].items():
         require_fields(target, INDEX_TARGET_FIELDS, f"index target {target_name}")

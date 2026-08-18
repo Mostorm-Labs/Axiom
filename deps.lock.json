@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_for": "POC-01 Shared Engine",
+  "generated_for": "Canvas proof-of-concept dependency supply chain",
   "dependencies": {
     "skia": {
       "url": "https://github.com/google/skia.git",
@@ -58,6 +58,10 @@
     "roboto_regular": {
       "source": "skia/resources/fonts/Roboto-Regular.ttf",
       "sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f"
+    },
+    "noto_sans_cjk_subset": {
+      "source": "skia/resources/fonts/NotoSansCJK-VF-subset.otf.ttc",
+      "sha256": "e7f71fc8aec139bb21cc541067eabb162b87aeeac0ccfcb3c835a20d0cee340a"
     }
   },
   "skia_builds": {
