@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "platform": "macos",
+  "backend": "ganesh-metal",
+  "source_commit": "9e9618fe9931af6695ce329c1883670c80983dcd",
+  "build": {
+    "configuration": "Release",
+    "runner_sha256": "f625dbddbe961298aebb70ae7aaf0d866750aef314752f3cde0158b4a0d06e47"
+  },
+  "device": {
+    "gpu": "Apple M2",
+    "host_model": "Mac14,2",
+    "os_version": "26.6.1",
+    "os_build": "25G76",
+    "architecture": "arm64"
+  },
+  "acceptance": {
+    "digest": "47826449b895ac4f4a57b4f386379775",
+    "lifecycle": 100,
+    "smoke_seconds": 60,
+    "smoke_frames": 3600,
+    "maximum_frame_ms": 9.80521,
+    "maximum_allowed_frame_ms": 100.0,
+    "pixel_hash": "32186d8e0c941ec118342f811a0a555e",
+    "core_conformance_version": 1,
+    "core_case_count": 10,
+    "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4
+  },
+  "memory": {
+    "scope": "process-physical-footprint",
+    "sampling_interval_ms": 5000,
+    "samples": [
+      { "elapsed_ms": 0, "bytes": 32473640 },
+      { "elapsed_ms": 5008, "bytes": 31932968 },
+      { "elapsed_ms": 10011, "bytes": 31932968 },
+      { "elapsed_ms": 15004, "bytes": 31932968 },
+      { "elapsed_ms": 20008, "bytes": 31932968 },
+      { "elapsed_ms": 25007, "bytes": 31932968 },
+      { "elapsed_ms": 30004, "bytes": 31932968 },
+      { "elapsed_ms": 35007, "bytes": 31932968 },
+      { "elapsed_ms": 40009, "bytes": 31932968 },
+      { "elapsed_ms": 45010, "bytes": 31932968 },
+      { "elapsed_ms": 50008, "bytes": 31932968 },
+      { "elapsed_ms": 55007, "bytes": 31932968 },
+      { "elapsed_ms": 60004, "bytes": 31932968 }
+    ],
+    "sample_count": 13,
+    "span_ms": 60004,
+    "window_samples": 4,
+    "head_median_bytes": 31932968,
+    "tail_median_bytes": 31932968,
+    "tail_growth_bytes": 0,
+    "tail_growth_ratio": 0.0,
+    "maximum_allowed_tail_growth_ratio": 0.05,
+    "decision_method": "compare medians of the first and last quartile windows",
+    "sustained_growth_observed": false,
+    "passed": true
+  },
+  "performance_environment": {
+    "thermal_state_before": "fair",
+    "thermal_state_after": "fair",
+    "low_power_mode": false,
+    "display_refresh": {
+      "maximum_hz": 60,
+      "availability": "maximum-only",
+      "observation_method": "CGDisplayModeGetRefreshRate"
+    },
+    "target_frame_interval_ms": 16.667,
+    "vrr": {
+      "status": "unavailable",
+      "observation_method": "no public API exposes active VRR state"
+    },
+    "browser_throttling": {
+      "status": "not_applicable",
+      "observation_method": "native Metal runner"
+    }
+  },
+  "external_evidence": {
+    "release_tag": "poc01-macos-stability-2026-08-18-2854fc7155cd3856",
+    "asset": "poc01-macos-stability-2026-08-18.zip",
+    "asset_bytes": 13844,
+    "asset_sha256": "2854fc7155cd38561ca30718ee4de076fbcfc15757530ee11cf1b396b946d4b0",
+    "file_member_count": 8,
+    "hashed_payload_member_count": 7
+  },
+  "privacy_redacted": true
+}

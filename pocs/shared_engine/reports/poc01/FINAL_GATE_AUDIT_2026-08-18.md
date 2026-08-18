@@ -19,8 +19,9 @@ separate changes:
 | Same-machine Windows/Web | [report](../../../../docs/quality/evidence/poc01/windows-web-physical-20260817.md), [PR #8](https://github.com/Mostorm-Labs/canvas/pull/8), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-physical-20260817-6a2bac2) | Native D3D12 and Chrome WebGL2 hardware subset passed |
 | Android non-debuggable Release | [supplemental report](android-release-physical-2026-08-18/README.md), harness [PR #11](https://github.com/Mostorm-Labs/canvas/pull/11), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-android-release-physical-2026-08-18-5b7d92d422df0337) | Physical Pixel 7 Release 100/60, post-warm-up PSS, and visual subset passed |
 | Apple mobile and macOS Release | [supplemental report](apple-macos-supplemental-2026-08-18/README.md), source [PR #12](https://github.com/Mostorm-Labs/canvas/pull/12), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-apple-macos-supplemental-2026-08-18-55b28935b59bbef2) | iPhone and iPadOS passed; macOS failed the first-run frame gate and the only bounded-rerun memory gate |
+| macOS fixed-source Release | [fix report](macos-stability-fix-2026-08-18/README.md), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-macos-stability-2026-08-18-2854fc7155cd3856) | Healthy Ganesh cleanup and bounded offscreen submission implemented; clean Release 100/60, memory, and visual gates passed on commit `9e9618fe9931af6695ce329c1883670c80983dcd` |
 
-All four downloaded Release assets were independently checked against their
+All five downloaded Release assets were independently checked against their
 published byte count and SHA-256. The mobile archive has SHA-256
 `62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7`;
 the Windows/Web archive has SHA-256
@@ -28,12 +29,16 @@ the Windows/Web archive has SHA-256
 the Android Release supplement has SHA-256
 `5b7d92d422df0337d86575df15f4158afc3ef4eb52374c6dd00f579c3622c449`;
 and the Apple/macOS supplement has SHA-256
-`55b28935b59bbef2325218133f9e686f6e67d2a09bc2b90f96075fa7c49c86a8`.
+`55b28935b59bbef2325218133f9e686f6e67d2a09bc2b90f96075fa7c49c86a8`;
+the fixed-source macOS asset has SHA-256
+`2854fc7155cd38561ca30718ee4de076fbcfc15757530ee11cf1b396b946d4b0`.
 All 19 Windows/Web payload members outside `artifact-hashes.json` were also
 matched to their file-level hash records. All eight Android payload members
 listed by the ninth member, `SHA256SUMS.json`, were checked for exact byte count
 and SHA-256. All 33 Apple/macOS payload members listed by the 34th member,
-`SHA256SUMS.json`, were checked the same way.
+`SHA256SUMS.json`, were checked the same way. All seven fixed-source macOS
+payload members listed by its eighth member were also matched by byte count and
+SHA-256.
 
 ## Gate decision
 
@@ -44,8 +49,8 @@ and SHA-256. All 33 Apple/macOS payload members listed by the 34th member,
 | Numeric corpus and independent empty-Document replay agree | Passed | All reviewed results report corpus `e8f3bc4f06282fc0a2348aa5059d56fa` and replay `bcdb19afb9eccbf68cec4a7f442b1cd2`, revision 1, sequence 4. |
 | GPU visual gate | Passed | Every reviewed CI and physical readback meets at least 99.9% of pixels within ±2 per channel. |
 | 100 lifecycle iterations | Passed | Six CI platforms and every completed physical acceptance path report 100 iterations. The retained initial iPad install failure and first macOS frame failure stopped before this gate could complete and are classified separately. |
-| 1,000-node, 60-second smoke with no frame over 100 ms | **Failed** | The first clean Release macOS physical run reached 104.214750 ms against the unchanged 100 ms ceiling. Its one bounded rerun reached 49.3456 ms, but does not erase the retained failure. iPhone, iPadOS, Android, Windows/Web hardware, and reviewed CI paths otherwise meet the threshold. |
-| No sustained memory growth | **Failed** | iPhone, iPadOS, Android, and Web pass their declared series checks. The only bounded macOS rerun has 13 post-warm-up physical-footprint samples over 60,004 ms and fails: tail-window median growth is 10.635462% against the unchanged 5% ceiling. Windows physical evidence still requires a revised working-set series; peak-only data is insufficient. |
+| 1,000-node, 60-second smoke with no frame over 100 ms | Passed on current source; historical failures retained | The fixed macOS source reports 3,600 frames and 9.80521 ms maximum. Earlier 148.524167 ms and 104.214750 ms macOS failures remain retained observations against their older source. Other reviewed paths meet the unchanged threshold. |
+| No sustained memory growth | Incomplete | iPhone, iPadOS, Android, Web, and fixed-source macOS pass their declared series checks. macOS reports 13 samples over 60,004 ms with identical 31,932,968-byte head/tail medians. Windows physical evidence still requires the revised working-set series; peak-only data is insufficient. |
 | Performance environment is reproducible | Incomplete | Android and the new Apple/macOS supplement record thermal, power, refresh/frame interval, VRR availability, and throttling applicability. The retained Windows/Web bundle predates the revised collector and still lacks the equivalent reviewed fields. |
 | Web has no pthread/SharedArrayBuffer/isolation dependency | Passed | The locked artifact scan passes and the Windows hardware bundle confirms the single-threaded artifact. |
 | Runtime core contains no platform UI/backend types | Passed | The generic `src/` and public include boundary contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit, EGL, or JNI type dependency; those types remain in platform adapters. |
@@ -84,19 +89,27 @@ the runs. No third rerun is permitted in this evidence cycle. The older
 148.524167 ms physical macOS observation also remains failed and is not erased
 or downplayed by the newer evidence.
 
+The failure was resolved on macOS by correcting two backend lifecycle
+contracts. A healthy Ganesh/Metal context now releases surfaces and renderer
+caches before `releaseResourcesAndAbandonContext()`; the lost-context-only
+`abandonContext()` path no longer substitutes for cleanup. The offscreen
+macOS renderer also synchronizes GPU completion per frame, bounding frames in
+flight as a swapchain normally would. Clean Release source commit
+`9e9618fe9931af6695ce329c1883670c80983dcd` then passed 100 lifecycle
+iterations, 60 seconds/3,600 frames, a 9.80521 ms maximum, the 5% memory rule
+at 0% growth, and the visual gate. iOS/iPadOS behavior is compile-time excluded
+from this fix. This new result closes the macOS blocker without rewriting the
+older failures.
+
 ## Evidence required for `Accepted`
 
-1. Diagnose and resolve the macOS physical stability failure before requesting
-   any fresh validation. A future run must be explicitly authorized and must
-   pass both the unchanged 100 ms frame ceiling and the unchanged 5%
-   quartile-median memory rule; repeated blind reruns are not acceptance.
-2. On the physical Windows/Web machine, use the revised `run_bundle.ps1` to
+1. On the physical Windows/Web machine, use the revised `run_bundle.ps1` to
    retain the Windows post-warm-up working-set series and the complete thermal,
    power, refresh/frame interval, VRR, and browser-throttling metadata. Preserve
    the existing Windows/Web evidence rather than overwriting it.
-3. Publish any new evidence as immutable content-addressed assets and complete
-   a final aggregate review. POC-01 remains `Validating` until the macOS and
-   revised Windows/Web records pass review.
+2. Publish the new Windows/Web evidence as an immutable content-addressed asset
+   and complete a final aggregate review. POC-01 remains `Validating` until the
+   revised Windows/Web record passes review.
 
 No CRDT, Snapshot codec, Ink, RichText, collaboration, product ABI, or product
 shell work is part of this remaining POC-01 evidence task.

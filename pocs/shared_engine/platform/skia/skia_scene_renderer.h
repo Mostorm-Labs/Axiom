@@ -39,6 +39,7 @@ class SkiaSceneRenderer {
   canvas_poc_status_t Readback(SkSurface& surface, uint32_t width,
                                uint32_t height,
                                std::vector<uint8_t>* rgba) const;
+  void ResetCaches();
 
  private:
   struct CachedImage {
