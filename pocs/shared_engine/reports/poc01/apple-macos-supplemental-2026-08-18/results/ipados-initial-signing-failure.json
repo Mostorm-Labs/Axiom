@@ -1,0 +1,9 @@
+{
+  "gate_workload_started": false,
+  "platform": "ipados",
+  "privacy_redacted": true,
+  "reason": "device rejected the initial stale development signing identity before the profile was refreshed",
+  "schema_version": 1,
+  "stage": "install",
+  "status": "failed"
+}

@@ -1,0 +1,14 @@
+{
+  "configuration": "Release",
+  "maximum_allowed_frame_ms": 100.0,
+  "maximum_frame_ms": 104.21475,
+  "platform": "macos",
+  "privacy_redacted": true,
+  "reason": "maximum frame exceeded the unchanged 100 ms ceiling",
+  "retained_for_audit": true,
+  "schema_version": 1,
+  "source_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+  "stage": "60-second-smoke",
+  "status": "failed",
+  "threshold_changed": false
+}

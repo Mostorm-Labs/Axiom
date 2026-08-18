@@ -2,8 +2,10 @@
   "schema_version": 1,
   "audit_id": "poc01-final-gate-audit-2026-08-18",
   "audit_timezone": "Asia/Shanghai",
-  "decision": "validating",
-  "accepted": false,
+  "decision": "accepted",
+  "accepted": true,
+  "corrected_runtime_merge_commit": "2ecdd0ec40e067988a16c0777d1dc8db870c0393",
+  "windows_evidence_merge_commit": "3a9905dac2618e7b69aa11e8bc8468b34f173605",
   "common_runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
   "reviewed_digest": "47826449b895ac4f4a57b4f386379775",
   "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
@@ -46,6 +48,22 @@
       "attempt_1_observations": [
         "macOS xxHash clone failed with GitHub HTTP 500 before build"
       ]
+    },
+    "fixed_source_full_regression": {
+      "pull_request": 15,
+      "head_commit": "f932044aca67e89d1ebb66c1e25b9cfe194b789a",
+      "run_id": 32103105209,
+      "accepted_attempt": 1,
+      "result": "passed",
+      "platform_jobs": [
+        "host-core",
+        "web",
+        "windows",
+        "macos",
+        "apple-mobile",
+        "android",
+        "cross-platform-acceptance"
+      ]
     }
   },
   "evidence": {
@@ -80,6 +98,70 @@
       "maximum_frame_ms": 17.2159,
       "memory_series_passed": true,
       "result": "android-release-physical-passed"
+    },
+    "apple_macos_supplemental": {
+      "source_pull_request": 12,
+      "tested_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+      "report": "apple-macos-supplemental-2026-08-18/manifest.json",
+      "release_tag": "poc01-apple-macos-supplemental-2026-08-18-55b28935b59bbef2",
+      "asset": "poc01-apple-macos-supplemental-2026-08-18.zip",
+      "asset_sha256": "55b28935b59bbef2325218133f9e686f6e67d2a09bc2b90f96075fa7c49c86a8",
+      "build_configuration": "Release",
+      "ios": {
+        "maximum_frame_ms": 6.93175,
+        "memory_series_passed": true,
+        "result": "passed"
+      },
+      "ipados": {
+        "maximum_frame_ms": 4.98487,
+        "memory_series_passed": true,
+        "result": "passed"
+      },
+      "macos": {
+        "first_attempt_maximum_frame_ms": 104.21475,
+        "first_attempt_frame_gate_passed": false,
+        "bounded_rerun_maximum_frame_ms": 49.3456,
+        "bounded_rerun_memory_tail_growth_ratio": 0.10635462238515674,
+        "bounded_rerun_memory_series_passed": false,
+        "historical_failed_maximum_frame_ms": 148.524167,
+        "further_reruns_allowed": false,
+        "result": "failed"
+      },
+      "result": "ios-and-ipados-passed-macos-failed"
+    },
+    "macos_stability_fix": {
+      "tested_commit": "9e9618fe9931af6695ce329c1883670c80983dcd",
+      "report": "macos-stability-fix-2026-08-18/manifest.json",
+      "release_tag": "poc01-macos-stability-2026-08-18-2854fc7155cd3856",
+      "asset": "poc01-macos-stability-2026-08-18.zip",
+      "asset_sha256": "2854fc7155cd38561ca30718ee4de076fbcfc15757530ee11cf1b396b946d4b0",
+      "build_configuration": "Release",
+      "maximum_frame_ms": 9.80521,
+      "memory_tail_growth_ratio": 0.0,
+      "memory_series_passed": true,
+      "visual_passed": true,
+      "historical_failures_retained": true,
+      "result": "passed"
+    },
+    "windows_web_revalidation": {
+      "pull_request": 16,
+      "runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+      "harness_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+      "report": "../../../../docs/quality/evidence/poc01/windows-web-revalidation-20260818.json",
+      "release_tag": "poc01-windows-web-revalidation-20260818-a11899ca",
+      "asset": "poc01-windows-web-revalidation-20260818-a11899ca.zip",
+      "asset_sha256": "a11899ca261429ab0890db6b9fd5a39cd904150caf7dac762e5d2470c4e10549",
+      "attempt": 1,
+      "rerun_performed": false,
+      "windows_maximum_frame_ms": 28.0954,
+      "web_maximum_frame_ms": 3.9000000953674316,
+      "windows_memory_sample_count": 13,
+      "windows_memory_span_ms": 60000,
+      "windows_memory_tail_growth_ratio": -0.10002073163836483,
+      "windows_memory_series_passed": true,
+      "environment_metadata": "passed-with-explicit-unavailability",
+      "bundle_payload_hashes_verified": 14,
+      "result": "passed"
     }
   },
   "gates": {
@@ -88,20 +170,19 @@
     "numeric_and_replay_conformance": "passed",
     "visual": "passed",
     "lifecycle_100": "passed",
-    "smoke_frame_threshold": "passed",
-    "no_sustained_memory_growth": "incomplete",
-    "performance_environment_metadata": "incomplete",
+    "smoke_frame_threshold": "passed-current-source-historical-failures-retained",
+    "no_sustained_memory_growth": "passed-current-source-historical-failures-retained",
+    "performance_environment_metadata": "passed-with-explicit-unavailability",
     "web_single_threaded": "passed",
     "runtime_platform_type_isolation": "passed"
   },
-  "blocking_evidence": [
-    {
-      "id": "memory-time-series",
-      "reason": "Windows and Apple physical evidence does not yet quantify post-warm-up memory throughout the smoke; Android Release now does"
-    },
-    {
-      "id": "performance-environment-metadata",
-      "reason": "thermal, power, refresh/frame interval, VRR, and throttling metadata is incomplete"
-    }
-  ]
+  "retained_failures": [
+    "148.524167 ms earlier macOS maximum frame",
+    "104.214750 ms clean Release macOS maximum frame before the lifecycle fix",
+    "10.635462% bounded-rerun macOS memory growth before the lifecycle fix",
+    "183.159625 ms unchanged iOS simulator boundary-regression frame",
+    "123.233167 ms hosted iPad simulator frame on the first six-platform CI attempt",
+    "1127.365600 ms hosted Windows WARP frame on the first integrated-main CI attempt"
+  ],
+  "blocking_evidence": []
 }

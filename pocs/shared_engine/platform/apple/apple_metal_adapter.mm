@@ -2,6 +2,7 @@
 
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
+#import <TargetConditionals.h>
 
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImageInfo.h"
@@ -27,15 +28,43 @@ struct AppleMetalAdapter::Impl {
   uint32_t width = 0;
   uint32_t height = 0;
   std::string device_name;
+
+  void ReleaseBackend() {
+#if TARGET_OS_OSX
+    // This adapter owns a healthy Metal backend. Drop every Skia object that
+    // can reference it before asking Ganesh to finish work and release native
+    // resources. abandonContext() is reserved for a lost/unusable backend and
+    // intentionally skips that cleanup path.
+    surface.reset();
+    renderer.ResetCaches();
+    scene = {};
+    scene_document = nullptr;
+    if (context != nullptr) {
+      context->releaseResourcesAndAbandonContext();
+      context.reset();
+    }
+#else
+    // Preserve the already accepted iOS/iPadOS backend behavior. The desktop
+    // cleanup fix is intentionally scoped to macOS physical evidence.
+    surface.reset();
+    scene = {};
+    scene_document = nullptr;
+    if (context != nullptr) {
+      context->abandonContext();
+      context.reset();
+    }
+#endif
+    queue = nil;
+    device = nil;
+    width = 0;
+    height = 0;
+    device_name.clear();
+  }
 };
 
 AppleMetalAdapter::AppleMetalAdapter() : impl_(std::make_unique<Impl>()) {}
 
-AppleMetalAdapter::~AppleMetalAdapter() {
-  if (impl_->context != nullptr) {
-    impl_->context->abandonContext();
-  }
-}
+AppleMetalAdapter::~AppleMetalAdapter() { impl_->ReleaseBackend(); }
 
 canvas_poc_status_t AppleMetalAdapter::Initialize(uint32_t width,
                                                    uint32_t height) {
@@ -44,13 +73,7 @@ canvas_poc_status_t AppleMetalAdapter::Initialize(uint32_t width,
     return CANVAS_POC_STATUS_INVALID_ARGUMENT;
   }
   @autoreleasepool {
-    impl_->surface.reset();
-    impl_->scene = {};
-    impl_->scene_document = nullptr;
-    if (impl_->context != nullptr) {
-      impl_->context->abandonContext();
-      impl_->context.reset();
-    }
+    impl_->ReleaseBackend();
     impl_->device = MTLCreateSystemDefaultDevice();
     if (impl_->device == nil) {
       SetLastError("Metal device is unavailable");
@@ -106,9 +129,18 @@ canvas_poc_status_t AppleMetalAdapter::Render(
     if (status != CANVAS_POC_STATUS_OK) {
       return status;
     }
-    impl_->context->flushAndSubmit(
-        impl_->surface.get(),
-        readback == nullptr ? GrSyncCpu::kNo : GrSyncCpu::kYes);
+    // A window swapchain normally bounds the number of frames in flight. The
+    // macOS POC renders to one offscreen target, so synchronize each measured
+    // frame instead of allowing Metal command buffers and their resources to
+    // queue without backpressure. The caller's frame timing therefore includes
+    // GPU completion. Preserve the accepted mobile submission behavior.
+#if TARGET_OS_OSX
+    constexpr GrSyncCpu sync = GrSyncCpu::kYes;
+#else
+    const GrSyncCpu sync =
+        readback == nullptr ? GrSyncCpu::kNo : GrSyncCpu::kYes;
+#endif
+    impl_->context->flushAndSubmit(impl_->surface.get(), sync);
     return readback == nullptr
                ? CANVAS_POC_STATUS_OK
                : impl_->renderer.Readback(*impl_->surface, impl_->width,

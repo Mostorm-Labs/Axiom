@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "report_id": "poc01-apple-macos-supplemental-2026-08-18",
+  "captured_at": "2026-08-18",
+  "captured_timezone": "Asia/Shanghai",
+  "status": "failed",
+  "summary": "iPhone and iPadOS passed; macOS failed the first-run frame gate and the bounded-rerun memory gate",
+  "scope": [
+    "ios-release-physical",
+    "ipados-release-physical",
+    "macos-release-physical"
+  ],
+  "poc01_status_after_report": "validating",
+  "tested_source": {
+    "repository": "Mostorm-Labs/canvas",
+    "commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+    "pull_request": 12,
+    "deps_lock_sha256": "f4653ac106f39aa95a2ea225ad470e5f262089c5f190f1c4035dbb9d736e1dcf",
+    "skia_sdk_lock_sha256": "847284704af4bcc0fea113c4046bd4832d52a07cfc00ead26b7f3d3b8ffd5361"
+  },
+  "skia": {
+    "commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "profile": "poc01-minimal-v1",
+    "profile_hash": "7b341c9e1987c7b797087eafcae2dfb0f7eb3fb0635fc18537b8dd3e26213f00",
+    "release_tag": "skia-sdk-poc01-minimal-v1-debcbb7b9376806c",
+    "set_id": "debcbb7b9376806c94ffb9af5950ebd8a6de0547833f9b57df96a20531ca7817",
+    "macos_sdk_id": "dbaf529389e90257b925815d5a279c77cc12466b6eb1a1027203d725ef64b054",
+    "ios_sdk_id": "eab7bc961815a59c8427efefc0cabb360c73ab7e679bf8e81c729426e397e8ea"
+  },
+  "toolchain": {
+    "xcode": "26.2 (17C52)",
+    "macos_sdk": "26.2",
+    "iphoneos_sdk": "26.2",
+    "deployment_target": "17.0"
+  },
+  "fixtures": {
+    "scene_ndjson_sha256": "110a9572d54864ae913e28d91a5e392135e22c1dbedc06a88db6d7b425d25724",
+    "checker_png_sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59",
+    "roboto_regular_sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f",
+    "reference_rgba_sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041"
+  },
+  "acceptance_constants": {
+    "document_digest": "47826449b895ac4f4a57b4f386379775",
+    "core_conformance_version": 1,
+    "core_case_count": 10,
+    "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4,
+    "lifecycle_iterations": 100,
+    "smoke_seconds": 60,
+    "maximum_frame_ms": 100.0,
+    "visual_tolerance": 2,
+    "minimum_visual_ratio": 0.999,
+    "maximum_memory_tail_growth_ratio": 0.05,
+    "memory_decision_method": "compare medians of the first and last quartile windows"
+  },
+  "builds": {
+    "configuration": "Release",
+    "macos_runner_sha256": "6a775f51042307b4e9dbd6bf71a9e2d068a4486a2ec75aa2a069318e45cfedca",
+    "iphoneos_runner_sha256": "463a5e742434f2692b898ec633eb79c8f53dc36c1b80fe2d242abf42f545156b"
+  },
+  "results": {
+    "ios": {
+      "result": "passed",
+      "device": "iPhone 15 Pro",
+      "os": "iOS 26.6",
+      "transport": "local-network",
+      "smoke_frames": 3600,
+      "maximum_frame_ms": 6.93175,
+      "memory_sample_count": 13,
+      "memory_span_ms": 60001,
+      "memory_head_median_bytes": 69485464,
+      "memory_tail_median_bytes": 69485464,
+      "memory_tail_growth_ratio": 0.0,
+      "memory_passed": true,
+      "thermal_before": "nominal",
+      "thermal_after": "nominal",
+      "low_power_mode": false,
+      "maximum_refresh_hz": 120,
+      "visual_ratio": 0.9998270833333334,
+      "visual_passed": true,
+      "normalized_result": "results/iphone15-pro-ios26.6-release.json",
+      "normalized_result_sha256": "db474003126f269dbd0af113abfc13e50079f62d90a032e2c247f6ae2894cb49",
+      "visual_metrics": "results/iphone15-pro-ios26.6-release-visual.json",
+      "visual_metrics_sha256": "7734707e33ab47e2e92c80fbe0f02a82aa447daa7866ca0c76901819847720cb"
+    },
+    "ipados": {
+      "result": "passed",
+      "device": "iPad Air (4th generation)",
+      "os": "iPadOS 26.6",
+      "transport": "wired",
+      "smoke_frames": 3600,
+      "maximum_frame_ms": 4.98487,
+      "memory_sample_count": 13,
+      "memory_span_ms": 60003,
+      "memory_head_median_bytes": 24888896,
+      "memory_tail_median_bytes": 24905280,
+      "memory_tail_growth_ratio": 0.0006582855262041354,
+      "memory_passed": true,
+      "thermal_before": "nominal",
+      "thermal_after": "nominal",
+      "low_power_mode": false,
+      "maximum_refresh_hz": 60,
+      "visual_ratio": 0.9998270833333334,
+      "visual_passed": true,
+      "normalized_result": "results/ipad-air4-ipados26.6-release.json",
+      "normalized_result_sha256": "c138ddcce53d44bcc2cf6010e255dab8202601d7f0373ffa83fd9d3c6cf58656",
+      "visual_metrics": "results/ipad-air4-ipados26.6-release-visual.json",
+      "visual_metrics_sha256": "d7b290dbea7670cdf488912235bf3c6024f29b9c3fc811705f84f3d14747e735",
+      "initial_installation_failure": "results/ipados-initial-signing-failure.json",
+      "initial_installation_failure_sha256": "41cc81a9aaff5e0662af2d51c3162c28b9b1c6328891c8fa06e3e2afaae0999a"
+    },
+    "macos": {
+      "result": "failed",
+      "device": "Apple M2",
+      "os": "macOS 26.6.1",
+      "first_attempt": {
+        "result": "failed",
+        "failed_gate": "maximum-frame-time",
+        "maximum_frame_ms": 104.21475,
+        "threshold_changed": false,
+        "retained": true,
+        "normalized_failure": "results/macos-m2-first-attempt-failure.json",
+        "normalized_failure_sha256": "69515c0e7def722ca7cfbe2711a1955b583a2f0c81dbb68245b8045bcf809187",
+        "visual_metrics": "results/macos-m2-first-attempt-visual.json",
+        "visual_metrics_sha256": "3b3f8e14b18cfe816c23292c8837719c67568d3aa0e5c7601dbc2d0125c9f5c6",
+        "visual_passed": true
+      },
+      "bounded_rerun": {
+        "result": "failed",
+        "failed_gate": "no-sustained-memory-growth",
+        "smoke_frames": 3554,
+        "maximum_frame_ms": 49.3456,
+        "memory_sample_count": 13,
+        "memory_span_ms": 60004,
+        "memory_head_median_bytes": 45367920,
+        "memory_tail_median_bytes": 50193008,
+        "memory_tail_growth_bytes": 4825088,
+        "memory_tail_growth_ratio": 0.10635462238515674,
+        "memory_passed": false,
+        "thermal_before": "fair",
+        "thermal_after": "fair",
+        "low_power_mode": false,
+        "maximum_refresh_hz": 60,
+        "threshold_changed": false,
+        "normalized_failure": "results/macos-m2-bounded-rerun-failure.json",
+        "normalized_failure_sha256": "654add12b68a4a279d3bdd7e6dba0b3b9dfae2c2491e75820a7c2be08232f22f",
+        "visual_metrics": "results/macos-m2-bounded-rerun-visual.json",
+        "visual_metrics_sha256": "0e24c8bab5fc50519100c709d7c2ef545e2692d3eed279a9986cb859695c0a59",
+        "visual_passed": true
+      },
+      "historical_failed_maximum_frame_ms": 148.524167,
+      "further_reruns_allowed": false
+    }
+  },
+  "privacy": {
+    "redacted": true,
+    "excluded_fields": [
+      "device identifiers and serial numbers",
+      "user and host names",
+      "absolute paths",
+      "network addresses and proxy configuration",
+      "signing identity and team ID",
+      "provisioning profile and account details"
+    ],
+    "private_signing_log_packaged": false,
+    "embedded_provisioning_profile_packaged": false
+  },
+  "external_evidence": {
+    "asset_name": "poc01-apple-macos-supplemental-2026-08-18.zip",
+    "bytes": 57292,
+    "uncompressed_bytes": 7755473,
+    "file_member_count": 34,
+    "hashed_payload_member_count": 33,
+    "sha256": "55b28935b59bbef2325218133f9e686f6e67d2a09bc2b90f96075fa7c49c86a8",
+    "retention": "content-addressed GitHub prerelease; referenced asset must not be overwritten or deleted",
+    "publication": {
+      "status": "published",
+      "repository": "Mostorm-Labs/canvas",
+      "release_tag": "poc01-apple-macos-supplemental-2026-08-18-55b28935b59bbef2",
+      "release_url": "https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-apple-macos-supplemental-2026-08-18-55b28935b59bbef2",
+      "target_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+      "prerelease": true,
+      "published_at": "2026-08-18T04:08:03Z",
+      "asset_url": "https://github.com/Mostorm-Labs/canvas/releases/download/poc01-apple-macos-supplemental-2026-08-18-55b28935b59bbef2/poc01-apple-macos-supplemental-2026-08-18.zip",
+      "github_asset_digest": "sha256:55b28935b59bbef2325218133f9e686f6e67d2a09bc2b90f96075fa7c49c86a8"
+    }
+  },
+  "closed_evidence_gaps": [
+    "ios-post-warm-up-memory-time-series",
+    "ipados-post-warm-up-memory-time-series",
+    "ios-performance-environment-metadata",
+    "ipados-performance-environment-metadata"
+  ],
+  "blocking_evidence": [
+    "macos-maximum-frame-and-memory-stability",
+    "windows-revised-working-set-and-performance-environment-evidence",
+    "final-review-and-publication"
+  ],
+  "rerun_policy": {
+    "macos_first_failure_retained": true,
+    "macos_bounded_reruns": 1,
+    "further_macos_reruns_allowed": false,
+    "thresholds_changed": false
+  }
+}

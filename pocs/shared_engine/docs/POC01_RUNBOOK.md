@@ -54,7 +54,9 @@ python3 tools/skia/update_lock.py --tag <immutable-prerelease-tag>
 
 The current lock points to
 `skia-sdk-poc01-minimal-v1-debcbb7b9376806c`. This Consumer cutover does not
-change POC-01 from `Validating` or waive either physical-device report.
+by itself change the then-current POC-01 `Validating` decision or waive either
+physical-device report; the later aggregate audit accepts POC-01 only after
+those separate reports are reviewed.
 
 ## 3. Fixture and semantic acceptance
 
@@ -179,6 +181,14 @@ same 100/60 gate and writes `poc01-result.json` and `apple-actual.rgba` to its
 application Documents container. Physical-device reports are required before
 acceptance; simulator results are correctness evidence only.
 
+The macOS adapter renders to one offscreen Metal target. Each measured frame
+uses a synchronous Ganesh submit so the runner includes GPU completion and has
+the same bounded-in-flight property a swapchain would normally provide. A
+healthy macOS adapter shutdown drops surfaces and renderer caches before
+calling `releaseResourcesAndAbandonContext`; plain `abandonContext` is reserved
+for a lost backend because it deliberately skips native-resource cleanup. The
+already accepted iOS/iPadOS submission and shutdown behavior is unchanged.
+
 After building and locally signing the device Release app, collect a physical
 iPhone or iPad run with the privacy-filtered helper (the device must remain
 unlocked and awake):
@@ -233,7 +243,8 @@ privacy-filtered evidence bundle. The structured report is committed; the raw
 bundle is published as the content-addressed retained prerelease
 [`poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd`](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd),
 and its manifest records the release, asset, target commit, and GitHub digest.
-It closes no non-mobile gate and does not change POC-01 from `Validating`.
+At submission time it closed no non-mobile gate and did not change POC-01 from
+`Validating`; the later aggregate acceptance retains that historical scope.
 
 ## 7. Manual Windows benchmark bundle
 
@@ -279,22 +290,26 @@ The reviewed result is archived in the
 [Windows/Web physical report](../../../docs/quality/evidence/poc01/windows-web-physical-20260817.md)
 and its content-addressed
 [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-physical-20260817-6a2bac2).
+The revised collector result that closes the working-set and environment gaps
+is archived in the
+[Windows/Web revalidation report](../../../docs/quality/evidence/poc01/windows-web-revalidation-20260818.md)
+and its content-addressed
+[revalidation Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-revalidation-20260818-a11899ca).
 
 The combined decision for the shared Runtime, six-platform CI, mobile devices,
 and Windows/Web machine is recorded in the
 [POC-01 final gate audit](../reports/poc01/FINAL_GATE_AUDIT_2026-08-18.md).
-The audit accepts the correctness evidence but keeps POC-01 `Validating` until
-the listed Release-build, memory-series, and environment-metadata evidence is
-captured. Historical subset reports retain the status they had when recorded.
+The aggregate audit accepts POC-01. Historical subset reports retain the status
+they had when recorded, and all earlier failed observations remain evidence.
 
 ## 8. Exit checklist
 
 - [x] All six platform families clean-build from the lock file.
 - [x] Web, Windows, macOS, iOS, iPadOS, and Android upload the reviewed digest.
 - [x] Every GPU readback passes the 99.9%/±2 visual gate.
-- [ ] Each platform passes 100 lifecycle iterations and a 1,000-node 60-second
+- [x] Each platform passes 100 lifecycle iterations and a 1,000-node 60-second
       smoke in an eligible build without crash, sustained growth, or a frame
-      over 100 ms. Android Release and missing memory series remain open.
+      over 100 ms; historical failed observations remain retained.
 - [x] Web output contains no pthread/SharedArrayBuffer dependency.
 - [x] iPhone, iPadOS, and Android physical-device report is reviewed and
       committed with raw artifact hashes and reproduction commands.
@@ -304,5 +319,5 @@ captured. Historical subset reports retain the status they had when recorded.
 - [x] Windows and Web physical benchmark bundle is archived.
 - [x] Runtime sources contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit,
       Android, EGL, or JNI types.
-- [ ] Physical performance manifests record thermal, power, refresh/frame
+- [x] Physical performance manifests record thermal, power, refresh/frame
       interval, VRR, and throttling state (or explicit unavailability).

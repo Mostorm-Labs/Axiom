@@ -1,6 +1,6 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline；当前阶段：POC-02 Integration Ready / Validating，POC-03 已解除启动阻塞；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
+> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 已解除启动阻塞，POC-04 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
 
 路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。编号表达工作包，不表达无条件串行关系；设计、实现和验收遵循以下 evidence DAG：
 
@@ -94,14 +94,14 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 ### 退出条件
 
-- [ ] Web、Windows、macOS、iOS、iPadOS 与 Android 从干净环境构建成功。
-- [ ] 跨平台 Document digest 100% 一致。
-- [ ] 数值边界语料在 x64/arm64/WASM 上得到相同 canonical result/error 和 digest。
-- [ ] 独立空 Document 的相同 Operation replay 得到相同 revision/sequence/digest，且没有
+- [x] Web、Windows、macOS、iOS、iPadOS 与 Android 从干净环境构建成功。
+- [x] 跨平台 Document digest 100% 一致。
+- [x] 数值边界语料在 x64/arm64/WASM 上得到相同 canonical result/error 和 digest。
+- [x] 独立空 Document 的相同 Operation replay 得到相同 revision/sequence/digest，且没有
   Shell/Scene 直接修改 Document 的旁路。
-- [ ] 黄金图达到 99.9%/通道差值 2 门禁。
-- [ ] 100 次生命周期测试和 60 秒 smoke 测试通过。
-- [ ] Runtime 内没有平台 UI、pthread 或产品业务依赖。
+- [x] 黄金图达到 99.9%/通道差值 2 门禁。
+- [x] 100 次生命周期测试和 60 秒 smoke 测试通过。
+- [x] Runtime 内没有平台 UI、pthread 或产品业务依赖。
 
 ## POC-02 — Ink Engine
 

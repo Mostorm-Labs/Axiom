@@ -1,0 +1,12 @@
+{
+  "backend": "ganesh-metal-ipados-physical",
+  "height": 600,
+  "matching_pixels": 479917,
+  "matching_ratio": 0.9998270833333334,
+  "maximum_channel_delta": 184,
+  "passed": true,
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "tolerance": 2,
+  "total_pixels": 480000,
+  "width": 800
+}
