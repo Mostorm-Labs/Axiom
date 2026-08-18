@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "status": "failed",
+  "platform": "macos",
+  "backend": "ganesh-metal",
+  "source_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+  "configuration": "Release",
+  "run_classification": "single-bounded-rerun-after-retained-104.214750-ms-first-failure",
+  "further_reruns_allowed": false,
+  "device": {
+    "gpu": "Apple M2",
+    "host_model": "Mac14,2",
+    "os_version": "26.6.1",
+    "os_build": "25G76",
+    "architecture": "arm64"
+  },
+  "acceptance": {
+    "digest": "47826449b895ac4f4a57b4f386379775",
+    "lifecycle": 100,
+    "smoke_seconds": 60,
+    "smoke_frames": 3554,
+    "maximum_frame_ms": 49.3456,
+    "maximum_allowed_frame_ms": 100.0,
+    "pixel_hash": "32186d8e0c941ec118342f811a0a555e",
+    "core_conformance_version": 1,
+    "core_case_count": 10,
+    "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4
+  },
+  "memory": {
+    "scope": "process-physical-footprint",
+    "sampling_interval_ms": 5000,
+    "samples": [
+      {"elapsed_ms": 0, "bytes": 124404336},
+      {"elapsed_ms": 5003, "bytes": 45400688},
+      {"elapsed_ms": 10004, "bytes": 42910320},
+      {"elapsed_ms": 15004, "bytes": 45335152},
+      {"elapsed_ms": 20003, "bytes": 45335152},
+      {"elapsed_ms": 25004, "bytes": 42910320},
+      {"elapsed_ms": 30008, "bytes": 42910320},
+      {"elapsed_ms": 35011, "bytes": 42910320},
+      {"elapsed_ms": 40010, "bytes": 42910320},
+      {"elapsed_ms": 45015, "bytes": 42910320},
+      {"elapsed_ms": 50007, "bytes": 50184816},
+      {"elapsed_ms": 55004, "bytes": 50201200},
+      {"elapsed_ms": 60004, "bytes": 50201200}
+    ],
+    "sample_count": 13,
+    "span_ms": 60004,
+    "window_samples": 4,
+    "head_median_bytes": 45367920,
+    "tail_median_bytes": 50193008,
+    "tail_growth_bytes": 4825088,
+    "tail_growth_ratio": 0.10635462238515674,
+    "maximum_allowed_tail_growth_ratio": 0.05,
+    "decision_method": "compare medians of the first and last quartile windows",
+    "sustained_growth_observed": true,
+    "passed": false
+  },
+  "performance_environment": {
+    "thermal_state_before": "fair",
+    "thermal_state_after": "fair",
+    "low_power_mode": false,
+    "display_refresh": {
+      "maximum_hz": 60,
+      "availability": "maximum-only",
+      "observation_method": "CGDisplayModeGetRefreshRate"
+    },
+    "target_frame_interval_ms": 16.667,
+    "vrr": {
+      "status": "unavailable",
+      "observation_method": "no public API exposes active VRR state"
+    },
+    "browser_throttling": {
+      "status": "not_applicable",
+      "observation_method": "native Metal runner"
+    }
+  },
+  "failure": {
+    "gate": "no-sustained-memory-growth",
+    "reason": "tail quartile-window median growth exceeded the unchanged 5% threshold",
+    "threshold_changed": false
+  },
+  "privacy_redacted": true
+}
