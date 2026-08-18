@@ -65,6 +65,21 @@
       "asset": "poc01-windows-web-physical-20260817-6a2bac2.zip",
       "asset_sha256": "de3c8347fbe5af8e656ed3918fbbf2cf5d1ac4dc346017600725d12f38612225",
       "result": "hardware-subset-passed"
+    },
+    "android_release_physical": {
+      "pull_request": 11,
+      "tested_commit": "4f1ab8d1833de06cf42508e8f398393a4c6677b8",
+      "merged_commit": "a87a8269229309dec453c34708326665500c2aa8",
+      "ci_run": 32092302992,
+      "report": "android-release-physical-2026-08-18/manifest.json",
+      "release_tag": "poc01-android-release-physical-2026-08-18-5b7d92d422df0337",
+      "asset": "poc01-android-release-physical-2026-08-18.zip",
+      "asset_sha256": "5b7d92d422df0337d86575df15f4158afc3ef4eb52374c6dd00f579c3622c449",
+      "build_configuration": "Release",
+      "debuggable": false,
+      "maximum_frame_ms": 17.2159,
+      "memory_series_passed": true,
+      "result": "android-release-physical-passed"
     }
   },
   "gates": {
@@ -73,7 +88,7 @@
     "numeric_and_replay_conformance": "passed",
     "visual": "passed",
     "lifecycle_100": "passed",
-    "smoke_frame_threshold": "incomplete",
+    "smoke_frame_threshold": "passed",
     "no_sustained_memory_growth": "incomplete",
     "performance_environment_metadata": "incomplete",
     "web_single_threaded": "passed",
@@ -81,12 +96,8 @@
   },
   "blocking_evidence": [
     {
-      "id": "android-release-physical",
-      "reason": "the physical Android performance run used a Debug acceptance APK"
-    },
-    {
       "id": "memory-time-series",
-      "reason": "Windows and Apple evidence does not quantify memory throughout the smoke"
+      "reason": "Windows and Apple physical evidence does not yet quantify post-warm-up memory throughout the smoke; Android Release now does"
     },
     {
       "id": "performance-environment-metadata",

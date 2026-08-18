@@ -1,0 +1,209 @@
+{
+  "backend": "ganesh-gles3",
+  "build": {
+    "apk_sha256": "86ce182cdb34bdde50ea0830689b0b8a69e4193ec88a9172fcf9d0aee624193a",
+    "configuration": "Release",
+    "debuggable": false
+  },
+  "core_conformance": {
+    "case_count": 10,
+    "corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "failure": "",
+    "passed": true,
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4,
+    "version": 1
+  },
+  "digest": "47826449b895ac4f4a57b4f386379775",
+  "lifecycle": 100,
+  "max_frame_ms": 17.2159,
+  "memory_analysis": {
+    "decision_rule": {
+      "maximum_tail_growth_ratio": 0.05,
+      "method": "compare medians of the first and last quartile windows",
+      "minimum_samples": 10,
+      "minimum_span_ms": 50000
+    },
+    "head_median_bytes": 75675648,
+    "maximum_bytes": 75717632,
+    "minimum_bytes": 46713856,
+    "passed": true,
+    "sample_count": 13,
+    "schema_version": 1,
+    "span_ms": 60059,
+    "sustained_growth_observed": false,
+    "tail_growth_bytes": -2034688,
+    "tail_growth_ratio": -0.02688695840437336,
+    "tail_median_bytes": 73640960,
+    "window_samples": 4
+  },
+  "memory_samples": [
+    {
+      "bytes": 75552768,
+      "elapsed_ms": 0
+    },
+    {
+      "bytes": 75686912,
+      "elapsed_ms": 5268
+    },
+    {
+      "bytes": 75675648,
+      "elapsed_ms": 10360
+    },
+    {
+      "bytes": 75675648,
+      "elapsed_ms": 15094
+    },
+    {
+      "bytes": 75703296,
+      "elapsed_ms": 20097
+    },
+    {
+      "bytes": 75717632,
+      "elapsed_ms": 25090
+    },
+    {
+      "bytes": 73636864,
+      "elapsed_ms": 30108
+    },
+    {
+      "bytes": 73640960,
+      "elapsed_ms": 35207
+    },
+    {
+      "bytes": 73640960,
+      "elapsed_ms": 40321
+    },
+    {
+      "bytes": 73640960,
+      "elapsed_ms": 45301
+    },
+    {
+      "bytes": 73640960,
+      "elapsed_ms": 50508
+    },
+    {
+      "bytes": 73646080,
+      "elapsed_ms": 55227
+    },
+    {
+      "bytes": 46713856,
+      "elapsed_ms": 60059
+    }
+  ],
+  "memory_sampling_interval_ms": 5000,
+  "memory_scope": "process-total-pss",
+  "performance_environment": {
+    "after": {
+      "browser_throttling": {
+        "observation_method": "native GLES runner",
+        "status": "not_applicable"
+      },
+      "device": {
+        "ro.build.version.release": "17",
+        "ro.build.version.sdk": "37",
+        "ro.hardware.egl": "mali",
+        "ro.product.cpu.abi": "arm64-v8a",
+        "ro.product.device": "panther",
+        "ro.product.manufacturer": "Google",
+        "ro.product.model": "Pixel 7"
+      },
+      "display": {
+        "active_mode_id": "2",
+        "current_refresh": {
+          "hz": null,
+          "status": "unavailable"
+        },
+        "minimum_refresh_setting_hz": "0.0",
+        "observation_method": "adb dumpsys display and settings system",
+        "peak_refresh_setting_hz": "Infinity",
+        "vrr": {
+          "observation_method": "Android public shell output did not expose a reliable active-VRR state",
+          "status": "unavailable"
+        }
+      },
+      "power": {
+        "battery_status_code": 2,
+        "low_power_mode": "unavailable",
+        "observation_method": "adb dumpsys battery and power",
+        "plugged": true
+      },
+      "privacy": {
+        "excluded": [
+          "ADB serial",
+          "device serial number",
+          "build fingerprint",
+          "network and account identifiers"
+        ],
+        "redacted": true
+      },
+      "target_frame_interval": {
+        "observation_method": "native POC-01 GLES smoke loop",
+        "status": "unbounded-submit-loop",
+        "value_ms": null
+      },
+      "thermal": {
+        "observation_method": "adb dumpsys thermalservice",
+        "status": 0
+      }
+    },
+    "before": {
+      "browser_throttling": {
+        "observation_method": "native GLES runner",
+        "status": "not_applicable"
+      },
+      "device": {
+        "ro.build.version.release": "17",
+        "ro.build.version.sdk": "37",
+        "ro.hardware.egl": "mali",
+        "ro.product.cpu.abi": "arm64-v8a",
+        "ro.product.device": "panther",
+        "ro.product.manufacturer": "Google",
+        "ro.product.model": "Pixel 7"
+      },
+      "display": {
+        "active_mode_id": "2",
+        "current_refresh": {
+          "hz": null,
+          "status": "unavailable"
+        },
+        "minimum_refresh_setting_hz": "0.0",
+        "observation_method": "adb dumpsys display and settings system",
+        "peak_refresh_setting_hz": "Infinity",
+        "vrr": {
+          "observation_method": "Android public shell output did not expose a reliable active-VRR state",
+          "status": "unavailable"
+        }
+      },
+      "power": {
+        "battery_status_code": 2,
+        "low_power_mode": "unavailable",
+        "observation_method": "adb dumpsys battery and power",
+        "plugged": true
+      },
+      "privacy": {
+        "excluded": [
+          "ADB serial",
+          "device serial number",
+          "build fingerprint",
+          "network and account identifiers"
+        ],
+        "redacted": true
+      },
+      "target_frame_interval": {
+        "observation_method": "native POC-01 GLES smoke loop",
+        "status": "unbounded-submit-loop",
+        "value_ms": null
+      },
+      "thermal": {
+        "observation_method": "adb dumpsys thermalservice",
+        "status": 0
+      }
+    }
+  },
+  "pixel_hash": "32186d8e0c941ec118342f811a0a555e",
+  "platform": "android",
+  "smoke_frames": 5410,
+  "smoke_seconds": 60
+}

@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "report_id": "poc01-android-release-physical-2026-08-18",
+  "captured_at": "2026-08-18T10:30:13+08:00",
+  "captured_timezone": "Asia/Shanghai",
+  "status": "passed",
+  "scope": ["android-release-physical"],
+  "poc01_status_after_report": "validating",
+  "tested_source": {
+    "repository": "Mostorm-Labs/canvas",
+    "commit": "4f1ab8d1833de06cf42508e8f398393a4c6677b8",
+    "branch_at_capture": "codex/poc01-supplemental-physical-gates",
+    "merged_commit": "a87a8269229309dec453c34708326665500c2aa8",
+    "pull_request": 11,
+    "ci_run": 32092302992,
+    "ci_result": "passed",
+    "deps_lock_sha256": "f4653ac106f39aa95a2ea225ad470e5f262089c5f190f1c4035dbb9d736e1dcf",
+    "skia_sdk_lock_sha256": "847284704af4bcc0fea113c4046bd4832d52a07cfc00ead26b7f3d3b8ffd5361"
+  },
+  "skia": {
+    "commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "profile": "poc01-minimal-v1",
+    "profile_hash": "7b341c9e1987c7b797087eafcae2dfb0f7eb3fb0635fc18537b8dd3e26213f00",
+    "release_tag": "skia-sdk-poc01-minimal-v1-debcbb7b9376806c",
+    "set_id": "debcbb7b9376806c94ffb9af5950ebd8a6de0547833f9b57df96a20531ca7817",
+    "android_sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f"
+  },
+  "fixtures": {
+    "scene_ndjson_sha256": "110a9572d54864ae913e28d91a5e392135e22c1dbedc06a88db6d7b425d25724",
+    "checker_png_sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59",
+    "roboto_regular_sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f",
+    "reference_rgba_sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041"
+  },
+  "acceptance": {
+    "document_digest": "47826449b895ac4f4a57b4f386379775",
+    "core_conformance_version": 1,
+    "core_case_count": 10,
+    "core_corpus_digest": "e8f3bc4f06282fc0a2348aa5059d56fa",
+    "replay_digest": "bcdb19afb9eccbf68cec4a7f442b1cd2",
+    "replay_revision": 1,
+    "replay_sequence": 4,
+    "lifecycle_iterations": 100,
+    "smoke_seconds": 60,
+    "smoke_frames": 5410,
+    "maximum_frame_ms": 17.2159,
+    "maximum_allowed_frame_ms": 100.0,
+    "visual_tolerance": 2,
+    "minimum_visual_ratio": 0.999,
+    "observed_visual_ratio": 0.9998270833333334,
+    "visual_passed": true
+  },
+  "build": {
+    "configuration": "Release",
+    "debuggable": false,
+    "apk_sha256": "86ce182cdb34bdde50ea0830689b0b8a69e4193ec88a9172fcf9d0aee624193a",
+    "java": "Temurin 17.0.20+8",
+    "gradle": "8.11.1",
+    "android_gradle_plugin": "8.10.1",
+    "cmake": "3.30.5",
+    "ndk": "27.2.12479018",
+    "compile_sdk": 35,
+    "target_sdk": 35,
+    "minimum_sdk": 26,
+    "abi": "arm64-v8a"
+  },
+  "device": {
+    "reality": "physical",
+    "transport": "usb",
+    "manufacturer": "Google",
+    "model": "Pixel 7",
+    "product_type": "panther",
+    "os": "Android 17",
+    "api_level": 37,
+    "cpu_abi": "arm64-v8a",
+    "egl_hardware": "mali"
+  },
+  "memory": {
+    "scope": "process-total-pss",
+    "sampling_interval_ms": 5000,
+    "sample_count": 13,
+    "span_ms": 60059,
+    "head_median_bytes": 75675648,
+    "tail_median_bytes": 73640960,
+    "tail_growth_bytes": -2034688,
+    "tail_growth_ratio": -0.02688695840437336,
+    "maximum_allowed_tail_growth_ratio": 0.05,
+    "decision_method": "compare medians of the first and last quartile windows",
+    "sustained_growth_observed": false,
+    "passed": true
+  },
+  "performance_environment": {
+    "thermal_status_before": 0,
+    "thermal_status_after": 0,
+    "power": {
+      "battery_status_code_before": 2,
+      "battery_status_code_after": 2,
+      "plugged_before": true,
+      "plugged_after": true,
+      "low_power_mode": "unavailable",
+      "observation_method": "adb dumpsys battery and power"
+    },
+    "display": {
+      "active_mode_id_before": "2",
+      "active_mode_id_after": "2",
+      "current_refresh_hz": null,
+      "current_refresh_status": "unavailable",
+      "peak_refresh_setting_hz": "Infinity",
+      "minimum_refresh_setting_hz": "0.0",
+      "observation_method": "adb dumpsys display and settings system"
+    },
+    "target_frame_interval": {
+      "status": "unbounded-submit-loop",
+      "value_ms": null
+    },
+    "vrr": {
+      "status": "unavailable",
+      "observation_method": "Android public shell output did not expose a reliable active-VRR state"
+    },
+    "browser_throttling": {
+      "status": "not_applicable",
+      "observation_method": "native GLES runner"
+    }
+  },
+  "results": {
+    "normalized_result": "results/pixel7-android17-release.json",
+    "normalized_result_sha256": "0e80b5252ca904fb0e3c56f64e4f451fd6796d9081d2cf864b15c38671676cc6",
+    "visual_metrics": "results/pixel7-android17-release-visual.json",
+    "visual_metrics_sha256": "93714adc32592b9cafefd29543dd35917ff8e6b7ed2b4e461901e71ca2bb6ede",
+    "raw_rgba_bytes": 1920000,
+    "raw_rgba_sha256": "1e1aa97f011e1d991b4f025c8df45cd96bd0b54ee0e746f0b8c8d4a58ca955a8",
+    "passed": true
+  },
+  "privacy": {
+    "redacted": true,
+    "excluded_fields": [
+      "ADB and device serial numbers",
+      "build fingerprint",
+      "accounts and network identifiers",
+      "APK signing certificate and key",
+      "host paths and proxy configuration"
+    ]
+  },
+  "external_evidence": {
+    "asset_name": "poc01-android-release-physical-2026-08-18.zip",
+    "bytes": 13183,
+    "uncompressed_bytes": 1941000,
+    "member_count": 9,
+    "sha256": "5b7d92d422df0337d86575df15f4158afc3ef4eb52374c6dd00f579c3622c449",
+    "retention": "content-addressed GitHub prerelease; referenced asset must not be overwritten or deleted",
+    "publication": {
+      "status": "published",
+      "repository": "Mostorm-Labs/canvas",
+      "release_tag": "poc01-android-release-physical-2026-08-18-5b7d92d422df0337",
+      "release_url": "https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-android-release-physical-2026-08-18-5b7d92d422df0337",
+      "target_commit": "4f1ab8d1833de06cf42508e8f398393a4c6677b8",
+      "prerelease": true,
+      "published_at": "2026-08-18T02:49:20Z",
+      "asset_url": "https://github.com/Mostorm-Labs/canvas/releases/download/poc01-android-release-physical-2026-08-18-5b7d92d422df0337/poc01-android-release-physical-2026-08-18.zip",
+      "github_asset_digest": "sha256:5b7d92d422df0337d86575df15f4158afc3ef4eb52374c6dd00f579c3622c449"
+    }
+  },
+  "closed_blocker": "android-release-physical",
+  "remaining_blockers": [
+    "windows-macos-iphone-ipad-memory-time-series",
+    "cross-platform-performance-environment-metadata",
+    "publish-and-review-complete-supplemental-evidence"
+  ]
+}
