@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "report_id": "poc01-windows-web-revalidation-20260818-a11899ca",
+  "status": "passed",
+  "attempt": 1,
+  "rerun_performed": false,
+  "poc_status_after_report": "Validating",
+  "scope": "supplemental same-machine Windows Native D3D12 and Chrome WebGL2 physical evidence",
+  "runtime_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+  "harness_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+  "runtime_core_diff_count": 0,
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "skia_sdks": {
+    "windows-x64-d3d12": {
+      "sdk_id": "7022f980c80e4786d8f883103552952c0aa27d8fdab9fd0c555850156ac3eec4",
+      "archive_sha256": "630ad8ca97337f8302f5dfe4c73e66bcd3d1fdd720d6e4ba766d3b7acfe4513c"
+    },
+    "web-wasm-webgl2": {
+      "sdk_id": "394a46256239b3a0a332e8c514205759d22ca4a6fff27b51eb113e721e5f3c6e",
+      "archive_sha256": "bbdcf2ee87d87adec986775dbb6de84ed62447be7d4458dc39c3e9bf66abc8ed"
+    }
+  },
+  "hashes": {
+    "skia_sdk_lock_sha256": "847284704af4bcc0fea113c4046bd4832d52a07cfc00ead26b7f3d3b8ffd5361",
+    "fixture_manifest_sha256": "77d4dacd86e174effa51347f65401a4a605e3222ece6de203e026461e338af26",
+    "fixture_replay_sha256": "110a9572d54864ae913e28d91a5e392135e22c1dbedc06a88db6d7b425d25724",
+    "fixture_checker_sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59",
+    "fixture_font_sha256": "466989fd178ca6ed13641893b7003e5d6ec36e42c2a816dee71f87b775ea097f",
+    "golden_sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041",
+    "native_executable_sha256": "7ee99c15067bb830ff35e8d4257c131a46249026fa220939dcb4c22ffcdeabf9",
+    "web_javascript_sha256": "a3356d1d90f44bc6ec08edda99036a1b37dbe36e7810417df57e4a95c822e357",
+    "web_wasm_sha256": "f9141961cf648debbf2555fbc2c374889330088fb2abb7f7f5cfab92832464ca"
+  },
+  "test_time": {
+    "timezone": "Asia/Shanghai",
+    "started_local": "2026-08-18T13:09:58.9835745+08:00",
+    "completed_local": "2026-08-18T13:12:24.8104543+08:00",
+    "started_utc": "2026-08-18T05:09:58.9835745Z",
+    "completed_utc": "2026-08-18T05:12:24.8104543Z"
+  },
+  "environment": {
+    "os": "Windows 10 Pro 10.0.19045 build 19045",
+    "cpu": "Intel Core i5-10400, 6 cores, 12 logical processors",
+    "gpu": "Intel UHD Graphics 630",
+    "gpu_device_id": "8086:9BC8",
+    "gpu_driver": "31.0.101.2111",
+    "chrome": "151.0.7922.138",
+    "chrome_webgl_renderer": "ANGLE (Intel, Intel UHD Graphics 630, D3D11)",
+    "llvm": "22.1.8",
+    "llvm_commit": "ca7933e47d3a3451d81e72ac174dcb5aa28b59d1",
+    "msvc_toolset": "14.51.36231",
+    "windows_sdk": "10.0.26100.0",
+    "emscripten": "6.0.6",
+    "collector_node": "24.19.0",
+    "thermal": {
+      "status": "unavailable",
+      "value_celsius": null,
+      "observation_method": "WMI MSAcpi_ThermalZoneTemperature",
+      "reason": "firmware exposes no ACPI thermal zone"
+    },
+    "power_mode": {
+      "status": "observed",
+      "value": "High performance",
+      "scheme_guid": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+      "observation_method": "powercfg /GETACTIVESCHEME"
+    },
+    "display_refresh": {
+      "current_hz": {
+        "status": "observed",
+        "value": [59],
+        "observation_method": "CIM Win32_VideoController.CurrentRefreshRate"
+      },
+      "supported_hz": {
+        "status": "unavailable",
+        "value": null,
+        "observation_method": "WMI WmiMonitorListedSupportedSourceModes",
+        "reason": "display driver exposes no source modes"
+      }
+    },
+    "target_frame_interval": {
+      "status": "unbounded-submit-loop",
+      "value_ms": null,
+      "observation_method": "POC-01 native/Web benchmark loops measure draw-submit throughput, not presentation cadence"
+    },
+    "vrr": {
+      "status": "unavailable",
+      "value": null,
+      "observation_method": "Windows public user-mode query not implemented by this POC harness",
+      "reason": "active VRR state unavailable"
+    },
+    "browser_throttling": {
+      "status": "disabled-by-command-line",
+      "flags": [
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding"
+      ],
+      "visibility_state": "visible",
+      "document_has_focus": true,
+      "observation_method": "document.visibilityState and document.hasFocus during the measured run"
+    }
+  },
+  "results": {
+    "windows": {
+      "backend": "ganesh-d3d12",
+      "hardware": true,
+      "warp": false,
+      "digest": "47826449b895ac4f4a57b4f386379775",
+      "lifecycle": 100,
+      "smoke_seconds": 60,
+      "smoke_frames": 53393,
+      "p50_ms": 1.0557,
+      "p95_ms": 1.6624,
+      "p99_ms": 1.8074,
+      "max_ms": 28.0954,
+      "peak_memory_bytes": 128286720,
+      "memory_scope": "process-working-set",
+      "memory_sampling_interval_ms": 5000,
+      "memory_samples": [
+        {"elapsed_ms": 0, "bytes": 124755968},
+        {"elapsed_ms": 5000, "bytes": 125239296},
+        {"elapsed_ms": 10000, "bytes": 91828224},
+        {"elapsed_ms": 15000, "bytes": 92573696},
+        {"elapsed_ms": 20000, "bytes": 92606464},
+        {"elapsed_ms": 25000, "bytes": 92794880},
+        {"elapsed_ms": 30000, "bytes": 92827648},
+        {"elapsed_ms": 35000, "bytes": 97009664},
+        {"elapsed_ms": 40000, "bytes": 97042432},
+        {"elapsed_ms": 45000, "bytes": 97026048},
+        {"elapsed_ms": 50000, "bytes": 97390592},
+        {"elapsed_ms": 55001, "bytes": 98201600},
+        {"elapsed_ms": 60000, "bytes": 98238464}
+      ],
+      "memory_analysis": {
+        "sample_count": 13,
+        "span_ms": 60000,
+        "window_samples": 4,
+        "head_median_bytes": 108664832,
+        "tail_median_bytes": 97796096,
+        "tail_growth_bytes": -10868736,
+        "tail_growth_ratio": -0.10002073163836483,
+        "maximum_tail_growth_ratio": 0.05,
+        "sustained_growth_observed": false,
+        "passed": true
+      },
+      "visual_matching_pixels": 479917,
+      "visual_total_pixels": 480000,
+      "visual_matching_ratio": 0.9998270833333334,
+      "visual_passed": true,
+      "core_conformance_passed": true
+    },
+    "web": {
+      "backend": "ganesh-webgl2-hardware",
+      "hardware": true,
+      "software_renderer": false,
+      "digest": "47826449b895ac4f4a57b4f386379775",
+      "lifecycle": 100,
+      "smoke_seconds": 60,
+      "smoke_frames": 3597,
+      "p50_ms": 1.299999713897705,
+      "p95_ms": 1.8000001907348633,
+      "p99_ms": 2.0,
+      "max_ms": 3.9000000953674316,
+      "peak_memory_bytes": 14714067,
+      "memory_scope": "renderer-js-heap",
+      "wasm_heap_before": 17170432,
+      "wasm_heap_after": 17170432,
+      "wasm_heap_stable": true,
+      "page_errors": [],
+      "visual_matching_pixels": 479952,
+      "visual_total_pixels": 480000,
+      "visual_matching_ratio": 0.9999,
+      "visual_passed": true,
+      "core_conformance_passed": true,
+      "single_threaded_artifact_scan_passed": true
+    }
+  },
+  "gate_results": {
+    "same_machine_hardware": "passed",
+    "digest": "passed",
+    "core_conformance": "passed",
+    "lifecycle_100": "passed",
+    "smoke_60_seconds": "passed",
+    "max_frame_100_ms": "passed",
+    "windows_working_set_series": "passed",
+    "web_wasm_heap_stability": "passed",
+    "visual": "passed",
+    "environment_metadata": "passed_with_explicit_unavailability",
+    "bundle_integrity": "passed"
+  },
+  "reproduction": {
+    "native": "canvas_poc01_windows.exe --hardware --offscreen --lifecycle=100 --smoke=60 --output=windows-hardware-actual.rgba",
+    "web": "node hardware_benchmark.mjs --url <local-url> --chrome <chrome-stable> --seconds 60 --output=web-hardware-result.json --rgba-output=web-hardware-actual.rgba",
+    "bundle": "pocs/shared_engine/benchmarks/windows/run_bundle.ps1 -NativeExe <native-exe> -WebUrl http://127.0.0.1:4173 -OutputDirectory <output> -DurationSeconds 60 -RuntimeCommit 5ab8b16bdac8f982a9d221d1f48d3867dda7b43c"
+  },
+  "release": {
+    "tag": "poc01-windows-web-revalidation-20260818-a11899ca",
+    "url": "https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-revalidation-20260818-a11899ca",
+    "target_commit": "06b61f3c7506f93d380765cdcaca59637bdf2644",
+    "asset": "poc01-windows-web-revalidation-20260818-a11899ca.zip",
+    "asset_bytes": 40863,
+    "asset_sha256": "a11899ca261429ab0890db6b9fd5a39cd904150caf7dac762e5d2470c4e10549",
+    "github_digest": "sha256:a11899ca261429ab0890db6b9fd5a39cd904150caf7dac762e5d2470c4e10549",
+    "archive_member_count": 15,
+    "hashed_payload_member_count": 14
+  }
+}
