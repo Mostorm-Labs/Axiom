@@ -13,9 +13,13 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE = ROOT / "tools/skia/profiles/poc01-minimal-v1.json"
 SKIA_ROOT = ROOT / ".deps/skia"
 SDK_FORMAT = "canvas-skia-sdk-v1"
-PROFILE_FIELDS = {
+PROFILE_REQUIRED_FIELDS = {
     "schema_version", "profile", "description", "skia_commit",
     "common_gn_args", "targets",
+}
+PROFILE_OPTIONAL_FIELDS = {
+    "build_targets", "module_header_dirs", "module_headers", "licenses",
+    "license_dependencies", "fixture_fonts", "runtime_files",
 }
 TARGET_FIELDS = {
     "platform", "arch", "backend", "output_name", "gn_args", "libraries",
@@ -78,9 +82,15 @@ def require_fields(value: Any, required: set[str], where: str) -> dict[str, Any]
 
 
 def load_profile(path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
-    profile = require_fields(
-        json.loads(path.read_text(encoding="utf-8")), PROFILE_FIELDS, "profile",
-    )
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(profile, dict):
+        raise SchemaError("profile must be an object")
+    unknown = set(profile) - PROFILE_REQUIRED_FIELDS - PROFILE_OPTIONAL_FIELDS
+    missing = PROFILE_REQUIRED_FIELDS - set(profile)
+    if unknown:
+        raise SchemaError(f"profile has unknown fields: {', '.join(sorted(unknown))}")
+    if missing:
+        raise SchemaError(f"profile is missing fields: {', '.join(sorted(missing))}")
     if profile["schema_version"] != 1:
         raise SchemaError("profile schema_version must be 1")
     if profile["profile"] != path.stem:
@@ -108,25 +118,77 @@ def load_profile(path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
                 f"target {target_name} has unknown toolchain fields: "
                 + ", ".join(sorted(unknown_toolchain))
             )
-    expected = {
-        "windows-x64-d3d12", "web-wasm-webgl2", "macos-arm64-metal",
-        "ios-arm64-metal", "ios-simulator-arm64-metal",
-        "android-arm64-v8a-gles3", "android-x86_64-gles3",
-    }
-    if set(targets) != expected:
-        raise SchemaError(f"profile target set mismatch: {sorted(targets)}")
-    web_toolchain = targets["web-wasm-webgl2"]["toolchain"]
-    if web_toolchain["emscripten"] != dependencies["emscripten"]["version"] or \
-       web_toolchain["llvm"] != dependencies["emscripten"]["llvm_version"]:
-        raise SchemaError("Web toolchain does not match deps.lock.json")
-    if targets["windows-x64-d3d12"]["toolchain"]["llvm"] != \
+    if "web-wasm-webgl2" in targets:
+        web_toolchain = targets["web-wasm-webgl2"]["toolchain"]
+        if web_toolchain["emscripten"] != dependencies["emscripten"]["version"] or \
+           web_toolchain["llvm"] != dependencies["emscripten"]["llvm_version"]:
+            raise SchemaError("Web toolchain does not match deps.lock.json")
+    if "windows-x64-d3d12" in targets and \
+       targets["windows-x64-d3d12"]["toolchain"]["llvm"] != \
        dependencies["windows_llvm"]["version"]:
         raise SchemaError("Windows LLVM does not match deps.lock.json")
-    for target_name in ("android-arm64-v8a-gles3", "android-x86_64-gles3"):
+    for target_name in targets:
+        if not target_name.startswith("android-"):
+            continue
         toolchain = targets[target_name]["toolchain"]
         if toolchain["android_ndk"] != dependencies["android_ndk"]["version"] or \
            toolchain["api_level"] != dependencies["android_ndk"]["api_level"]:
             raise SchemaError(f"{target_name} toolchain does not match deps.lock.json")
+    for field in ("build_targets", "module_header_dirs", "module_headers"):
+        value = profile.get(field, [])
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) or not item for item in value
+        ) or len(value) != len(set(value)):
+            raise SchemaError(f"profile {field} must be a unique string array")
+    licenses = profile.get("licenses", {})
+    if not isinstance(licenses, dict) or any(
+        not isinstance(name, str) or not name or not isinstance(source, str) or not source
+        for name, source in licenses.items()
+    ):
+        raise SchemaError("profile licenses must map output names to source paths")
+    license_dependencies = profile.get("license_dependencies", {})
+    if not isinstance(license_dependencies, dict) or any(
+        not isinstance(name, str) or not name or
+        not isinstance(dependency, str) or dependency not in dependencies
+        for name, dependency in license_dependencies.items()
+    ):
+        raise SchemaError(
+            "profile license_dependencies must map output names to locked dependencies"
+        )
+    fixture_fonts = profile.get("fixture_fonts", {})
+    if not isinstance(fixture_fonts, dict) or any(
+        not isinstance(destination, str) or not destination or
+        not destination.startswith("resources/fonts/") or
+        Path(destination).is_absolute() or ".." in Path(destination).parts or
+        not isinstance(dependency, str) or dependency not in dependencies or
+        "source" not in dependencies[dependency] or
+        "sha256" not in dependencies[dependency]
+        for destination, dependency in fixture_fonts.items()
+    ):
+        raise SchemaError(
+            "profile fixture_fonts must map safe font destinations to locked dependencies"
+        )
+    runtime_files = profile.get("runtime_files", [])
+    if not isinstance(runtime_files, list) or any(
+        not isinstance(item, dict) or
+        set(item) != {"target", "source", "destination"} or
+        not all(isinstance(item[key], str) and item[key] for key in item)
+        for item in runtime_files
+    ):
+        raise SchemaError(
+            "profile runtime_files must contain target/source/destination objects"
+        )
+    if any(item["target"] not in targets for item in runtime_files):
+        raise SchemaError("profile runtime_files contains an unknown target")
+    runtime_destinations = [item["destination"] for item in runtime_files]
+    if len(runtime_destinations) != len(set(runtime_destinations)) or any(
+        Path(item["source"]).is_absolute() or
+        Path(item["destination"]).is_absolute() or
+        ".." in Path(item["source"]).parts or
+        ".." in Path(item["destination"]).parts
+        for item in runtime_files
+    ):
+        raise SchemaError("profile runtime_files paths must be unique and relative")
     return profile
 
 

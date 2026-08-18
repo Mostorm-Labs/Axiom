@@ -1,0 +1,201 @@
+name: POC-04 RichText and IME
+
+on:
+  pull_request:
+    paths:
+      - "deps.lock.json"
+      - "pocs/rich_text/**"
+      - "tools/skia/**"
+      - ".github/workflows/poc04.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: poc04-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROFILE: tools/skia/profiles/poc04-richtext-v1.json
+  LOCK: pocs/rich_text/skia-sdk.lock.json
+  INSTALL: .deps/skia-sdk-poc04
+
+jobs:
+  sdk-lock:
+    runs-on: ubuntu-24.04
+    outputs:
+      available: ${{ steps.lock.outputs.available }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: lock
+        shell: bash
+        run: |
+          if [[ -f "$LOCK" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "RichText SDK lock is not published yet; platform consumers remain pending." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  host-core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap isolated core dependencies
+        run: python3 tools/bootstrap_deps.py --core --font-only
+      - name: Validate source-free consumer and SDK schemas
+        run: |
+          python3 pocs/rich_text/tools/check_consumer_ci.py
+          python3 pocs/rich_text/tools/test_behavior_conformance.py -v
+          python3 -m unittest discover -s tools/skia/tests -v
+          git diff --check
+      - name: Build and test core
+        run: |
+          cmake -S pocs/rich_text -B out/poc04-host -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build out/poc04-host --parallel
+          ctest --test-dir out/poc04-host --output-on-failure
+          out/poc04-host/canvas_poc04_cli --lifecycle=100
+          out/poc04-host/canvas_poc04_behavior_report --platform=host --output=out/poc04-host/host-behavior.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc04-host
+          path: out/poc04-host/host-behavior.json
+
+  web:
+    needs: sdk-lock
+    if: needs.sdk-lock.outputs.available == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: pocs/rich_text/platform/web/package-lock.json
+      - name: Bootstrap compiler and core dependencies
+        run: python3 tools/bootstrap_deps.py --core --web
+      - name: Fetch verified RichText Web SDK
+        run: python3 tools/skia/fetch.py --profile "$PROFILE" --lock "$LOCK" --install-root "$INSTALL" --target web-wasm-webgl2 --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Build source-free Web adapter and SkParagraph
+        shell: bash
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
+          cmake --build out/poc04-web --parallel
+          ! rg -l "pthread|SharedArrayBuffer" out/poc04-web/canvas_poc04_web.*
+      - name: Record canonical Web Runtime behavior in Chromium
+        working-directory: pocs/rich_text/platform/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm test
+          POC04_WASM_DIR="$GITHUB_WORKSPACE/out/poc04-web" POC04_BEHAVIOR_OUTPUT="$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json" npm run record:wasm
+      - name: Validate browser IME event adapter
+        working-directory: pocs/rich_text/platform/web
+        run: |
+          test -s "$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc04-web
+          path: out/poc04-web/web-behavior.json
+
+  windows:
+    needs: sdk-lock
+    if: needs.sdk-lock.outputs.available == 'true'
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
+      - name: Bootstrap core and pinned Windows LLVM
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --core --windows-llvm
+          $installer = Resolve-Path .deps/downloads/LLVM-22.1.8-win64.exe
+          $installDir = Join-Path $PWD ".deps/llvm"
+          Start-Process $installer -ArgumentList "/S", "/D=$installDir" -Wait
+      - name: Fetch verified RichText Windows SDK
+        shell: pwsh
+        run: python tools/skia/fetch.py --profile "$env:PROFILE" --lock "$env:LOCK" --install-root "$env:INSTALL" --target windows-x64-d3d12 --summary-file "$env:GITHUB_STEP_SUMMARY"
+      - name: Build and test Win32 IME adapter
+        shell: pwsh
+        run: |
+          cmake -S pocs/rich_text -B out/poc04-windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WINDOWS=ON
+          cmake --build out/poc04-windows --parallel
+          ctest --test-dir out/poc04-windows --output-on-failure
+          out/poc04-windows/canvas_poc04_canonical_behavior_report.exe --platform=windows --output=out/poc04-windows/windows-behavior.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc04-windows
+          path: out/poc04-windows/windows-behavior.json
+
+  android:
+    needs: sdk-lock
+    if: needs.sdk-lock.outputs.available == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - { abi: arm64-v8a, target: android-arm64-v8a-gles3 }
+          - { abi: x86_64, target: android-x86_64-gles3, emulator: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.11.1" }
+      - name: Install pinned Android NDK and core dependencies
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.5" "ndk;27.2.12479018"
+          python3 tools/bootstrap_deps.py --core
+      - name: Install Android emulator image
+        if: matrix.emulator == true
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
+      - name: Fetch verified RichText Android SDK
+        run: python3 tools/skia/fetch.py --profile "$PROFILE" --lock "$LOCK" --install-root "$INSTALL" --target "${{ matrix.target }}" --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Build Native CanvasView JNI data plane
+        run: |
+          gradle -p pocs/rich_text/platform/android :app:assembleDebug -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
+      - name: Enable Android emulator hardware acceleration
+        if: matrix.emulator == true
+        run: sudo chmod 0666 /dev/kvm
+      - name: Record canonical Android Runtime behavior
+        if: matrix.emulator == true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am force-stop com.mostorm.canvas.poc04
+            adb shell am start -n com.mostorm.canvas.poc04/.RichTextActivity --ez recordCanonicalBehavior true
+            timeout 180 bash -c 'until adb shell run-as com.mostorm.canvas.poc04 test -s files/android-behavior.json; do sleep 1; done'
+            mkdir -p out/poc04-android
+            adb exec-out run-as com.mostorm.canvas.poc04 cat files/android-behavior.json > out/poc04-android/android-behavior.json
+      - uses: actions/upload-artifact@v4
+        if: matrix.emulator == true
+        with:
+          name: poc04-android
+          path: out/poc04-android/android-behavior.json
+
+  cross-platform-acceptance:
+    if: ${{ false }} # Enabled after real platform behavior recorders land.
+    needs: [web, windows, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { pattern: "poc04-*", path: out/poc04-results }
+      - run: python3 pocs/rich_text/tools/behavior_conformance.py out/poc04-results/web/web-behavior.json out/poc04-results/windows/windows-behavior.json out/poc04-results/android/android-behavior.json

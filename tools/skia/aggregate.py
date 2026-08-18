@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate seven verified SDK archives into an immutable release set."""
+"""Aggregate one profile's verified SDK archives into an immutable release set."""
 
 from __future__ import annotations
 
