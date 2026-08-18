@@ -194,6 +194,11 @@ canvas_poc_status_t SkiaSceneRenderer::Readback(
   return CANVAS_POC_STATUS_OK;
 }
 
+void SkiaSceneRenderer::ResetCaches() {
+  images_.clear();
+  typefaces_.clear();
+}
+
 VisualMetrics CompareRgba(std::span<const uint8_t> expected,
                           std::span<const uint8_t> actual,
                           uint8_t tolerance) {

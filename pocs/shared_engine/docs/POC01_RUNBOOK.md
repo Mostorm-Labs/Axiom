@@ -179,6 +179,14 @@ same 100/60 gate and writes `poc01-result.json` and `apple-actual.rgba` to its
 application Documents container. Physical-device reports are required before
 acceptance; simulator results are correctness evidence only.
 
+The macOS adapter renders to one offscreen Metal target. Each measured frame
+uses a synchronous Ganesh submit so the runner includes GPU completion and has
+the same bounded-in-flight property a swapchain would normally provide. A
+healthy macOS adapter shutdown drops surfaces and renderer caches before
+calling `releaseResourcesAndAbandonContext`; plain `abandonContext` is reserved
+for a lost backend because it deliberately skips native-resource cleanup. The
+already accepted iOS/iPadOS submission and shutdown behavior is unchanged.
+
 After building and locally signing the device Release app, collect a physical
 iPhone or iPad run with the privacy-filtered helper (the device must remain
 unlocked and awake):

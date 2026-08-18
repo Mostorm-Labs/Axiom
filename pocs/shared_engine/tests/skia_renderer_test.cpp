@@ -53,6 +53,12 @@ TEST(SkiaRendererTest, DecodesPngLoadsRobotoAndRendersRgba) {
             CANVAS_POC_STATUS_OK)
       << GetLastError();
   EXPECT_EQ(cached_rgba, rgba);
+  renderer.ResetCaches();
+  std::vector<uint8_t> reset_rgba;
+  ASSERT_EQ(renderer.RenderRaster(scene, document.assets(), &reset_rgba),
+            CANVAS_POC_STATUS_OK)
+      << GetLastError();
+  EXPECT_EQ(reset_rgba, rgba);
 }
 
 TEST(SkiaRendererTest, InvalidImageBytesReportAssetError) {
