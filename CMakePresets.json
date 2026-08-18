@@ -83,6 +83,69 @@
         "CANVAS_POC01_BUILD_TESTS": "OFF",
         "CANVAS_POC01_ENABLE_SKIA": "ON"
       }
+    },
+    {
+      "name": "poc02-host-debug",
+      "displayName": "POC-02 Ink Engine host (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc02-host-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "ON",
+        "CANVAS_POC02_ENABLE_SKIA": "OFF"
+      }
+    },
+    {
+      "name": "poc02-host-asan",
+      "inherits": "poc02-host-debug",
+      "displayName": "POC-02 Ink Engine host (sanitizers)",
+      "binaryDir": "${sourceDir}/out/poc02-host-asan",
+      "cacheVariables": {
+        "CANVAS_POC02_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "poc02-web-release",
+      "displayName": "POC-02 Ink Engine Web/WASM (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc02-web-release",
+      "toolchainFile": "${sourceDir}/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "OFF",
+        "CANVAS_POC02_ENABLE_SKIA": "ON",
+        "CANVAS_POC02_WEB": "ON"
+      }
+    },
+    {
+      "name": "poc02-macos-release",
+      "displayName": "POC-02 Ink Engine macOS arm64 (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc02-macos-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "ON",
+        "CANVAS_POC02_ENABLE_SKIA": "ON"
+      }
+    },
+    {
+      "name": "poc02-windows-release",
+      "displayName": "POC-02 Ink Engine Windows/D3D12 (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc02-windows-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "ON",
+        "CANVAS_POC02_ENABLE_SKIA": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -92,7 +155,12 @@
     { "name": "windows-release", "configurePreset": "windows-release" },
     { "name": "macos-release", "configurePreset": "macos-release" },
     { "name": "ios-simulator-release", "configurePreset": "ios-simulator-release" },
-    { "name": "ios-device-release", "configurePreset": "ios-device-release" }
+    { "name": "ios-device-release", "configurePreset": "ios-device-release" },
+    { "name": "poc02-host-debug", "configurePreset": "poc02-host-debug" },
+    { "name": "poc02-host-asan", "configurePreset": "poc02-host-asan" },
+    { "name": "poc02-web-release", "configurePreset": "poc02-web-release" },
+    { "name": "poc02-macos-release", "configurePreset": "poc02-macos-release" },
+    { "name": "poc02-windows-release", "configurePreset": "poc02-windows-release" }
   ],
   "testPresets": [
     {
@@ -113,6 +181,26 @@
     {
       "name": "macos-release",
       "configurePreset": "macos-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc02-host-debug",
+      "configurePreset": "poc02-host-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc02-host-asan",
+      "configurePreset": "poc02-host-asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc02-macos-release",
+      "configurePreset": "poc02-macos-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc02-windows-release",
+      "configurePreset": "poc02-windows-release",
       "output": { "outputOnFailure": true }
     }
   ]
