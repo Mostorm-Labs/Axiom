@@ -10,10 +10,11 @@ Android.
 POC-01 is accepted. POC-02 is Integration Ready / Validating, so POC-03 scene
 work, POC-06 FastInk experiments, and R1 foundation work may consume its
 experimental contracts while its final latency and physical-device gates
-remain Pending. POC-03 and POC-04 can advance independently before R1
-acceptance. The delivery order is six focused POCs followed by five
-productization stages; no production code should bypass their documented exit
-gates.
+remain Pending. This branch implements POC-03 and remains `Validating` until
+its physical Windows/Web/Android and integrated-ink gates have recorded
+evidence. POC-04 can advance independently before R1 acceptance. The delivery
+order is six focused POCs followed by five productization stages; no production
+code should bypass their documented exit gates.
 
 ## Fixed architecture baseline
 
@@ -56,6 +57,7 @@ gates.
 - [Architecture decisions](docs/adr/README.md)
 - [POC-01 implementation](pocs/shared_engine/README.md)
 - [POC-02 Ink Engine implementation](pocs/ink_engine/README.md)
+- [POC-03 100K Scene implementation](pocs/large_scene/README.md)
 - [Prebuilt Skia SDK supply chain](docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md)
 
 ## Current sequence
