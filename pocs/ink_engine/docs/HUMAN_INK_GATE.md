@@ -173,3 +173,8 @@ POC-02 may move from `Validating` to `Accepted` only when all three reports are
 complete, the quantitative gates pass, subjective observations are linked to
 evidence, and every failure has a classified disposition. CI success alone must
 not change this status.
+
+POC-02 may separately be marked `Integration Ready` while it remains
+`Validating`. That non-terminal decision permits POC-03, POC-06, and R1
+foundation experiments to consume the verified Ink contracts; it is not a
+Human Ink Gate result and does not satisfy or remove any Pending row above.

@@ -1,6 +1,6 @@
 # POC-02 Automated Validation Report
 
-Status: **Validating**
+Status: **Integration Ready / Validating**
 
 Scope: deterministic core, operation replay, raster/GPU rendering, platform
 builds, and automated shell acceptance
@@ -13,6 +13,22 @@ Vector and Dab p95/p99 application-level latency remained above the gate. The
 device details, artifact hashes, measurements, and limitations are recorded in
 [`HUMAN_INK_GATE.md`](HUMAN_INK_GATE.md); the required Windows, Chrome Web, and
 Android reports remain Pending.
+
+## Integration decision
+
+POC-02 is **Integration Ready** for downstream experimental work. The shared
+Pointer/Stroke/Preview contracts, deterministic Vector/Dab semantics,
+operation-driven commit, pointer ownership, bounded Canonical handoff, and
+cross-platform automated oracles are stable enough for POC-03 integrated scene
+testing, POC-06 FastInk sinks, and R1 foundation work to consume.
+
+This is not final acceptance. The POC remains **Validating** because its current
+Web timing is not a presentation timestamp, Vector and Dab p95/p99 did not meet
+the exploratory iPad latency gate, and the qualifying Windows, Chrome Web, and
+Android physical-device reports are Pending. Historical-stroke scale behavior
+also moves into the POC-03 integrated ink gate, where SpatialIndex, dirty
+regions, and Raster/Tile cache can be measured together instead of forcing
+POC-02 to solve a circular dependency.
 
 ## Implemented evidence
 
@@ -104,7 +120,7 @@ missing/duplicate platforms, semantic drift, visual drift, or malformed
 Preview evidence. WARP, SwiftShader, and the Android emulator establish
 correctness only.
 
-## Remaining acceptance work
+## Remaining final-acceptance work
 
 POC-02 is not accepted until:
 
@@ -119,3 +135,7 @@ POC-02 is not accepted until:
 
 No placeholder, emulator run, synthetic replay, or green CI run may be recorded
 as physical-device evidence.
+
+Merging this POC records the `Integration Ready / Validating` decision only. It
+does not change any Pending Human Ink Gate row, and it does not promise source
+or binary compatibility for the experimental POC interfaces.

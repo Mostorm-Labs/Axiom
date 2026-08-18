@@ -1,6 +1,13 @@
 # POC-02 Ink Engine
 
-Status: **Validating**
+Status: **Integration Ready / Validating**
+
+`Integration Ready` is a non-terminal integration decision: the deterministic
+Ink contracts, operation replay, Preview/Canonical handoff, pointer ownership,
+and automated cross-platform evidence are sufficient for POC-03, POC-06, and
+R1 foundation experiments to consume. It does not mark POC-02 `Accepted`, turn
+the experimental POC surface into a product ABI, or waive the remaining
+latency and physical-device gates.
 
 This proof validates that one experimental C++20 Ink Engine can consume batched
 pen input, build deterministic Vector and Dab strokes incrementally, drive a
@@ -160,5 +167,7 @@ upstream contract is in
 Automated correctness is necessary but does not satisfy physical writing
 experience. Windows, Web, and Android device runs, application-level latency,
 frame pacing, recordings, and subjective rubric are intentionally still
-**Pending** in [`docs/HUMAN_INK_GATE.md`](docs/HUMAN_INK_GATE.md). POC-02 must
-remain `Validating` until those reports are completed and reviewed.
+**Pending** in [`docs/HUMAN_INK_GATE.md`](docs/HUMAN_INK_GATE.md). POC-02 is
+`Integration Ready` so downstream experimental integration may proceed, but it
+must remain `Validating` until those reports and the deferred scale/performance
+evidence are completed and reviewed.
