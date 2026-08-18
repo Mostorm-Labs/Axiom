@@ -17,14 +17,19 @@ separate changes:
 | Post-incident integrated regression | audit commit `77583fce67ed73d47979d147e25862f2939f0dec`, [run `32044717916`](https://github.com/Mostorm-Labs/canvas/actions/runs/32044717916), attempt 2 | Same executable code as integrated `main`; all six platforms and aggregate acceptance passed |
 | Mobile physical devices | [report](mobile-physical-2026-08-17/README.md), [PR #7](https://github.com/Mostorm-Labs/canvas/pull/7), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-mobile-physical-2026-08-17-62d1ae02ffaa15bd) | iPhone, iPadOS, and Android correctness subset passed |
 | Same-machine Windows/Web | [report](../../../../docs/quality/evidence/poc01/windows-web-physical-20260817.md), [PR #8](https://github.com/Mostorm-Labs/canvas/pull/8), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-windows-web-physical-20260817-6a2bac2) | Native D3D12 and Chrome WebGL2 hardware subset passed |
+| Android non-debuggable Release | [supplemental report](android-release-physical-2026-08-18/README.md), harness [PR #11](https://github.com/Mostorm-Labs/canvas/pull/11), [evidence Release](https://github.com/Mostorm-Labs/canvas/releases/tag/poc01-android-release-physical-2026-08-18-5b7d92d422df0337) | Physical Pixel 7 Release 100/60, post-warm-up PSS, and visual subset passed |
 
-Both downloaded Release assets were independently checked against their
+All three downloaded Release assets were independently checked against their
 published byte count and SHA-256. The mobile archive has SHA-256
 `62d1ae02ffaa15bdc0183dac9fc7657604862d7aea1f9da3267fefaf334f3fe7`;
 the Windows/Web archive has SHA-256
-`de3c8347fbe5af8e656ed3918fbbf2cf5d1ac4dc346017600725d12f38612225`.
+`de3c8347fbe5af8e656ed3918fbbf2cf5d1ac4dc346017600725d12f38612225`;
+the Android Release supplement has SHA-256
+`5b7d92d422df0337d86575df15f4158afc3ef4eb52374c6dd00f579c3622c449`.
 All 19 Windows/Web payload members outside `artifact-hashes.json` were also
-matched to their file-level hash records.
+matched to their file-level hash records. All eight Android payload members
+listed by the ninth member, `SHA256SUMS.json`, were checked for exact byte count
+and SHA-256.
 
 ## Gate decision
 
@@ -35,9 +40,9 @@ matched to their file-level hash records.
 | Numeric corpus and independent empty-Document replay agree | Passed | All reviewed results report corpus `e8f3bc4f06282fc0a2348aa5059d56fa` and replay `bcdb19afb9eccbf68cec4a7f442b1cd2`, revision 1, sequence 4. |
 | GPU visual gate | Passed | Every reviewed CI and physical readback meets at least 99.9% of pixels within ±2 per channel. |
 | 100 lifecycle iterations | Passed | Six CI platforms and all five physical paths report 100 iterations. |
-| 1,000-node, 60-second smoke with no frame over 100 ms | Incomplete | CI and physical runs meet the frame threshold, but the Android physical result is from a Debug acceptance APK. The quality baseline forbids using Debug builds as performance conclusions. |
-| No sustained memory growth | Incomplete | Web records a stable WASM heap and Android records non-monotonic PSS samples. Windows records only a peak working set; Apple runners do not record a quantitative time series. Peak-only or missing samples cannot prove absence of sustained growth. |
-| Performance environment is reproducible | Incomplete | Device/OS/toolchain/backend are recorded, but the Windows/Web bundle omits thermal state, power mode, refresh/frame interval, VRR, and browser-throttling state required by the quality baseline. Equivalent metadata is also incomplete for mobile performance interpretation. |
+| 1,000-node, 60-second smoke with no frame over 100 ms | Passed | The supplemental physical Pixel 7 run uses a verified non-debuggable Release APK and reports 5,410 frames with a 17.2159 ms maximum; earlier CI and physical paths also meet the unchanged threshold. |
+| No sustained memory growth | Incomplete | Web records a stable WASM heap. The Android Release supplement has 13 post-warm-up PSS samples over 60,059 ms and passes the declared 5% quartile-median rule. Windows and Apple physical evidence still lacks equivalent accepted time series. Peak-only or missing samples cannot prove absence of sustained growth. |
+| Performance environment is reproducible | Incomplete | The Android Release supplement now records thermal, power, display mode/settings, target interval, explicit VRR unavailability, and native throttling applicability. The previously retained Windows/Web and Apple bundles still omit part of the equivalent metadata required by the quality baseline. |
 | Web has no pthread/SharedArrayBuffer/isolation dependency | Passed | The locked artifact scan passes and the Windows hardware bundle confirms the single-threaded artifact. |
 | Runtime core contains no platform UI/backend types | Passed | The generic `src/` and public include boundary contain no HWND, D3D12, Emscripten, DOM, Metal, UIKit, EGL, or JNI type dependency; those types remain in platform adapters. |
 
@@ -67,19 +72,17 @@ failed-job rerun, so the post-incident integrated regression is complete.
 
 ## Evidence required for `Accepted`
 
-1. Build a non-debuggable Android Release acceptance APK from the same locked
-   Runtime/Skia inputs, run the existing physical-device 100/60/visual gate,
-   and retain the result, artifact hash, and environment record.
-2. Capture post-warm-up memory samples throughout the 60-second smoke for
+1. Capture post-warm-up memory samples throughout the 60-second smoke for
    Windows, macOS, iPhone, and iPadOS (and keep the existing Web/Android
    samples), with a declared sampling interval and an explicit no-sustained-
    growth decision. Peak-only memory is insufficient.
-3. Add thermal state, power mode, display refresh/frame interval, VRR status,
+2. Add thermal state, power mode, display refresh/frame interval, VRR status,
    and browser-throttling state to the physical benchmark manifests. If a
    platform cannot expose a field, record `unavailable` plus the observation
    method instead of silently omitting it.
-4. Publish the supplemental raw evidence as content-addressed retained assets,
-   update the aggregate machine-readable audit, and rerun the unchanged gate.
+3. Publish the remaining supplemental raw evidence as content-addressed
+   retained assets, update the aggregate machine-readable audit, and rerun the
+   unchanged gate.
 
 No CRDT, Snapshot codec, Ink, RichText, collaboration, product ABI, or product
 shell work is part of this remaining POC-01 evidence task.
