@@ -110,6 +110,20 @@
         "result": "failed"
       },
       "result": "ios-and-ipados-passed-macos-failed"
+    },
+    "macos_stability_fix": {
+      "tested_commit": "9e9618fe9931af6695ce329c1883670c80983dcd",
+      "report": "macos-stability-fix-2026-08-18/manifest.json",
+      "release_tag": "poc01-macos-stability-2026-08-18-2854fc7155cd3856",
+      "asset": "poc01-macos-stability-2026-08-18.zip",
+      "asset_sha256": "2854fc7155cd38561ca30718ee4de076fbcfc15757530ee11cf1b396b946d4b0",
+      "build_configuration": "Release",
+      "maximum_frame_ms": 9.80521,
+      "memory_tail_growth_ratio": 0.0,
+      "memory_series_passed": true,
+      "visual_passed": true,
+      "historical_failures_retained": true,
+      "result": "passed"
     }
   },
   "gates": {
@@ -118,24 +132,20 @@
     "numeric_and_replay_conformance": "passed",
     "visual": "passed",
     "lifecycle_100": "passed",
-    "smoke_frame_threshold": "failed",
-    "no_sustained_memory_growth": "failed",
+    "smoke_frame_threshold": "passed-current-source-historical-failures-retained",
+    "no_sustained_memory_growth": "incomplete-windows",
     "performance_environment_metadata": "incomplete",
     "web_single_threaded": "passed",
     "runtime_platform_type_isolation": "passed"
   },
   "blocking_evidence": [
     {
-      "id": "macos-performance-and-memory-stability",
-      "reason": "the first clean Release macOS physical run exceeded 100 ms and the only bounded rerun exceeded the unchanged 5% tail-window memory-growth ceiling; no third rerun is permitted"
-    },
-    {
       "id": "windows-revised-physical-evidence",
       "reason": "the Windows/Web physical bundle must be regenerated with the revised run_bundle.ps1 to retain a Windows working-set series and complete performance-environment metadata"
     },
     {
       "id": "final-review-and-publication",
-      "reason": "fresh evidence after resolving the macOS blocker and the revised Windows/Web record must be published immutably and reviewed before acceptance"
+      "reason": "the revised Windows/Web record must be published immutably and reviewed before acceptance"
     }
   ]
 }
