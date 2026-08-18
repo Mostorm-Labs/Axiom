@@ -24,15 +24,22 @@ Physical Human Ink Gate: **Pending**
 | Frame scheduling | bounded callback and stale-generation rejection | Passing locally |
 | macOS arm64 | locked prebuilt Skia Metal/Ganesh clean build and tests | Passing locally |
 | Web | single-thread WASM/WebGL2, Playwright replay/golden/interactive flow | Passing locally |
-| Windows | clang-cl/D3D12 WARP build, visual, digest, 100 lifecycle loops | Pending CI |
+| Windows | clang-cl/D3D12 WARP build, visual, digest, 100 lifecycle loops | Passing CI |
 | Android | arm64/x86_64 build | Passing locally |
 | Android arm64 emulator | Native CanvasView replay, Vector/Dab golden, semantic/numeric digest | Passing locally |
-| Android x86_64 emulator | Native CanvasView replay/golden acceptance | Pending CI |
+| Android x86_64 emulator | Native CanvasView replay/golden acceptance | Passing CI |
 | Physical writing | Windows/Web/Android representative pen devices | Pending Human Ink Gate |
 
 “Passing locally” records development-host evidence, not an acceptance status.
 The POC-02 workflow independently rebuilds and compares required Web, Windows,
 and Android artifacts before its cross-platform result can pass.
+
+The first authoritative run for commit `40232e68b5f4f2b4e40ebe1cabbfc74ddd3a16c1`
+is [GitHub Actions run 32098127687](https://github.com/Mostorm-Labs/canvas/actions/runs/32098127687).
+Its host-arm64, Web, Windows, Android, and cross-platform acceptance jobs all
+passed. The aggregator observed all three required GPU platforms with no
+semantic, Preview, numeric, or visual failure. This automated result does not
+change the separate Human Ink Gate from `Pending`.
 
 ## Fixed semantic and visual oracles
 
