@@ -195,6 +195,9 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
     return Failure(env, error);
   }
   const bool visual_equivalent = incremental_rgba == oracle_rgba;
+  g_pan_x = final_pan_x;
+  g_pan_y = final_pan_y;
+  g_zoom = final_zoom;
 
   const char* raw_path = env->GetStringUTFChars(output_path, nullptr);
   const std::string result_path(raw_path);
@@ -235,22 +238,30 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeTransform(
-    JNIEnv* env, jobject, jfloat dx, jfloat dy, jfloat scale) {
+    JNIEnv* env, jobject, jfloat previous_focus_x, jfloat previous_focus_y,
+    jfloat current_focus_x, jfloat current_focus_y, jfloat scale) {
   std::lock_guard<std::mutex> lock(g_mutex);
-  if (!g_adapter || !g_scene || !std::isfinite(dx) || !std::isfinite(dy) ||
-      !std::isfinite(scale) || scale <= 0.0F) {
+  if (!g_adapter || !g_scene) {
     return Failure(env, "invalid interactive transform");
   }
-  g_pan_x = std::clamp(g_pan_x - dx / (g_zoom * g_dpr), 0.0F, 30000.0F);
-  g_pan_y = std::clamp(g_pan_y - dy / (g_zoom * g_dpr), 0.0F, 3000.0F);
-  g_zoom = std::clamp(g_zoom * scale, 0.25F, 4.0F);
+  ViewportTransform transform{g_pan_x, g_pan_y, g_zoom};
+  std::string error;
+  if (!ApplyViewportGesture(
+          ViewportGesture{previous_focus_x, previous_focus_y, current_focus_x,
+                          current_focus_y, scale},
+          g_dpr, 0.25F, 4.0F,
+          Bounds{0.0F, 0.0F, 30000.0F, 3000.0F}, &transform, &error)) {
+    return Failure(env, error);
+  }
+  g_pan_x = transform.pan_x;
+  g_pan_y = transform.pan_y;
+  g_zoom = transform.zoom;
   ++g_view_revision;
   ++g_input_events;
   const ViewState view = CurrentView();
   const ViewQueryResult query = QueryView(*g_scene, view, std::nullopt);
   std::vector<uint8_t> ignored;
   double elapsed_ms = 0.0;
-  std::string error;
   if (!g_adapter->Render(*g_scene, view, query, false, &ignored, &elapsed_ms,
                          &error)) {
     return Failure(env, error);

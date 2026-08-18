@@ -95,6 +95,23 @@ physical-device evidence. Before installation, verify both the ELF `PT_LOAD`
 alignment and the uncompressed APK entry alignment are 16 KiB; the Android CI
 lane performs both checks and a device compatibility warning is a hard failure.
 
+For iPadOS, build the checked-in `canvas_poc03_ipados_runner` with the locked
+`ios-arm64-metal` SDK and a local signing identity. Run the fixed 600-frame
+trace once immediately after installation and once more without reinstalling.
+Archive both reports, the signed app binary hash, Skia SDK ID, device model,
+iPadOS build, physical resolution/DPR, maximum refresh rate, and wired/wireless
+transport. Interpret `frame_*` as the whole CADisplayLink callback,
+`render_submit_*` as Metal draw/submit diagnostics, and `display_interval_*`
+as the scheduling evidence. Record first-launch shader/pipeline compilation
+spikes rather than folding them into the warm result. Finally, exercise single-
+finger pan and two-finger pinch for at least ten seconds each. Pinch must
+preserve the world point below the moving two-finger centroid. Verify both
+simultaneous release and one-finger-first release, then continue dragging with
+the remaining finger; none may cause a viewport jump. Also report any freeze,
+black frame, flicker, or input discontinuity. Gesture events crossing a pointer-
+count boundary must update recognizer state without committing a transform
+derived from a one-pointer pinch centroid.
+
 ## Failure artifacts
 
 An equivalence failure must preserve the seed, operations, ChangeSets, injected

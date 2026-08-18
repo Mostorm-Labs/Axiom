@@ -142,6 +142,19 @@
         "CANVAS_POC03_BUILD_TESTS": "ON",
         "CANVAS_POC03_ENABLE_SKIA": "ON"
       }
+    },
+    {
+      "name": "poc03-ios-device-release",
+      "displayName": "POC-03 iPadOS/iOS 100K Scene (Release)",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/out/poc03-ios-device-release",
+      "toolchainFile": "${sourceDir}/cmake/ios.toolchain.cmake",
+      "cacheVariables": {
+        "CANVAS_POC01_BUILD": "OFF",
+        "CANVAS_POC03_BUILD": "ON",
+        "CANVAS_POC03_BUILD_TESTS": "OFF",
+        "CANVAS_POC03_ENABLE_SKIA": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -156,7 +169,8 @@
     { "name": "poc03-host-asan", "configurePreset": "poc03-host-asan" },
     { "name": "poc03-host-release", "configurePreset": "poc03-host-release" },
     { "name": "poc03-web-release", "configurePreset": "poc03-web-release" },
-    { "name": "poc03-windows-release", "configurePreset": "poc03-windows-release" }
+    { "name": "poc03-windows-release", "configurePreset": "poc03-windows-release" },
+    { "name": "poc03-ios-device-release", "configurePreset": "poc03-ios-device-release" }
   ],
   "testPresets": [
     {

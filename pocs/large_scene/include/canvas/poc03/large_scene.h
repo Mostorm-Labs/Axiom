@@ -187,6 +187,25 @@ struct ViewState {
   uint32_t pixel_height = 0;
 };
 
+struct ViewportTransform {
+  float pan_x = 0.0F;
+  float pan_y = 0.0F;
+  float zoom = 1.0F;
+};
+
+struct ViewportGesture {
+  float previous_focus_x_px = 0.0F;
+  float previous_focus_y_px = 0.0F;
+  float current_focus_x_px = 0.0F;
+  float current_focus_y_px = 0.0F;
+  float scale = 1.0F;
+};
+
+bool ApplyViewportGesture(const ViewportGesture& gesture, float dpr,
+                          float minimum_zoom, float maximum_zoom,
+                          const Bounds& pan_limits,
+                          ViewportTransform* transform, std::string* error);
+
 struct ViewQueryResult {
   std::vector<uint32_t> candidates;
   std::vector<uint32_t> visible;

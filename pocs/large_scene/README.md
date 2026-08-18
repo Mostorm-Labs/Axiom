@@ -101,6 +101,28 @@ Ink tool. The `write` gate remains blocked on POC-02's shared Ink contract.
 The native target uses 16 KiB-aligned ELF load segments, and CI also requires
 each uncompressed APK JNI library to pass `zipalign -P 16`.
 
+The iPadOS/iOS runner uses a native UIKit `CAMetalLayer` and the locked
+`ios-arm64-metal` SDK. Signing identities, Team IDs, profiles, and device IDs
+are supplied only on the local command line and must not be committed:
+
+```bash
+python3 tools/skia/fetch.py --target ios-arm64-metal
+cmake --preset poc03-ios-device-release \
+  -DCANVAS_SKIA_SDK_ROOT="$PWD/.deps/skia-sdk/ios-arm64-metal"
+xcodebuild \
+  -project out/poc03-ios-device-release/canvas_v2_pocs.xcodeproj \
+  -scheme canvas_poc03_ipados_runner -configuration Release \
+  -sdk iphoneos -destination 'id=<LOCAL_DEVICE_UDID>' \
+  -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic \
+  DEVELOPMENT_TEAM=<LOCAL_DEVELOPMENT_TEAM> CODE_SIGNING_ALLOWED=YES build
+```
+
+Install and launch the resulting app with `devicectl`, then copy
+`Documents/poc03-result.json` from its app data container. The report separates
+the complete CADisplayLink callback time, render/submit time, and actual display
+callback intervals. Preserve both the first launch and a no-reinstall warm
+launch; shader/pipeline compilation cost must not be silently discarded.
+
 ## Acceptance evidence and honest limits
 
 Automated tests cover canonical float handling, deterministic generation,
@@ -115,7 +137,13 @@ The following remain external exit evidence and therefore keep POC-03 in
 - 60-second physical Windows D3D12 and Chrome Stable Web traces with display
   p50/p95/p99/max, refresh rate, intervals, missed presentation, and memory.
 - At least one representative Android device frame/input/memory and experience
-  report. POC-03 does not create a new Android product shell.
+  report. Manual acceptance includes centroid-anchored pinch, simultaneous and
+  one-finger-first release without a viewport jump, and continuous remaining-
+  finger pan. POC-03 does not create a new Android product shell.
+- iPadOS is additional cross-platform evidence: archive cold/warm Metal traces,
+  actual display intervals, memory, visual equivalence, and the same manual
+  centroid/release/remaining-finger gesture rubric separately. It does not
+  replace the required Windows/Web report.
 - The Integrated Performance Playground's `write` path, which must consume the
   independently developed POC-02 Ink output instead of inventing a second Ink
   model here.
