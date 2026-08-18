@@ -1,6 +1,6 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Accepted，POC-02～04 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
+> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 已解除启动阻塞，POC-04 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
 
 路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。编号表达工作包，不表达无条件串行关系；设计、实现和验收遵循以下 evidence DAG：
 
@@ -9,19 +9,19 @@ flowchart LR
   P1["POC-01 Shared Engine"] --> P2["POC-02 Ink"]
   P1 --> P3["POC-03 Scene core"]
   P1 --> P4["POC-04 RichText"]
-  P2 --> P6["POC-06 FastInk"]
-  P2 --> P3Gate["POC-03 integrated ink gate"]
+  P2 -->|"Integration Ready contracts"| P6["POC-06 FastInk"]
+  P2 -->|"Integration Ready Ink"| P3Gate["POC-03 integrated ink gate"]
   P3 --> P3Gate
   P3 --> P5["POC-05 Hybrid Surface risk proof"]
   P1 --> R1["R1 foundation work"]
-  P2 --> R1Accept["R1 acceptance"]
+  P2 -->|"Integration Ready contracts"| R1Accept["R1 acceptance"]
   P3Gate --> R1Accept
   P4 --> R1Accept
   R1 --> R1Accept
   P6 --> R3Fast["R3 FastInk productization"]
 ```
 
-POC-02/03/04 的核心工作可在 POC-01 后并行。R1 工程准备可在证据收集期间进行，但 R1 acceptance 最低要求 POC-01～04 通过；POC-05 是非 V1 的未来能力风险验证，不阻塞 R1/V1；POC-06 可与 R1 并行，但在通过前阻塞 R3 FastInk 产品化。任何未通过 POC 的接口都不能因并行开发而被提前视为稳定产品契约。
+POC-02/03/04 的核心工作可在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后，POC-03 integrated ink gate、POC-06 和 R1 foundation 可以消费其实验性契约，无需等待 POC-02 最终延迟验收；POC-02 的规模性能由 POC-03 integrated ink gate 联合验证，平台级低延迟 Preview 由 POC-06 验证。R1 工程准备可在证据收集期间进行，但 R1 acceptance 仍要求依赖图中的功能、规模与产品门禁全部满足。POC-05 是非 V1 的未来能力风险验证，不阻塞 R1/V1；POC-06 可与 R1 并行，但在通过前阻塞 R3 FastInk 产品化。任何未通过 POC 的接口都不能因并行开发或合并而被提前视为稳定产品契约。
 
 每个性能结果必须记录设备、系统、编译器、构建模式、Skia commit/backend、场景版本、分辨率和采样方法。下文阈值是当前门禁；如基准设备变化，只能通过 ADR 修订。
 
@@ -33,6 +33,8 @@ POC-02/03/04 的核心工作可在 POC-01 后并行。R1 工程准备可在证�
 - `Implementing`：POC 已通过，正在构建产品实现。
 - `Accepted`：全部退出条件有可重复证据。
 - `Rejected`：假设被推翻，必须 ADR 记录替代路线。
+
+`Integration Ready` 不是新的终态，而是可与 `Validating` 并存的非终态集成资格：表示已列明的功能、确定性和契约证据足以解除下游实验阻塞，但尚未满足该 POC 的全部退出条件。它不等于 `Accepted`，不冻结产品 ABI，也不允许删除或降低剩余门禁。
 
 # 第一层：技术验证
 
@@ -102,6 +104,8 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 - [x] Runtime 内没有平台 UI、pthread 或产品业务依赖。
 
 ## POC-02 — Ink Engine
+
+> 当前结论：**Integration Ready / Validating**。POC-03 integrated ink gate、POC-06 和 R1 foundation 已解除启动阻塞；延迟、正式真机 Human Ink Gate 和联合规模性能仍是 Pending，不因分支合并而视为通过。
 
 ### 目标
 

@@ -1,6 +1,6 @@
 # Canvas v2 项目总体框架
 
-> 状态：Architecture Baseline v1.2；当前阶段：POC-01 Shared Engine / Accepted，POC-02～04 并行验证；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
+> 状态：Architecture Baseline v1.2；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 已解除启动阻塞，POC-04 / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
 
 Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯的白板应用、Skia Renderer 或跨平台 UI 框架，而是整个产品体系共享的语义文档、编辑、笔迹、文本、场景、渲染、持久化与协作运行时。
 
@@ -441,13 +441,13 @@ flowchart LR
   P1["POC-01 Shared Engine"] --> P2["POC-02 Ink"]
   P1 --> P3["POC-03 Scene core"]
   P1 --> P4["POC-04 RichText"]
-  P2 --> P6["POC-06 FastInk"]
-  P2 --> P3Gate["POC-03 integrated ink gate"]
+  P2 -->|"Integration Ready contracts"| P6["POC-06 FastInk"]
+  P2 -->|"Integration Ready Ink"| P3Gate["POC-03 integrated ink gate"]
   P3 --> P3Gate
   P3 --> P5["POC-05 Hybrid Surface risk proof"]
 ```
 
-POC-02/03/04 的核心工作可以在 POC-01 后并行；POC-03 的集成体验验收依赖 POC-02；POC-05 只证明未来扩展边界，不进入 V1；POC-06 可与 R1 工程化并行，但在通过前阻塞 R3 FastInk 产品化。
+POC-02/03/04 的核心工作可以在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后即可解除 POC-03 integrated ink gate、POC-06 和 R1 foundation 的启动阻塞；该资格只允许消费实验性契约，不等于 POC-02 `Accepted` 或产品 ABI 冻结。POC-03 的集成体验验收负责联合验证历史对象规模、Dirty Region 和 Raster/Tile cache 下的 Ink 性能；POC-05 只证明未来扩展边界，不进入 V1；POC-06 可与 R1 工程化并行，但在通过前阻塞 R3 FastInk 产品化。
 
 ### 产品化层
 

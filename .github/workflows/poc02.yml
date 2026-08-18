@@ -1,0 +1,216 @@
+name: POC-02 Ink Engine
+
+on:
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "deps.lock.json"
+      - "skia-sdk.lock.json"
+      - "pocs/ink_engine/**"
+      - ".github/workflows/poc02.yml"
+  push:
+    branches: [main, "codex/poc-02-ink-engine"]
+  workflow_dispatch:
+
+concurrency:
+  group: poc02-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VECTOR_DOCUMENT_DIGEST: 672abdc8604a169ecda4ce08e8d80b55
+  VECTOR_STROKE_DIGEST: 2ae509ac25da5ca82937044f740265e4
+
+jobs:
+  host-arm64:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap locked core dependencies
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Enforce prebuilt Skia consumer boundary
+        run: python3 pocs/ink_engine/tools/check_ci_boundary.py
+      - name: Build and test deterministic C++ core
+        run: |
+          cmake --preset poc02-host-debug
+          cmake --build --preset poc02-host-debug --parallel
+          ctest --preset poc02-host-debug --output-on-failure
+      - name: UBSan core check
+        run: |
+          cmake --preset poc02-host-asan
+          cmake --build --preset poc02-host-asan --parallel
+          ctest --preset poc02-host-asan --output-on-failure
+      - name: Upload arm64 semantic oracle
+        run: |
+          mkdir -p out/results
+          out/poc02-host-debug/pocs/ink_engine/canvas_poc02_replay --repeat=10 > out/results/arm64-vector.json
+          out/poc02-host-debug/pocs/ink_engine/canvas_poc02_replay --fixture=pocs/ink_engine/fixtures/dab-turn.ndjson --repeat=10 > out/results/arm64-dab.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc02-host-arm64
+          path: out/results
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: pocs/ink_engine/playground/web/package-lock.json
+      - name: Bootstrap locked dependencies
+        run: python3 tools/bootstrap_deps.py --core --web
+      - name: Fetch verified Web Skia SDK
+        run: >-
+          python3 tools/skia/fetch.py --target web-wasm-webgl2
+          --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Enforce prebuilt Skia consumer boundary
+        run: python3 pocs/ink_engine/tools/check_ci_boundary.py
+      - name: Build single-threaded WASM InkEngine
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          python3 tools/ci_time.py --label "POC-02 Web configure" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --preset poc02-web-release
+          python3 tools/ci_time.py --label "POC-02 Web build" --summary-file "$GITHUB_STEP_SUMMARY" -- cmake --build --preset poc02-web-release --parallel
+          python3 pocs/ink_engine/tools/check_web_artifact.py out/poc02-web-release/pocs/ink_engine/platform/web/canvas_poc02_web.js out/poc02-web-release/pocs/ink_engine/platform/web/canvas_poc02_web.wasm
+      - name: Build and test Ink Playground
+        working-directory: pocs/ink_engine/playground/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm run test:e2e
+      - name: Capture Web acceptance result
+        working-directory: pocs/ink_engine/playground/web
+        run: |
+          npm run dev > /tmp/poc02-vite.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          timeout 60 bash -c 'until curl --silent --fail http://127.0.0.1:4273 >/dev/null; do sleep 1; done'
+          node tools/write_web_result.mjs ../../../../out/results/web-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc02-web
+          path: |
+            out/results
+            pocs/ink_engine/playground/web/test-results
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
+      - name: Bootstrap locked dependencies and LLVM
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --core --windows-llvm
+          $installer = Resolve-Path .deps/downloads/LLVM-22.1.8-win64.exe
+          $installDir = Join-Path $PWD ".deps/llvm"
+          Start-Process $installer -ArgumentList "/S", "/D=$installDir" -Wait
+          (Join-Path $installDir "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Fetch verified Windows Skia SDK
+        shell: pwsh
+        run: python tools/skia/fetch.py --target windows-x64-d3d12 --summary-file "$env:GITHUB_STEP_SUMMARY"
+      - name: Build and test Windows C++ Runtime
+        shell: pwsh
+        run: |
+          cmake --preset poc02-windows-release -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe"
+          cmake --build --preset poc02-windows-release --parallel
+          ctest --preset poc02-windows-release --output-on-failure
+      - name: WARP replay, visual, and lifecycle acceptance
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/results | Out-Null
+          & out/poc02-windows-release/pocs/ink_engine/platform/windows/canvas_poc02_windows.exe --offscreen --lifecycle=100 --output=out/results/windows-actual.rgba --result=out/results/windows-result.json
+          if ($LASTEXITCODE -ne 0) { throw "POC-02 Windows acceptance failed" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc02-windows
+          path: out/results
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.11.1" }
+      - name: Install locked Android components
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.30.5" "ndk;27.2.12479018" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Bootstrap core and Android Skia SDKs
+        run: |
+          python3 tools/bootstrap_deps.py --core
+          python3 tools/skia/fetch.py --target android-arm64-v8a-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --target android-x86_64-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Clean-build Android arm64 and emulator targets
+        working-directory: pocs/ink_engine/platform/android
+        run: |
+          mkdir -p ../../../../out/android-apks
+          gradle :app:assembleDebug -PcanvasPocAbi=arm64-v8a --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../../../../out/android-apks/poc02-arm64-v8a.apk
+          gradle :app:assembleDebug -PcanvasPocAbi=x86_64 --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk ../../../../out/android-apks/poc02-x86_64.apk
+          unzip -l ../../../../out/android-apks/poc02-arm64-v8a.apk | grep -q 'lib/arm64-v8a/libcanvas_poc02_android.so'
+          unzip -l ../../../../out/android-apks/poc02-x86_64.apk | grep -q 'lib/x86_64/libcanvas_poc02_android.so'
+      - name: Enable emulator acceleration
+        run: sudo chmod 0666 /dev/kvm
+      - name: Native CanvasView replay acceptance
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r pocs/ink_engine/platform/android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell wm size 800x600
+            adb logcat -c
+            adb shell am start -n dev.mostorm.canvas.poc02/dev.mostorm.canvas.poc02.CanvasInkActivity --ez acceptance true
+            timeout 180 bash -c 'until adb logcat -d -s CanvasPOC02:I | grep -q CANVAS_POC02_RESULT; do sleep 1; done'
+            mkdir -p out/results
+            adb shell run-as dev.mostorm.canvas.poc02 cat files/android-actual.rgba > out/results/android-actual.rgba
+            adb logcat -d -s CanvasPOC02:I | sed -n 's/.*CANVAS_POC02_RESULT //p' | tail -1 > out/results/android-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc02-android
+          path: |
+            out/results
+            out/android-apks
+
+  cross-platform-acceptance:
+    if: always()
+    needs: [host-arm64, web, windows, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: poc02-*
+          path: out/all-results
+          merge-multiple: false
+      - name: Compare Web, Windows, and Android semantic/visual results
+        run: >-
+          python3 pocs/ink_engine/tools/cross_platform_acceptance.py
+          --results out/all-results --required web windows android
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc02-cross-platform-acceptance
+          path: out/all-results/cross-platform-acceptance.json

@@ -7,10 +7,13 @@ shells. The shared C++20 Runtime is validated on Web, Windows, macOS, iOS,
 iPadOS, and Android; the initial product shells remain Web, Windows, and
 Android.
 
-POC-01 is accepted. The repository is now advancing the independent POC-02,
-POC-03, and POC-04 workstreams before R1 acceptance. The delivery order is six
-focused POCs followed by five productization stages; no production code should
-bypass their documented exit gates.
+POC-01 is accepted. POC-02 is Integration Ready / Validating, so POC-03 scene
+work, POC-06 FastInk experiments, and R1 foundation work may consume its
+experimental contracts while its final latency and physical-device gates
+remain Pending. POC-03 and POC-04 can advance independently before R1
+acceptance. The delivery order is six focused POCs followed by five
+productization stages; no production code should bypass their documented exit
+gates.
 
 ## Fixed architecture baseline
 
@@ -52,14 +55,16 @@ bypass their documented exit gates.
 - [Vibe architecture findings](docs/research/VIBE_ARCHITECTURE_FINDINGS.md)
 - [Architecture decisions](docs/adr/README.md)
 - [POC-01 implementation](pocs/shared_engine/README.md)
+- [POC-02 Ink Engine implementation](pocs/ink_engine/README.md)
 - [Prebuilt Skia SDK supply chain](docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md)
 
 ## Current sequence
 
 The accepted `POC-01 Shared Engine` has unlocked parallel Ink, Scene, and
-RichText work. POC-06 depends on the POC-02 Preview Model; POC-05 depends on
-the POC-03 reserved external-surface pass. POC-03's integrated ink experience
-gate also consumes POC-02 outputs.
+RichText work. POC-02 is Integration Ready / Validating: POC-06 may consume its
+Preview Model, and POC-03's integrated ink experience gate may consume its Ink
+outputs without treating POC-02 as Accepted. POC-05 depends on the POC-03
+reserved external-surface pass.
 
 R1 foundation acceptance is blocked by POC-01 through POC-04. POC-05 is a
 future-capability risk proof and does not enter V1 product scope. POC-06 may run
