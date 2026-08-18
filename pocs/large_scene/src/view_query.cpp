@@ -27,6 +27,44 @@ Bounds WorldToScreen(const Bounds& world, const ViewState& view) {
 
 }  // namespace
 
+bool ApplyViewportGesture(const ViewportGesture& gesture, float dpr,
+                          float minimum_zoom, float maximum_zoom,
+                          const Bounds& pan_limits,
+                          ViewportTransform* transform, std::string* error) {
+  if (transform == nullptr || error == nullptr ||
+      !std::isfinite(gesture.previous_focus_x_px) ||
+      !std::isfinite(gesture.previous_focus_y_px) ||
+      !std::isfinite(gesture.current_focus_x_px) ||
+      !std::isfinite(gesture.current_focus_y_px) ||
+      !std::isfinite(gesture.scale) || gesture.scale <= 0.0F ||
+      !std::isfinite(dpr) || dpr <= 0.0F || !std::isfinite(minimum_zoom) ||
+      !std::isfinite(maximum_zoom) || minimum_zoom <= 0.0F ||
+      minimum_zoom > maximum_zoom || !pan_limits.IsFiniteAndOrdered() ||
+      !std::isfinite(transform->pan_x) || !std::isfinite(transform->pan_y) ||
+      !std::isfinite(transform->zoom) || transform->zoom <= 0.0F) {
+    if (error != nullptr) *error = "invalid viewport gesture";
+    return false;
+  }
+
+  const float old_screen_scale = transform->zoom * dpr;
+  const float next_zoom =
+      std::clamp(transform->zoom * gesture.scale, minimum_zoom, maximum_zoom);
+  const float next_screen_scale = next_zoom * dpr;
+  const float focus_world_x =
+      transform->pan_x + gesture.previous_focus_x_px / old_screen_scale;
+  const float focus_world_y =
+      transform->pan_y + gesture.previous_focus_y_px / old_screen_scale;
+
+  transform->pan_x =
+      std::clamp(focus_world_x - gesture.current_focus_x_px / next_screen_scale,
+                 pan_limits.left, pan_limits.right);
+  transform->pan_y =
+      std::clamp(focus_world_y - gesture.current_focus_y_px / next_screen_scale,
+                 pan_limits.top, pan_limits.bottom);
+  transform->zoom = next_zoom;
+  return true;
+}
+
 ViewQueryResult QueryView(const RuntimeScene& scene, const ViewState& view,
                           const std::optional<Bounds>& world_damage) {
   if (view.view_id == 0 || !view.world_viewport.IsFiniteAndOrdered() ||

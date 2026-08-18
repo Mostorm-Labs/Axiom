@@ -275,6 +275,63 @@ TEST(ViewState, TwoViewsKeepQueriesDamageAndKeysIsolated) {
   EXPECT_FALSE(first_key == second_key);
 }
 
+TEST(ViewState, PinchKeepsWorldPointUnderMovingScreenFocus) {
+  ViewportTransform transform{100.0F, 50.0F, 2.0F};
+  const float dpr = 3.0F;
+  const ViewportGesture gesture{600.0F, 300.0F, 630.0F, 282.0F, 1.5F};
+  const float focus_world_x =
+      transform.pan_x + gesture.previous_focus_x_px / (transform.zoom * dpr);
+  const float focus_world_y =
+      transform.pan_y + gesture.previous_focus_y_px / (transform.zoom * dpr);
+  std::string error;
+  ASSERT_TRUE(ApplyViewportGesture(
+      gesture, dpr, 0.25F, 4.0F,
+      Bounds{-10000.0F, -10000.0F, 10000.0F, 10000.0F}, &transform,
+      &error))
+      << error;
+  EXPECT_FLOAT_EQ(transform.zoom, 3.0F);
+  EXPECT_NEAR((focus_world_x - transform.pan_x) * transform.zoom * dpr,
+              gesture.current_focus_x_px, 0.0001F);
+  EXPECT_NEAR((focus_world_y - transform.pan_y) * transform.zoom * dpr,
+              gesture.current_focus_y_px, 0.0001F);
+}
+
+TEST(ViewState, PanUsesPhysicalPixelsAndPinchHonorsClampedZoom) {
+  ViewportTransform transform{100.0F, 50.0F, 1.0F};
+  std::string error;
+  ASSERT_TRUE(ApplyViewportGesture(
+      ViewportGesture{600.0F, 300.0F, 660.0F, 270.0F, 1.0F}, 3.0F,
+      0.25F, 4.0F, Bounds{0.0F, 0.0F, 30000.0F, 3000.0F}, &transform,
+      &error))
+      << error;
+  EXPECT_FLOAT_EQ(transform.pan_x, 80.0F);
+  EXPECT_FLOAT_EQ(transform.pan_y, 60.0F);
+
+  const float focus_world_x = transform.pan_x + 300.0F / 3.0F;
+  ASSERT_TRUE(ApplyViewportGesture(
+      ViewportGesture{300.0F, 150.0F, 300.0F, 150.0F, 100.0F}, 3.0F,
+      0.25F, 4.0F, Bounds{0.0F, 0.0F, 30000.0F, 3000.0F}, &transform,
+      &error))
+      << error;
+  EXPECT_FLOAT_EQ(transform.zoom, 4.0F);
+  EXPECT_NEAR((focus_world_x - transform.pan_x) * transform.zoom * 3.0F,
+              300.0F, 0.0001F);
+}
+
+TEST(ViewState, InvalidViewportGestureIsAtomic) {
+  ViewportTransform transform{100.0F, 50.0F, 2.0F};
+  const ViewportTransform before = transform;
+  std::string error;
+  EXPECT_FALSE(ApplyViewportGesture(
+      ViewportGesture{10.0F, 10.0F, 10.0F, 10.0F,
+                      std::numeric_limits<float>::quiet_NaN()},
+      2.0F, 0.25F, 4.0F, Bounds{0.0F, 0.0F, 30000.0F, 3000.0F},
+      &transform, &error));
+  EXPECT_EQ(transform.pan_x, before.pan_x);
+  EXPECT_EQ(transform.pan_y, before.pan_y);
+  EXPECT_EQ(transform.zoom, before.zoom);
+}
+
 TEST(HitTest, GeometryQuerySelectionPolicyAndSnapStaySeparate) {
   Document document;
   NodeRecord bottom = MakeNode(1U, 1U, Bounds{0.0F, 0.0F, 20.0F, 20.0F});

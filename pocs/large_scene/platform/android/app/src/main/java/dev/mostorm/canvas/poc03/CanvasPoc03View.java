@@ -20,9 +20,15 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
     private final ScaleGestureDetector scaleDetector;
     private float lastX;
     private float lastY;
-    private float pendingDx;
-    private float pendingDy;
     private float pendingScale = 1.0f;
+    private float pendingPreviousFocusX;
+    private float pendingPreviousFocusY;
+    private float pendingCurrentFocusX;
+    private float pendingCurrentFocusY;
+    private float lastScaleFocusX;
+    private float lastScaleFocusY;
+    private boolean gesturePending;
+    private boolean suppressScaleUpdate;
     private boolean framePending;
     private boolean acceptanceStarted;
     private volatile boolean acceptanceRunning;
@@ -36,8 +42,20 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
         scaleDetector = new ScaleGestureDetector(context,
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
+                    public boolean onScaleBegin(ScaleGestureDetector detector) {
+                        lastScaleFocusX = detector.getFocusX();
+                        lastScaleFocusY = detector.getFocusY();
+                        return true;
+                    }
+
+                    @Override
                     public boolean onScale(ScaleGestureDetector detector) {
-                        pendingScale *= detector.getScaleFactor();
+                        if (suppressScaleUpdate) return true;
+                        enqueueGesture(lastScaleFocusX, lastScaleFocusY,
+                                detector.getFocusX(), detector.getFocusY(),
+                                detector.getScaleFactor());
+                        lastScaleFocusX = detector.getFocusX();
+                        lastScaleFocusY = detector.getFocusY();
                         requestNativeFrame();
                         return true;
                     }
@@ -81,17 +99,28 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        boolean transitionsFromPinchToOneFinger =
+                event.getActionMasked() == MotionEvent.ACTION_POINTER_UP
+                        && event.getPointerCount() == 2;
+        suppressScaleUpdate = transitionsFromPinchToOneFinger;
         scaleDetector.onTouchEvent(event);
+        suppressScaleUpdate = false;
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             lastX = event.getX();
             lastY = event.getY();
             return true;
         }
-        if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+        if (transitionsFromPinchToOneFinger) {
+            int remainingIndex = event.getActionIndex() == 0 ? 1 : 0;
+            lastX = event.getX(remainingIndex);
+            lastY = event.getY(remainingIndex);
+            return true;
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_MOVE
+                && event.getPointerCount() == 1 && !scaleDetector.isInProgress()) {
             float x = event.getX();
             float y = event.getY();
-            pendingDx += x - lastX;
-            pendingDy += y - lastY;
+            enqueueGesture(lastX, lastY, x, y, 1.0f);
             lastX = x;
             lastY = y;
             requestNativeFrame();
@@ -100,15 +129,35 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
         return true;
     }
 
+    private void enqueueGesture(float previousX, float previousY,
+                                float currentX, float currentY, float scale) {
+        if (!gesturePending) {
+            pendingPreviousFocusX = previousX;
+            pendingPreviousFocusY = previousY;
+            pendingCurrentFocusX = currentX;
+            pendingCurrentFocusY = currentY;
+            pendingScale = scale;
+            gesturePending = true;
+            return;
+        }
+        pendingCurrentFocusX = currentX
+                + scale * (pendingCurrentFocusX - previousX);
+        pendingCurrentFocusY = currentY
+                + scale * (pendingCurrentFocusY - previousY);
+        pendingScale *= scale;
+    }
+
     private void requestNativeFrame() {
         if (framePending || acceptanceRunning) return;
         framePending = true;
         Choreographer.getInstance().postFrameCallback(frameTimeNanos -> {
             framePending = false;
-            String result = nativeTransform(pendingDx, pendingDy, pendingScale);
-            pendingDx = 0.0f;
-            pendingDy = 0.0f;
+            if (!gesturePending) return;
+            String result = nativeTransform(
+                    pendingPreviousFocusX, pendingPreviousFocusY,
+                    pendingCurrentFocusX, pendingCurrentFocusY, pendingScale);
             pendingScale = 1.0f;
+            gesturePending = false;
             Log.d("CanvasPOC03", result);
         });
     }
@@ -121,7 +170,9 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
                                        float density);
     private native String nativeRunAcceptance(String outputPath, float refreshRate,
                                                int frameCount);
-    private native String nativeTransform(float dx, float dy, float scale);
+    private native String nativeTransform(float previousFocusX, float previousFocusY,
+                                          float currentFocusX, float currentFocusY,
+                                          float scale);
     private native void nativeDetach();
     private native void nativeDestroy();
 }
