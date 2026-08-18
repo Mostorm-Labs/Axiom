@@ -7,6 +7,13 @@ builds, and automated shell acceptance
 
 Physical Human Ink Gate: **Pending**
 
+An iPadOS Safari + Apple Pencil exploratory run found and verified fixes for a
+multi-pointer/visible-ack stall and rapid-stroke handoff drops. Its final
+Vector and Dab p95/p99 application-level latency remained above the gate. The
+device details, artifact hashes, measurements, and limitations are recorded in
+[`HUMAN_INK_GATE.md`](HUMAN_INK_GATE.md); the required Windows, Chrome Web, and
+Android reports remain Pending.
+
 ## Implemented evidence
 
 | Area | Evidence | Current result |

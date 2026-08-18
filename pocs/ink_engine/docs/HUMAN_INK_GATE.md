@@ -122,6 +122,51 @@ Status: **Pending**
 | Trace/video links and hashes | Pending |
 | Reviewer/date | Pending |
 
+## Supplemental iPadOS Safari exploratory evidence
+
+Status: **Correctness fixes verified; latency gate not met; not a qualifying
+Web report**
+
+This exploratory run used an iPad Air (4th generation), iPadOS 26.6, Apple
+Pencil, and Safari on 2026-08-18. It supplements the required matrix but does
+not complete the Web physical-device report because that report requires
+Chrome Stable and the full trace fields listed above. The Playground currently
+reports application-level `PointerEvent.timeStamp` to `requestAnimationFrame`
+latency; it does not export presentation timestamps, frame counts, queue age,
+handoff latency, or raw trace files.
+
+The first run at commit `894419b97d7092a0dfe96686c91c80e630552800`
+reproduced a permanent-in-page input stall after repeated two-finger
+interleaving followed by Apple Pencil strokes. Refreshing the page restored
+input. Two independent defects were then fixed:
+
+- `dd8d4af5780eaada792329b7225d07d3a0304c5a` bound JS input to one owner
+  `pointerId` and separated the Web adapter's active stroke from the pending
+  Canonical-visible stroke. Ten repetitions of the original multi-pointer
+  sequence no longer stalled input.
+- `cbc5fd60e323988edc2aee7e2b01968131e14e0d` added a bounded handoff queue
+  for complete strokes that arrive before the previous Canonical-visible
+  acknowledgement. Fifty rapid Vector strokes and fifty rapid Dab strokes
+  were all visible; no redraw was needed and no silent stroke drop was
+  observed.
+
+The final measured runtime was `cbc5fd6`; its Web WASM SHA-256 was
+`40dc22d3dca6b4f615510bf377dcf151b262b6603d7ad520ca322b5c72d36e4a`
+and its frontend bundle SHA-256 was
+`40b57fc8bda3ae04b56b03d7e9cfc9dea0303186f4ccb4137fc7cf20d91001bd`.
+
+| Brush/run | Correctness | p50 | p95 | p99 | Disposition |
+|---|---|---:|---:|---:|---|
+| Vector, 50 rapid strokes | 50/50 visible; no stall or silent drop | 16 ms | 51 ms | 81 ms | Fails p95 and p99 latency gates |
+| Dab, 50 rapid strokes | 50/50 visible; no stall or silent drop | 8 ms | 38 ms | 48 ms | Fails p95 and p99 latency gates |
+
+The operator reported Dab as subjectively more responsive than Vector. Before
+the handoff queue fix, Vector also silently lost some rapid strokes during the
+Canonical-visible window; that correctness failure invalidated the earlier
+latency sample and is not treated as an accepted measurement. The remaining
+tail-latency failure must be investigated with exportable per-sample and
+presentation evidence before another qualifying device run.
+
 ## Sign-off
 
 POC-02 may move from `Validating` to `Accepted` only when all three reports are
