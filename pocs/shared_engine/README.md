@@ -9,6 +9,12 @@ All C ABI, replay schema, handles, scene structures, and fixtures in this
 directory are **Experimental**. R1 will replace them using the evidence
 collected by this POC; no source or binary compatibility is promised.
 
+POC-01 was accepted on 2026-08-18 after the six-platform CI, physical
+iPhone/iPadOS/Android gates, same-machine Windows/Web hardware gates, and the
+fixed-source macOS gate passed the aggregate review. Acceptance validates the
+architecture and evidence; it does not promote these experimental interfaces
+to product contracts. See the [final gate audit](reports/poc01/FINAL_GATE_AUDIT_2026-08-18.md).
+
 POC-01 is also the minimal operation-driven Document proof: two independent
 empty Documents that consume the same transactional create/move/delete replay
 must end at the same sequence and digest. It does not implement or stabilize a
