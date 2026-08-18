@@ -36,3 +36,98 @@ test("draws an interactive stroke and records visible acknowledgement", async ({
   const traceCount = await page.evaluate(() => window.__canvasPoc02Trace?.length ?? 0);
   expect(traceCount).toBeGreaterThan(0);
 });
+
+test("rejected begin cannot steal the pending canonical visible acknowledgement",
+  async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("status")).toContainText("coalesced input stays in C++");
+    const result = await page.evaluate(() => {
+      const module = window.__canvasPoc02Module;
+      if (!module) throw new Error("POC-02 module unavailable");
+      const packed = module._malloc(3 * 4);
+      const timestamps = module._malloc(4);
+      try {
+        module.HEAPF32.set([40, 40, 0.5], packed / 4);
+        module.HEAPU32[timestamps / 4] = 0;
+        const begin = (strokeId: number) => module._canvas_poc02_begin(
+          strokeId, 1, 8, packed, timestamps, 1, 1);
+        const firstBegin = begin(8000);
+        const firstEnd = module._canvas_poc02_end();
+        const competingBegin = begin(8001);
+        const originalVisible = module._canvas_poc02_visible();
+        const recoveredBegin = begin(8002);
+        const recoveredCancel = module._canvas_poc02_cancel();
+        return {
+          firstBegin, firstEnd, competingBegin, originalVisible,
+          recoveredBegin, recoveredCancel,
+        };
+      } finally {
+        module._free(timestamps);
+        module._free(packed);
+      }
+    });
+    expect(result.firstBegin).toBe(0);
+    expect(result.firstEnd).toBe(0);
+    expect(result.competingBegin).not.toBe(0);
+    expect(result.originalVisible).toBe(0);
+    expect(result.recoveredBegin).toBe(0);
+    expect(result.recoveredCancel).toBe(0);
+  });
+
+test("multi-pointer interleaving preserves the owner and accepts the next pen stroke",
+  async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("status")).toContainText("coalesced input stays in C++");
+    const canvas = page.locator("#ink-canvas");
+    await canvas.evaluate((element) => {
+      element.setPointerCapture = () => {};
+      const emit = (type: string, pointerId: number, pointerType: string,
+        clientX: number, clientY: number, pressure: number, buttons: number) => {
+        element.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          pointerId,
+          pointerType,
+          clientX,
+          clientY,
+          pressure,
+          buttons,
+          isPrimary: pointerId === 21,
+        }));
+      };
+      emit("pointerdown", 21, "touch", 100, 100, 0.5, 1);
+      emit("pointerdown", 22, "touch", 180, 100, 0.5, 1);
+      emit("pointermove", 22, "touch", 210, 140, 0.5, 1);
+      emit("pointermove", 21, "touch", 140, 160, 0.5, 1);
+      emit("pointerup", 22, "touch", 210, 140, 0, 0);
+      emit("pointerup", 21, "touch", 140, 160, 0, 0);
+      // The previous Canonical stroke is waiting for its rAF acknowledgement.
+      // This competing pointer must stay outside both the JS owner and C++ Runtime.
+      emit("pointerdown", 23, "pen", 240, 120, 0.7, 1);
+    });
+    await expect(page.getByTestId("latency")).toContainText("p95");
+    const firstDigest = await page.getByTestId("document-digest").textContent();
+    expect(firstDigest).toMatch(/^[0-9a-f]{32}$/);
+
+    await canvas.evaluate((element) => {
+      const emit = (type: string, clientX: number, clientY: number,
+        pressure: number, buttons: number) => {
+        element.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 24,
+          pointerType: "pen",
+          clientX,
+          clientY,
+          pressure,
+          buttons,
+          isPrimary: true,
+        }));
+      };
+      emit("pointerdown", 280, 180, 0.4, 1);
+      emit("pointermove", 340, 240, 0.8, 1);
+      emit("pointerup", 380, 260, 0, 0);
+    });
+    await expect.poll(async () => page.getByTestId("document-digest").textContent())
+      .not.toBe(firstDigest);
+    await expect(page.getByTestId("status"))
+      .toContainText("Canonical AddStroke committed");
+  });

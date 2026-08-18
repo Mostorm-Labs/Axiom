@@ -33,6 +33,7 @@ canvas::poc02::InkSkiaRenderer g_renderer;
 canvas::poc02::StrokeId g_stroke_id = 0;
 uint64_t g_next_sample_sequence = 0;
 uint64_t g_next_operation_sequence = 1;
+canvas::poc02::StrokeId g_pending_visible_stroke_id = 0;
 uint64_t g_pending_visible_revision = 0;
 EMSCRIPTEN_WEBGL_CONTEXT_HANDLE g_webgl = 0;
 sk_sp<GrDirectContext> g_context;
@@ -103,6 +104,7 @@ EMSCRIPTEN_KEEPALIVE int canvas_poc02_reset() {
   g_stroke_id = 0;
   g_next_sample_sequence = 0;
   g_next_operation_sequence = 1;
+  g_pending_visible_stroke_id = 0;
   g_pending_visible_revision = 0;
   DestroySurface();
   return 0;
@@ -121,6 +123,8 @@ EMSCRIPTEN_KEEPALIVE int canvas_poc02_replay(const char* ndjson, size_t size,
   g_router.reset();
   g_document = {};
   g_preview = {};
+  g_pending_visible_stroke_id = 0;
+  g_pending_visible_revision = 0;
   canvas::poc02::AddStrokeOperation operation;
   status = canvas::poc02::RunReplayFixture(fixture, &g_document, &g_preview,
                                            &operation, &error);
@@ -240,7 +244,7 @@ EMSCRIPTEN_KEEPALIVE int canvas_poc02_begin(
   }
   if (!g_router) g_router = std::make_unique<canvas::poc02::InputRouter>(
       g_document, g_preview);
-  g_stroke_id = stroke_id;
+  const uint64_t previous_sample_sequence = g_next_sample_sequence;
   g_next_sample_sequence = 0;
   canvas::poc02::BrushDescriptor brush{
       .type = brush_type == 2 ? canvas::poc02::BrushType::kDab
@@ -251,7 +255,14 @@ EMSCRIPTEN_KEEPALIVE int canvas_poc02_begin(
       .jitter = brush_type == 2 ? 0.12F : 0.0F,
   };
   auto batch = MakeBatch(packed, timestamps_us, count, true, false, dpr);
-  return Code(g_router->Begin(g_stroke_id, 1, brush, batch));
+  const canvas::poc02::Status status =
+      g_router->Begin(stroke_id, 1, brush, batch);
+  if (status == canvas::poc02::Status::kOk) {
+    g_stroke_id = stroke_id;
+  } else {
+    g_next_sample_sequence = previous_sample_sequence;
+  }
+  return Code(status);
 }
 
 EMSCRIPTEN_KEEPALIVE int canvas_poc02_push_batch(
@@ -273,6 +284,7 @@ EMSCRIPTEN_KEEPALIVE int canvas_poc02_end() {
   const canvas::poc02::Status status =
       g_router->End(g_next_operation_sequence++, &operation);
   if (status == canvas::poc02::Status::kOk) {
+    g_pending_visible_stroke_id = operation.stroke.id;
     g_pending_visible_revision = g_document.revision();
   }
   return Code(status);
@@ -284,12 +296,16 @@ EMSCRIPTEN_KEEPALIVE int canvas_poc02_cancel() {
 }
 
 EMSCRIPTEN_KEEPALIVE int canvas_poc02_visible() {
-  if (!g_router || g_pending_visible_revision == 0) {
+  if (!g_router || g_pending_visible_stroke_id == 0 ||
+      g_pending_visible_revision == 0) {
     return Code(canvas::poc02::Status::kInvalidState);
   }
   const auto status = g_router->AcknowledgeCanonicalVisible(
-      g_stroke_id, g_pending_visible_revision);
-  if (status == canvas::poc02::Status::kOk) g_pending_visible_revision = 0;
+      g_pending_visible_stroke_id, g_pending_visible_revision);
+  if (status == canvas::poc02::Status::kOk) {
+    g_pending_visible_stroke_id = 0;
+    g_pending_visible_revision = 0;
+  }
   return Code(status);
 }
 

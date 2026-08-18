@@ -45,7 +45,8 @@ function App() {
   const [numericDigest, setNumericDigest] = useState("—");
   const [latency, setLatency] = useState("No visible samples yet");
   const [golden, setGolden] = useState("Not compared");
-  const drawing = useRef(false);
+  const activePointerId = useRef<number | null>(null);
+  const pendingVisible = useRef(false);
   const nextStrokeId = useRef(3000);
   const activeStrokeId = useRef(0);
   const lastSampleTimestamp = useRef(0);
@@ -105,24 +106,28 @@ function App() {
   }
 
   function onPointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!module || drawing.current) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (!module || activePointerId.current !== null || pendingVisible.current) {
+      return;
+    }
     const batch = pointerSamples(event);
     const strokeId = nextStrokeId.current++;
-    activeStrokeId.current = strokeId;
-    lastSampleTimestamp.current = batch.at(-1)?.timeStamp ?? performance.now();
-    strokeTimestampBase.current = batch[0]?.timeStamp ?? event.timeStamp;
-    withSamples(module, event.currentTarget, batch, strokeTimestampBase.current,
+    const sampleTimestamp = batch.at(-1)?.timeStamp ?? performance.now();
+    const timestampBase = batch[0]?.timeStamp ?? event.timeStamp;
+    withSamples(module, event.currentTarget, batch, timestampBase,
       (packed, timestamps, count) =>
       check(module._canvas_poc02_begin(strokeId, brush === "dab" ? 2 : 1,
         brush === "dab" ? 16 : 8, packed, timestamps, count, 1), "begin stroke"));
-    drawing.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activePointerId.current = event.pointerId;
+    activeStrokeId.current = strokeId;
+    lastSampleTimestamp.current = sampleTimestamp;
+    strokeTimestampBase.current = timestampBase;
     renderPreview(module, strokeId, lastSampleTimestamp.current);
     setMessage(`Active ${brush} stroke ${strokeId}`);
   }
 
   function onPointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!module || !drawing.current) return;
+    if (!module || event.pointerId !== activePointerId.current) return;
     const batch = pointerSamples(event);
     lastSampleTimestamp.current = batch.at(-1)?.timeStamp ?? performance.now();
     withSamples(module, event.currentTarget, batch, strokeTimestampBase.current,
@@ -133,7 +138,7 @@ function App() {
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!module || !drawing.current) return;
+    if (!module || event.pointerId !== activePointerId.current) return;
     const batch = pointerSamples(event);
     lastSampleTimestamp.current = batch.at(-1)?.timeStamp ?? performance.now();
     withSamples(module, event.currentTarget, batch, strokeTimestampBase.current,
@@ -142,21 +147,33 @@ function App() {
         "push final batch"));
     check(module._canvas_poc02_end(), "commit AddStroke");
     check(module._canvas_poc02_render(), "render canonical");
+    const committedStrokeId = activeStrokeId.current;
+    const committedSampleTimestamp = lastSampleTimestamp.current;
+    activePointerId.current = null;
+    pendingVisible.current = true;
     requestAnimationFrame(() => {
       check(module._canvas_poc02_visible(), "canonical visible acknowledgement");
-      recordVisible(activeStrokeId.current, lastSampleTimestamp.current);
+      pendingVisible.current = false;
+      recordVisible(committedStrokeId, committedSampleTimestamp);
       refreshMetrics(module);
     });
-    drawing.current = false;
     setMessage("Canonical AddStroke committed; Preview retires only after visible ack.");
   }
 
-  function onPointerCancel() {
-    if (!module || !drawing.current) return;
+  function onPointerCancel(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!module || event.pointerId !== activePointerId.current) return;
     check(module._canvas_poc02_cancel(), "cancel stroke");
     check(module._canvas_poc02_render(), "clear preview");
-    drawing.current = false;
+    activePointerId.current = null;
     setMessage("Stroke cancelled atomically; Document was not modified.");
+  }
+
+  function onLostPointerCapture(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!module || event.pointerId !== activePointerId.current) return;
+    check(module._canvas_poc02_cancel(), "cancel stroke after lost pointer capture");
+    check(module._canvas_poc02_render(), "clear preview after lost pointer capture");
+    activePointerId.current = null;
+    setMessage("Pointer capture was lost; the active stroke was cancelled atomically.");
   }
 
   async function replayFixture(name: string) {
@@ -254,6 +271,7 @@ function App() {
       <canvas id="ink-canvas" width="800" height="600"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={onPointerUp} onPointerCancel={onPointerCancel}
+        onLostPointerCapture={onLostPointerCapture}
         aria-label="Canvas POC-02 ink surface" />
       <aside>
         <h2>Live evidence</h2>
