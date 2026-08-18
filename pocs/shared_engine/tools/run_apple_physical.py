@@ -213,6 +213,27 @@ def main() -> int:
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             if copy_from(args.device, "Documents/poc01-failure.txt", failure_file, check=False):
+                retained_failure = args.output / f"{args.platform}-physical-failure.txt"
+                retained_failure.write_text(
+                    failure_file.read_text(encoding="utf-8"), encoding="utf-8"
+                )
+                failure_record = {
+                    "schema_version": 1,
+                    "status": "failed",
+                    "platform": args.platform,
+                    "error": retained_failure.read_text(encoding="utf-8").strip(),
+                    "physical_environment": environment,
+                    "build": {
+                        "configuration": "Release",
+                        "app_executable_sha256": sha256(
+                            app / "canvas_poc01_ios_runner"
+                        ),
+                    },
+                }
+                (args.output / f"{args.platform}-physical-failure.json").write_text(
+                    json.dumps(failure_record, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
                 raise RuntimeError(failure_file.read_text(encoding="utf-8"))
             if copy_from(args.device, "Documents/poc01-result.json", result_file, check=False):
                 break
@@ -221,6 +242,9 @@ def main() -> int:
             raise RuntimeError("Apple physical runner did not produce a result")
 
         result = json.loads(result_file.read_text(encoding="utf-8"))
+        (args.output / f"{args.platform}-physical-raw-result.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         if result.get("platform") != args.platform:
             raise RuntimeError(
                 f"expected {args.platform}, device runner reported {result.get('platform')}"
@@ -232,10 +256,6 @@ def main() -> int:
         if result.get("max_frame_ms", 101) > 100:
             raise RuntimeError("Apple device frame exceeded 100 ms")
         result["memory_analysis"] = analyze(result["memory_samples"])
-        if not result["memory_analysis"]["passed"]:
-            raise RuntimeError(
-                f"{args.platform} physical-footprint series shows sustained growth"
-            )
         result["physical_environment"] = environment
         result["build"] = {
             "configuration": "Release",
@@ -245,6 +265,10 @@ def main() -> int:
         normalized.write_text(
             json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
+        if not result["memory_analysis"]["passed"]:
+            raise RuntimeError(
+                f"{args.platform} physical-footprint series shows sustained growth"
+            )
         rgba = args.output / f"{args.platform}-physical-actual.rgba"
         copy_from(
             args.device,

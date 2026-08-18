@@ -199,6 +199,7 @@ def main() -> int:
 
     original_size = adb(serial, "shell", "wm", "size")
     original_stay_awake = adb(serial, "shell", "settings", "get", "global", "stay_on_while_plugged_in")
+    environment_before = None
     try:
         adb(serial, "install", "-r", str(apk), capture=False)
         if application_debuggable(serial):
@@ -232,6 +233,12 @@ def main() -> int:
         if not result_lines:
             raise RuntimeError("Android runner did not emit a structured result")
         result = json.loads(result_lines[-1])
+        (args.output / "android-release-raw-result.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        (args.output / "android-release-logcat.txt").write_text(
+            log + "\n", encoding="utf-8"
+        )
         if result.get("digest") != EXPECTED_DIGEST:
             raise RuntimeError("Android digest differs from the reviewed fixture")
         if result.get("lifecycle") != 100 or result.get("smoke_seconds") != 60:
@@ -249,14 +256,14 @@ def main() -> int:
         result["memory_sampling_interval_ms"] = round(args.sample_seconds * 1000)
         result["memory_samples"] = samples
         result["memory_analysis"] = analyze(samples)
-        if not result["memory_analysis"]["passed"]:
-            raise RuntimeError("Android total-PSS series shows sustained growth")
         result["performance_environment"] = {
             "before": environment_before,
             "after": environment(serial),
         }
         result_path = args.output / "android-release-result.json"
         result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if not result["memory_analysis"]["passed"]:
+            raise RuntimeError("Android total-PSS series shows sustained growth")
         rgba = args.output / "android-release-actual.rgba"
         adb(serial, "pull", REMOTE_RGBA, str(rgba), capture=False)
         subprocess.run(
@@ -276,9 +283,36 @@ def main() -> int:
             ],
             check=True,
         )
-        (args.output / "android-release-logcat.txt").write_text(log + "\n", encoding="utf-8")
         print(result_path)
         return 0
+    except Exception as error:
+        log = adb(
+            serial, "logcat", "-d", "-s", "CanvasPOC01:I", "*:S", check=False
+        )
+        (args.output / "android-release-logcat.txt").write_text(
+            log + "\n", encoding="utf-8"
+        )
+        failure = {
+            "schema_version": 1,
+            "status": "failed",
+            "error": str(error),
+            "build": {
+                "configuration": "Release",
+                "apk_sha256": sha256(apk),
+            },
+            "performance_environment": {
+                "before": environment_before,
+                "after": environment(serial),
+            },
+            "privacy": {
+                "redacted": True,
+                "device_serial_recorded": False,
+            },
+        }
+        (args.output / "android-release-failure.json").write_text(
+            json.dumps(failure, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        raise
     finally:
         restore_display_size(serial, original_size)
         if original_stay_awake not in {"", "null"}:
