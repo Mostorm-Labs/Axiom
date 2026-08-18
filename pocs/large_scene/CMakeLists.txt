@@ -53,6 +53,8 @@ endif()
 add_executable(canvas_poc03_benchmark src/benchmark_cli.cpp)
 target_link_libraries(canvas_poc03_benchmark PRIVATE canvas_poc03_core)
 if(WIN32)
+  target_compile_definitions(canvas_poc03_benchmark PRIVATE
+    NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(canvas_poc03_benchmark PRIVATE psapi)
 endif()
 if(EMSCRIPTEN)

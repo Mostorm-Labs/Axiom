@@ -67,10 +67,12 @@ elseif(EMSCRIPTEN)
     "-sMIN_WEBGL_VERSION=2"
     "-sMAX_WEBGL_VERSION=2"
     "-sGL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=0"
-    "-sEXPORTED_FUNCTIONS=['_canvas_poc03_web_run','_canvas_poc03_web_reset']"
-    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString']")
+    "-sEXPORTED_FUNCTIONS=['_canvas_poc03_web_run','_canvas_poc03_web_prepare','_canvas_poc03_web_render_frame','_canvas_poc03_web_finish','_canvas_poc03_web_reset']"
+    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','HEAPU8']")
 elseif(WIN32)
   add_executable(canvas_poc03_windows_probe windows_probe.cpp)
+  target_compile_definitions(canvas_poc03_windows_probe PRIVATE
+    NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(canvas_poc03_windows_probe PRIVATE
     canvas_poc03_skia d3d12 dxgi)
 else()

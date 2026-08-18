@@ -58,6 +58,30 @@ Windows must meet p95 ≤ 16.7 ms and p99 ≤ 33.3 ms. Web must meet p95 ≤
 frame intervals; these absolute limits are not a claim that 16.7 ms is one
 frame on every display.
 
+The Windows physical probe separates render/submit duration (the `frame_*`
+gate fields) from DXGI presentation intervals. Run it from an x64 Visual
+Studio developer environment after the `poc03-windows-release` build:
+
+```powershell
+out/poc03-windows-release/pocs/large_scene/platform/skia/canvas_poc03_windows_probe.exe `
+  --hardware --seconds=60 `
+  --output=out/poc03-windows-physical/windows-hardware-result.json `
+  --trace-output=out/poc03-windows-physical/windows-frame-trace.ndjson
+```
+
+The Web physical probe must use installed Chrome Stable, not Playwright's
+bundled Chromium or SwiftShader. It records rAF intervals separately from
+render/GPU completion (`gl.finish`) duration:
+
+```powershell
+node pocs/large_scene/platform/web/hardware_benchmark.mjs `
+  --build out/poc03-web-release/pocs/large_scene/platform/skia `
+  --chrome "C:/Program Files/Google/Chrome/Application/chrome.exe" `
+  --seconds 60 `
+  --output out/poc03-windows-physical/web-hardware-result.json `
+  --trace out/poc03-windows-physical/web-frame-trace.ndjson
+```
+
 For Android, archive one representative physical-device report covering the
 1K/10K/50K/100K pan, zoom, select, and drag paths. `write` is only accepted
 after the POC-02 playground is integrated. Record frame/input/memory traces and
