@@ -7,9 +7,12 @@ shells. The shared C++20 Runtime is validated on Web, Windows, macOS, iOS,
 iPadOS, and Android; the initial product shells remain Web, Windows, and
 Android.
 
-This repository is currently implementing and validating POC-01. The delivery order is
-six focused POCs followed by five productization stages; no production code
-should bypass their documented exit gates.
+POC-01 has produced the shared-engine baseline; POC-02/03/04 now proceed on
+independent branches and worktrees. This branch implements POC-03 and remains
+`Validating` until its physical Windows/Web/Android and integrated-ink gates
+have recorded evidence. The delivery order is six focused POCs followed by
+five productization stages; no production code should bypass their documented
+exit gates.
 
 ## Fixed architecture baseline
 
@@ -51,6 +54,7 @@ should bypass their documented exit gates.
 - [Vibe architecture findings](docs/research/VIBE_ARCHITECTURE_FINDINGS.md)
 - [Architecture decisions](docs/adr/README.md)
 - [POC-01 implementation](pocs/shared_engine/README.md)
+- [POC-03 100K Scene implementation](pocs/large_scene/README.md)
 - [Prebuilt Skia SDK supply chain](docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md)
 
 ## Current sequence

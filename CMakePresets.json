@@ -83,6 +83,65 @@
         "CANVAS_POC01_BUILD_TESTS": "OFF",
         "CANVAS_POC01_ENABLE_SKIA": "ON"
       }
+    },
+    {
+      "name": "poc03-host-debug",
+      "displayName": "POC-03 100K Scene core (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc03-host-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CANVAS_POC01_BUILD": "OFF",
+        "CANVAS_POC03_BUILD": "ON",
+        "CANVAS_POC03_BUILD_TESTS": "ON",
+        "CANVAS_POC03_ENABLE_SKIA": "OFF"
+      }
+    },
+    {
+      "name": "poc03-host-asan",
+      "inherits": "poc03-host-debug",
+      "displayName": "POC-03 100K Scene core (sanitizers)",
+      "binaryDir": "${sourceDir}/out/poc03-host-asan",
+      "cacheVariables": {
+        "CANVAS_POC03_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "poc03-host-release",
+      "inherits": "poc03-host-debug",
+      "displayName": "POC-03 100K Scene core (Release diagnostics)",
+      "binaryDir": "${sourceDir}/out/poc03-host-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_POC03_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "poc03-web-release",
+      "displayName": "POC-03 Web/WASM 100K Scene (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc03-web-release",
+      "toolchainFile": "${sourceDir}/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_POC01_BUILD": "OFF",
+        "CANVAS_POC03_BUILD": "ON",
+        "CANVAS_POC03_BUILD_TESTS": "OFF",
+        "CANVAS_POC03_ENABLE_SKIA": "ON"
+      }
+    },
+    {
+      "name": "poc03-windows-release",
+      "displayName": "POC-03 Windows 100K Scene (Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc03-windows-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CANVAS_POC01_BUILD": "OFF",
+        "CANVAS_POC03_BUILD": "ON",
+        "CANVAS_POC03_BUILD_TESTS": "ON",
+        "CANVAS_POC03_ENABLE_SKIA": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -92,7 +151,12 @@
     { "name": "windows-release", "configurePreset": "windows-release" },
     { "name": "macos-release", "configurePreset": "macos-release" },
     { "name": "ios-simulator-release", "configurePreset": "ios-simulator-release" },
-    { "name": "ios-device-release", "configurePreset": "ios-device-release" }
+    { "name": "ios-device-release", "configurePreset": "ios-device-release" },
+    { "name": "poc03-host-debug", "configurePreset": "poc03-host-debug" },
+    { "name": "poc03-host-asan", "configurePreset": "poc03-host-asan" },
+    { "name": "poc03-host-release", "configurePreset": "poc03-host-release" },
+    { "name": "poc03-web-release", "configurePreset": "poc03-web-release" },
+    { "name": "poc03-windows-release", "configurePreset": "poc03-windows-release" }
   ],
   "testPresets": [
     {
@@ -113,6 +177,21 @@
     {
       "name": "macos-release",
       "configurePreset": "macos-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc03-host-debug",
+      "configurePreset": "poc03-host-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc03-host-asan",
+      "configurePreset": "poc03-host-asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc03-windows-release",
+      "configurePreset": "poc03-windows-release",
       "output": { "outputOnFailure": true }
     }
   ]
