@@ -13,6 +13,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "canvas_poc/canvas_poc.h"
@@ -187,7 +188,7 @@ double Percentile(const std::vector<double>& sorted_samples, double percentile) 
                                    rank == 0 ? size_t{0} : rank - 1)];
 }
 
-uint64_t PeakWorkingSetBytes() {
+PROCESS_MEMORY_COUNTERS_EX ProcessMemoryCounters() {
   PROCESS_MEMORY_COUNTERS_EX counters{};
   counters.cb = sizeof(counters);
   if (!GetProcessMemoryInfo(
@@ -196,7 +197,7 @@ uint64_t PeakWorkingSetBytes() {
           sizeof(counters))) {
     throw std::runtime_error("GetProcessMemoryInfo failed");
   }
-  return static_cast<uint64_t>(counters.PeakWorkingSetSize);
+  return counters;
 }
 
 }  // namespace
@@ -230,6 +231,7 @@ int wmain() {
     double p95_frame_ms = 0;
     double p99_frame_ms = 0;
     double max_frame_ms = 0;
+    std::vector<std::pair<int64_t, uint64_t>> memory_samples;
     if (options.smoke_seconds > 0) {
       Session session = LoadFixture(true);
       auto internal = canvas::poc01::ResolveDocumentForPlatform(session.document);
@@ -239,8 +241,12 @@ int wmain() {
         Check(adapter.Render(*internal), "smoke warmup");
       }
       std::vector<double> frame_times;
-      const auto deadline = std::chrono::steady_clock::now() +
-                            std::chrono::seconds(options.smoke_seconds);
+      const auto smoke_started = std::chrono::steady_clock::now();
+      const auto deadline =
+          smoke_started + std::chrono::seconds(options.smoke_seconds);
+      auto next_memory_sample = smoke_started + std::chrono::seconds(5);
+      memory_samples.emplace_back(
+          0, static_cast<uint64_t>(ProcessMemoryCounters().WorkingSetSize));
       while (std::chrono::steady_clock::now() < deadline) {
         const auto start = std::chrono::steady_clock::now();
         Check(adapter.Render(*internal), "smoke render");
@@ -249,6 +255,30 @@ int wmain() {
                                     .count();
         frame_times.push_back(frame_ms);
         ++smoke_frames;
+        const auto completed = std::chrono::steady_clock::now();
+        if (completed >= next_memory_sample) {
+          const int64_t elapsed_ms =
+              std::chrono::duration_cast<std::chrono::milliseconds>(
+                  completed - smoke_started)
+                  .count();
+          memory_samples.emplace_back(
+              elapsed_ms,
+              static_cast<uint64_t>(ProcessMemoryCounters().WorkingSetSize));
+          do {
+            next_memory_sample += std::chrono::seconds(5);
+          } while (next_memory_sample <= completed);
+        }
+      }
+      const auto smoke_completed = std::chrono::steady_clock::now();
+      const int64_t completed_ms =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              smoke_completed - smoke_started)
+              .count();
+      if (memory_samples.empty() ||
+          completed_ms - memory_samples.back().first >= 1000) {
+        memory_samples.emplace_back(
+            completed_ms,
+            static_cast<uint64_t>(ProcessMemoryCounters().WorkingSetSize));
       }
       std::vector<uint8_t> smoke_drain;
       Check(adapter.Render(*internal, &smoke_drain), "smoke drain");
@@ -262,7 +292,9 @@ int wmain() {
                                  std::to_string(max_frame_ms));
       }
     }
-    const uint64_t peak_memory_bytes = PeakWorkingSetBytes();
+    const PROCESS_MEMORY_COUNTERS_EX final_memory = ProcessMemoryCounters();
+    const uint64_t peak_memory_bytes =
+        static_cast<uint64_t>(final_memory.PeakWorkingSetSize);
     const canvas::poc01::CoreConformanceResult conformance =
         canvas::poc01::RunCoreConformance();
     std::ostringstream result;
@@ -281,7 +313,14 @@ int wmain() {
            << ",\"max_ms\":" << max_frame_ms
            << ",\"max_frame_ms\":" << max_frame_ms
            << ",\"peak_memory_bytes\":" << peak_memory_bytes
-           << ",\"memory_scope\":\"process-peak-working-set\","
+           << ",\"memory_scope\":\"process-working-set\","
+              "\"memory_sampling_interval_ms\":5000,\"memory_samples\":[";
+    for (size_t index = 0; index < memory_samples.size(); ++index) {
+      if (index != 0) result << ',';
+      result << "{\"elapsed_ms\":" << memory_samples[index].first
+             << ",\"bytes\":" << memory_samples[index].second << '}';
+    }
+    result << "],"
            << canvas::poc01::CoreConformanceJsonFields(conformance) << "}";
     std::cout << result.str() << '\n';
     if (window != nullptr) {

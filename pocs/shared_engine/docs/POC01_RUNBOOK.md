@@ -97,6 +97,13 @@ submission cadence after the warmup drain. This prevents an asynchronous
 software/simulator queue from being saturated while keeping scheduling delay
 outside the measured Runtime draw/submit interval.
 
+Supplemental physical runs sample process memory only after this warm-up
+boundary. The shared leak screen requires at least 10 ordered samples spanning
+at least 50 seconds and compares the medians of the first and last quartile
+windows. A tail more than 5% above the head fails as sustained growth. This is
+a bounded POC leak signal, not a product memory budget; failed samples and
+frame outliers remain evidence and are never removed by repeated runs.
+
 ## 4. Host-core development
 
 ```sh
@@ -172,6 +179,24 @@ same 100/60 gate and writes `poc01-result.json` and `apple-actual.rgba` to its
 application Documents container. Physical-device reports are required before
 acceptance; simulator results are correctness evidence only.
 
+After building and locally signing the device Release app, collect a physical
+iPhone or iPad run with the privacy-filtered helper (the device must remain
+unlocked and awake):
+
+```sh
+python3 pocs/shared_engine/tools/run_apple_physical.py \
+  --device <LOCAL_CORE_DEVICE_ID> \
+  --app out/ios-device-release/pocs/shared_engine/platform/apple/Release-iphoneos/canvas_poc01_ios_runner.app \
+  --platform ios \
+  --output out/physical/ios-supplemental
+```
+
+Use `--platform ipados` and a separate output directory for iPad. The helper
+refuses simulator builds and invalid signatures, verifies the 100/60 and
+100 ms gates, analyzes the in-process physical-footprint series, performs the
+visual comparison, and writes only a sanitized device description. It omits
+UDID, ECID, serial number, custom device name, addresses, and signing identity.
+
 ### Android
 
 The Gradle demo builds the C++ target with the locked NDK. `CanvasPocView`
@@ -179,6 +204,26 @@ loads the three assets and runs the 100/60 gate on a worker thread through JNI
 and an EGL ES3 surface; the high-frequency rendering data path never enters
 JavaScript. CI clean-builds arm64 and executes the x86_64 emulator/SwiftShader
 artifact. A physical-device report remains a separate acceptance gate.
+
+Physical evidence must use the explicit non-debuggable Release APK. The APK
+is signed only so it can be installed for this POC; signing material is not an
+acceptance identity and is never archived. Build and collect it with:
+
+```sh
+cd pocs/shared_engine/platform/android
+gradle :app:assembleRelease -PcanvasPocAbi=arm64-v8a --no-daemon
+cd ../../../..
+python3 pocs/shared_engine/tools/run_android_physical.py \
+  --apk pocs/shared_engine/platform/android/app/build/outputs/apk/release/app-release.apk \
+  --output out/physical/android-release
+```
+
+The collector refuses emulators and installed packages carrying the
+`DEBUGGABLE` flag. It preserves/restores display-size and stay-awake settings,
+samples total PSS after the native warm-up marker, checks the fixed digest,
+100/60 and 100 ms gates, pulls RGBA from the app-specific external directory,
+and executes the visual gate. ADB/device serial, build fingerprint, accounts,
+and network identifiers are excluded from the retained report.
 
 The reviewed iPhone, iPad, and Android physical-device report is recorded in
 [`mobile-physical-2026-08-17`](../reports/poc01/mobile-physical-2026-08-17/README.md).
@@ -212,10 +257,23 @@ pocs/shared_engine/benchmarks/windows/run_bundle.ps1 `
 
 The command refuses WARP, SwiftShader/software WebGL, digest drift, missing
 percentiles or peak-memory fields, an incomplete 100/60 gate, and any frame
-over 100 ms. Commit only the redacted report and structured summary; publish
+over 100 ms. It also analyzes post-warm-up native working-set samples and
+records thermal availability, active power plan, current/supported refresh
+rates, the unbounded native submit interval, explicit VRR unavailability, and
+Chrome foreground/focus and anti-throttling observations. Commit only the
+redacted report and structured summary; publish
 the generated ZIP containing raw RGBA/log/diff evidence as a Release asset.
 Both native D3D12 and Chrome WebGL2 readbacks and visual-diff directories must
 be present in that single ZIP.
+
+Generated physical evidence is captured from a fixed committed (preferably
+merged) harness commit and is submitted separately from the collector change.
+Large RGBA/PNG/log artifacts, signed apps/APKs, provisioning profiles, signing
+identities, Team IDs, and device identifiers never enter Git. Publish a
+privacy-filtered ZIP as a content-addressed prerelease, then commit its hashes,
+immutable tag, tested commit, normalized results, and reproduction commands.
+If a gate fails, retain that first result; at most one bounded rerun after the
+environment is stable may be added as separate evidence.
 
 The reviewed result is archived in the
 [Windows/Web physical report](../../../docs/quality/evidence/poc01/windows-web-physical-20260817.md)

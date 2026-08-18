@@ -43,9 +43,19 @@
           UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad
               ? "ipados"
               : "ios";
+      NSURL* phase =
+          [documents URLByAppendingPathComponent:@"poc01-smoke-phase.txt"];
+      auto smoke_phase = [phase](bool started) {
+        NSString* value = started ? @"measured\n" : @"complete\n";
+        [value writeToURL:phase
+               atomically:YES
+                 encoding:NSUTF8StringEncoding
+                    error:nil];
+      };
       const std::string result = canvas::poc01::RunAppleAcceptance(
           resources, resources / "Roboto-Regular.ttf",
-          documentsPath / "apple-actual.rgba", platform, 100, 60);
+          documentsPath / "apple-actual.rgba", platform, 100, 60,
+          smoke_phase);
       NSURL* output =
           [documents URLByAppendingPathComponent:@"poc01-result.json"];
       [[NSString stringWithUTF8String:result.c_str()]

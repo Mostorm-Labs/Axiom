@@ -267,6 +267,12 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
         return Failure(env, "smoke warmup", status);
       }
     }
+    // The host collector starts post-warm-up PSS sampling only after this
+    // marker. Keeping the phase boundary in the native runner prevents
+    // install, lifecycle setup, and shader warm-up from contaminating the
+    // 60-second steady-state memory series.
+    __android_log_print(ANDROID_LOG_INFO, "CanvasPOC01",
+                        "CANVAS_POC01_SMOKE_BEGIN");
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::seconds(smoke_seconds);
     while (std::chrono::steady_clock::now() < deadline) {
@@ -281,6 +287,8 @@ Java_dev_mostorm_canvas_CanvasPocView_nativeRunAcceptance(
       max_frame_ms = std::max(max_frame_ms, frame_ms);
       ++smoke_frames;
     }
+    __android_log_print(ANDROID_LOG_INFO, "CanvasPOC01",
+                        "CANVAS_POC01_SMOKE_END");
     if (max_frame_ms > 100.0) {
       canvas::poc01::SetLastError(
           "Android GLES smoke frame exceeded 100 ms: " +

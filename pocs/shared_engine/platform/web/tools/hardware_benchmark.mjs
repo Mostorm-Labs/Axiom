@@ -16,13 +16,20 @@ if (!args.url || !args.chrome || !args.seconds || !args.output || !args["rgba-ou
 const browser = await chromium.launch({
   executablePath: args.chrome,
   headless: false,
-  args: ["--enable-precise-memory-info"],
+  args: [
+    "--enable-precise-memory-info",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+  ],
 });
 try {
   const page = await browser.newPage();
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto(args.url);
+  await page.bringToFront();
+  await page.evaluate(() => window.focus());
   await page.getByRole("button", { name: "Load Fixture" }).click();
   await page.waitForFunction(() =>
     document.querySelector('[data-testid="backend"]')?.textContent === "ganesh-webgl2");
@@ -185,6 +192,17 @@ try {
       user_agent: navigator.userAgent,
       webgl_vendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
       webgl_renderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      browser_throttling: {
+        status: "disabled-by-command-line",
+        flags: [
+          "--disable-background-timer-throttling",
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding",
+        ],
+        visibility_state: document.visibilityState,
+        document_has_focus: document.hasFocus(),
+        observation_method: "document.visibilityState and document.hasFocus during the measured run",
+      },
     };
     // The measured smoke uses the 1,000-node scene. Reset to the reviewed
     // four-node fixture before exporting the raw visual-acceptance readback.
