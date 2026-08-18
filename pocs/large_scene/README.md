@@ -131,21 +131,17 @@ atomic operations, full/incremental equivalence, hint fault injection, the
 order, two-View isolation, logical-pass optimization, cache recovery, and
 scheduler generation/coalescing behavior.
 
-The following remain external exit evidence and therefore keep POC-03 in
-`Validating`:
+Physical Windows D3D12 and Chrome Stable Web traces, Pixel 7, iPhone, iPad,
+manual centroid/release gestures, and cross-platform equivalence are recorded
+in the [2026-08-18 physical validation report](../../docs/quality/evidence/poc03/physical-validation-20260818.md).
+The Windows/Web hard performance gates passed. Mobile performance evidence
+retains the observed Pixel 7 cold-start spike and an iPad warm-run scheduling
+anomaly; it is portability and experience evidence rather than a replacement
+for the same-machine Windows/Web gate.
 
-- 60-second physical Windows D3D12 and Chrome Stable Web traces with display
-  p50/p95/p99/max, refresh rate, intervals, missed presentation, and memory.
-- At least one representative Android device frame/input/memory and experience
-  report. Manual acceptance includes centroid-anchored pinch, simultaneous and
-  one-finger-first release without a viewport jump, and continuous remaining-
-  finger pan. POC-03 does not create a new Android product shell.
-- iPadOS is additional cross-platform evidence: archive cold/warm Metal traces,
-  actual display intervals, memory, visual equivalence, and the same manual
-  centroid/release/remaining-finger gesture rubric separately. It does not
-  replace the required Windows/Web report.
-- The Integrated Performance Playground's `write` path, which must consume the
-  independently developed POC-02 Ink output instead of inventing a second Ink
-  model here.
+POC-03 remains `Validating` only because the Integrated Performance
+Playground's `write` path must consume the independently developed POC-02 Ink
+output instead of inventing a second Ink model here. POC-02 is still being
+validated. POC-03 does not create an Android or Apple product shell.
 
 See [the runbook](docs/POC03_RUNBOOK.md) for evidence commands and schemas.
