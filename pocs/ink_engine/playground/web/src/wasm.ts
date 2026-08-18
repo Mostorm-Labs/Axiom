@@ -37,6 +37,7 @@ declare global {
     __canvasPoc02FactoryReady?: Promise<ModuleFactory>;
     __canvasPoc02Module?: InkModule;
     __canvasPoc02Trace?: LatencySample[];
+    __canvasPoc02CommittedStrokeCount?: number;
   }
 }
 

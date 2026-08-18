@@ -64,6 +64,7 @@ function App() {
   const activePointerId = useRef<number | null>(null);
   const pendingVisible = useRef(false);
   const queuedStrokes = useRef<QueuedStroke[]>([]);
+  const committedStrokeCount = useRef(0);
   const nextStrokeId = useRef(3000);
   const activeStrokeId = useRef(0);
   const lastSampleTimestamp = useRef(0);
@@ -80,6 +81,7 @@ function App() {
         check(wasm._canvas_poc02_render(), "initial render");
         window.__canvasPoc02Module = wasm;
         window.__canvasPoc02Trace = trace.current;
+        window.__canvasPoc02CommittedStrokeCount = 0;
         setModule(wasm);
         setMessage("Draw with a pen, mouse, or touch; coalesced input stays in C++.");
       } catch (error) {
@@ -157,6 +159,8 @@ function App() {
     requestAnimationFrame(() => {
       check(wasm._canvas_poc02_visible(), "canonical visible acknowledgement");
       pendingVisible.current = false;
+      committedStrokeCount.current += 1;
+      window.__canvasPoc02CommittedStrokeCount = committedStrokeCount.current;
       recordVisible(strokeId, sampleTimestamp);
       refreshMetrics(wasm);
       flushQueuedStroke(wasm);

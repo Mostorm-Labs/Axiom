@@ -165,7 +165,7 @@ test("rapid short strokes inside chained handoff windows are queued, not dropped
       }
     });
     await expect.poll(async () => page.evaluate(
-      () => window.__canvasPoc02Trace?.length ?? 0)).toBe(6);
+      () => window.__canvasPoc02CommittedStrokeCount ?? 0)).toBe(6);
     const sixthDigest = await page.getByTestId("document-digest").textContent();
     expect(sixthDigest).toMatch(/^[0-9a-f]{32}$/);
 
