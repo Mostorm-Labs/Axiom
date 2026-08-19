@@ -129,6 +129,39 @@ CGRect CaretRect(canvas_poc04_handle_t session, NSUInteger offset, CGFloat width
 }
 
 - (canvas_poc04_handle_t)session { return _session; }
+- (void)drawRect:(NSRect)rect {
+  [super drawRect:rect];
+
+  // NSTextInputClient supplies IME state; it does not draw the editor.  Keep
+  // the AppKit surface on the same composition-aware C++ presentation used
+  // by the text-input queries so native editing is visible without a second
+  // platform-owned text model.
+  const NSUInteger length = PresentedLength(_session);
+  NSString* text = TextForRange(_session, 0, length) ?: @"";
+  NSFont* font = [NSFont systemFontOfSize:28.0 weight:NSFontWeightRegular];
+  NSDictionary* attributes = @{
+    NSFontAttributeName: font,
+    NSForegroundColorAttributeName: NSColor.labelColor,
+  };
+  NSRect content = NSInsetRect(self.bounds, 8.0, 8.0);
+  [text drawInRect:content withAttributes:attributes];
+
+  NSRange selection{};
+  if (QuerySelection(_session, &selection) && selection.location != NSNotFound) {
+    NSString* prefix = [text substringWithRange:NSMakeRange(
+        0, MIN(selection.location, text.length))];
+    CGFloat caretX = content.origin.x +
+                     [prefix sizeWithAttributes:attributes].width;
+    CGFloat caretY = content.origin.y;
+    CGFloat caretHeight = font.ascender - font.descender + font.leading;
+    if (selection.location == text.length && [text hasSuffix:@"\n"]) {
+      caretX = content.origin.x;
+      caretY += caretHeight;
+    }
+    [NSColor.controlAccentColor setFill];
+    NSRectFill(NSMakeRect(caretX, caretY, 2.0, caretHeight));
+  }
+}
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)becomeFirstResponder {
   const BOOL result = [super becomeFirstResponder];
@@ -307,6 +340,46 @@ CGRect CaretRect(canvas_poc04_handle_t session, NSUInteger offset, CGFloat width
 }
 
 - (canvas_poc04_handle_t)session { return _session; }
+- (void)drawRect:(CGRect)rect {
+  [super drawRect:rect];
+
+  // UITextInput is an input protocol, not a renderer.  The recorder used to
+  // keep the text in a separate UILabel, which made it possible for the
+  // actual editor surface to remain visually blank even while the C++ session
+  // was receiving callbacks.  Render the composition-aware presentation from
+  // the same session that backs the IME queries so the visible result cannot
+  // drift from the text returned to UIKit.
+  const NSUInteger length = PresentedLength(_session);
+  NSString* text = TextForRange(_session, 0, length);
+  if (!text) text = @"";
+
+  UIFont* font = [UIFont systemFontOfSize:28.0 weight:UIFontWeightRegular];
+  NSDictionary* attributes = @{
+    NSFontAttributeName: font,
+    NSForegroundColorAttributeName: UIColor.labelColor,
+  };
+  CGRect content = CGRectInset(self.bounds, 4.0, 8.0);
+  [text drawInRect:content withAttributes:attributes];
+
+  // Keep a visible caret for the collapsed selection.  This is intentionally
+  // lightweight POC geometry; the authoritative caret rectangle remains the
+  // C++ geometry exposed through caretRectForPosition:.
+  NSRange selection{};
+  if (QuerySelection(_session, &selection) && selection.location != NSNotFound) {
+    NSString* prefix = [text substringWithRange:NSMakeRange(
+        0, MIN(selection.location, text.length))];
+    CGSize measured = [prefix sizeWithAttributes:attributes];
+    CGFloat caretX = content.origin.x + measured.width;
+    CGFloat caretY = content.origin.y;
+    CGFloat caretHeight = font.lineHeight;
+    if (selection.location == text.length && [text hasSuffix:@"\n"]) {
+      caretX = content.origin.x;
+      caretY += caretHeight;
+    }
+    [[UIColor systemBlueColor] setFill];
+    UIRectFill(CGRectMake(caretX, caretY, 2.0, caretHeight));
+  }
+}
 - (BOOL)canBecomeFirstResponder { return YES; }
 - (BOOL)becomeFirstResponder {
   const BOOL result = [super becomeFirstResponder];
@@ -370,6 +443,7 @@ CGRect CaretRect(canvas_poc04_handle_t session, NSUInteger offset, CGFloat width
   [self.inputDelegate selectionWillChange:self];
   SetSelection(_session, value.utf16Range);
   [self.inputDelegate selectionDidChange:self];
+  [self setNeedsDisplay];
   if (self.inputEventHandler) self.inputEventHandler(@"setSelectedTextRange");
 }
 - (UITextRange*)markedTextRange {
