@@ -7,6 +7,7 @@ import re
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/poc04.yml"
 ANDROID_BUILD = ROOT / "pocs/rich_text/platform/android/app/build.gradle.kts"
+ANDROID_RECORDER = ROOT / "pocs/rich_text/platform/android/record_canonical_behavior.sh"
 FORBIDDEN = {
     r"bootstrap_deps\.py[^\n]*--skia": "Skia source bootstrap",
     r"sync-skia": "Skia dependency sync",
@@ -52,8 +53,8 @@ def main() -> int:
         raise RuntimeError(
             "cross-platform acceptance must stay disabled until platform recorders exist"
         )
-    if "adb logcat -d -t 1000" not in text or "dumpsys activity top" not in text:
-        raise RuntimeError("Android recorder must preserve diagnostics when canonical behavior is missing")
+    if "bash pocs/rich_text/platform/android/record_canonical_behavior.sh" not in text:
+        raise RuntimeError("Android emulator job must invoke the atomic recorder script")
     if "always() && matrix.emulator == true" not in text:
         raise RuntimeError("Android diagnostics artifact must upload after recorder failure")
     for target in ("web-wasm-webgl2", "windows-x64-d3d12",
@@ -67,6 +68,15 @@ def main() -> int:
     )
     if expected_root not in android:
         raise RuntimeError("Android consumer SDK path does not resolve to repository .deps")
+    recorder = ANDROID_RECORDER.read_text(encoding="utf-8")
+    for required in (
+        "adb logcat -d -t 1000",
+        "dumpsys activity top",
+        'adb shell pidof "$package_name"',
+        'test -s "files/$artifact_name"',
+    ):
+        if required not in recorder:
+            raise RuntimeError(f"Android recorder is missing required diagnostic: {required}")
     print("POC-04 workflow is an isolated, source-free RichText SDK consumer")
     return 0
 

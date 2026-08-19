@@ -179,22 +179,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            mkdir -p out/poc04-android
-            adb install -r pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am force-stop com.mostorm.canvas.poc04
-            adb shell am start -n com.mostorm.canvas.poc04/.RichTextActivity --ez recordCanonicalBehavior true
-            if ! timeout 180 bash -c 'until adb shell run-as com.mostorm.canvas.poc04 test -s files/android-behavior.json; do sleep 1; done'; then
-              echo 'Android canonical behavior artifact was not produced; collecting diagnostics.' >&2
-              adb logcat -d -t 1000 > out/poc04-android/logcat.txt || true
-              adb shell dumpsys activity top > out/poc04-android/activity-top.txt || true
-              adb shell dumpsys package com.mostorm.canvas.poc04 > out/poc04-android/package.txt || true
-              cat out/poc04-android/logcat.txt >&2 || true
-              cat out/poc04-android/activity-top.txt >&2 || true
-              exit 1
-            fi
-            adb exec-out run-as com.mostorm.canvas.poc04 cat files/android-behavior.json > out/poc04-android/android-behavior.json
-            adb logcat -d -t 300 > out/poc04-android/logcat.txt || true
+          script: bash pocs/rich_text/platform/android/record_canonical_behavior.sh
       - uses: actions/upload-artifact@v4
         if: ${{ always() && matrix.emulator == true }}
         with:
