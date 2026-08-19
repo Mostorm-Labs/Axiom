@@ -22,13 +22,23 @@ test("WASM Runtime emits canonical SkParagraph behavior artifact", async ({ page
       return;
     }
     const asset = path.basename(new URL(relative, "http://localhost").pathname);
-    if (asset !== "canvas_poc04_web.js" && asset !== "canvas_poc04_web.wasm") {
+    const allowedAssets = new Set([
+      "canvas_poc04_web.data",
+      "canvas_poc04_web.js",
+      "canvas_poc04_web.wasm",
+    ]);
+    if (!allowedAssets.has(asset)) {
       response.writeHead(404);
       response.end();
       return;
     }
     const file = path.join(root, asset);
-    response.setHeader("Content-Type", file.endsWith(".wasm") ? "application/wasm" : "application/javascript");
+    const contentType = file.endsWith(".wasm")
+      ? "application/wasm"
+      : file.endsWith(".js")
+        ? "application/javascript"
+        : "application/octet-stream";
+    response.setHeader("Content-Type", contentType);
     const stream = fs.createReadStream(file);
     stream.on("error", (error) => response.destroy(error));
     stream.pipe(response);

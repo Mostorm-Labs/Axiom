@@ -86,6 +86,7 @@ jobs:
           source .deps/emsdk/emsdk_env.sh
           cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
           cmake --build out/poc04-web --parallel
+          test -s out/poc04-web/platform/web/canvas_poc04_web.data
           test -s out/poc04-web/platform/web/canvas_poc04_web.js
           test -s out/poc04-web/platform/web/canvas_poc04_web.wasm
           ! grep -E -l "pthread|SharedArrayBuffer" out/poc04-web/platform/web/canvas_poc04_web.js
