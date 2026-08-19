@@ -10,14 +10,22 @@ test("WASM Runtime emits canonical SkParagraph behavior artifact", async ({ page
   const root = path.resolve(wasmDirectory!);
   const server = http.createServer((request, response) => {
     const relative = request.url === "/" ? "/index.html" : request.url!;
-    const file = path.join(root, path.basename(relative));
     if (relative === "/index.html") {
       response.setHeader("Content-Type", "text/html");
-      response.end("<!doctype html><html></html>");
+      response.end('<!doctype html><html><head><link rel="icon" href="data:," /></head></html>');
       return;
     }
+    const asset = path.basename(new URL(relative, "http://localhost").pathname);
+    if (asset !== "canvas_poc04_web.js" && asset !== "canvas_poc04_web.wasm") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    const file = path.join(root, asset);
     response.setHeader("Content-Type", file.endsWith(".wasm") ? "application/wasm" : "application/javascript");
-    fs.createReadStream(file).pipe(response);
+    const stream = fs.createReadStream(file);
+    stream.on("error", (error) => response.destroy(error));
+    stream.pipe(response);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
