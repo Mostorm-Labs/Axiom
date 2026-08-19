@@ -2,6 +2,7 @@ package com.mostorm.canvas.poc04
 
 import android.app.Activity
 import android.os.Bundle
+import org.json.JSONObject
 import android.view.inputmethod.InputMethodManager
 import java.io.File
 
@@ -26,7 +27,36 @@ class RichTextActivity : Activity() {
                 latin.absolutePath,
                 cjk.absolutePath,
             ) ?: error("Canvas POC-04 canonical behavior recorder failed")
+            try {
+                validateCanonicalBehavior(report)
+            } catch (failure: Throwable) {
+                File(filesDir, "android-behavior.failed.json").writeText(report)
+                throw failure
+            }
             File(filesDir, "android-behavior.json").writeText(report)
+        }
+    }
+
+    private fun validateCanonicalBehavior(report: String) {
+        val value = JSONObject(report)
+        val behavior = value.getJSONObject("behavior")
+        check(behavior.keys().asSequence().all(behavior::getBoolean)) {
+            "Canvas POC-04 canonical behavior matrix failed"
+        }
+        check(value.getJSONObject("lifecycle").getInt("failures") == 0) {
+            "Canvas POC-04 canonical lifecycle gate failed"
+        }
+        val layout = value.getJSONObject("layout")
+        check(layout.getJSONArray("lines").length() > 0 &&
+            layout.getJSONArray("clusters").length() > 0 &&
+            layout.getJSONArray("selection").length() > 0 &&
+            layout.getJSONArray("diagnostics").length() == 0) {
+            "Canvas POC-04 canonical layout gate failed"
+        }
+        val performance = value.getJSONObject("performance")
+        check(performance.getDouble("input_caret_p95_ms") <= 16.7 &&
+            performance.getDouble("full_layout_p95_ms") <= 33.3) {
+            "Canvas POC-04 canonical performance gate failed"
         }
     }
 

@@ -1,5 +1,7 @@
 #include <jni.h>
+#include <android/log.h>
 
+#include <exception>
 #include <string>
 
 #include "canvas_poc04/canvas_poc04.h"
@@ -202,11 +204,22 @@ Java_com_mostorm_canvas_poc04_NativeRichText_nativeCanonicalBehaviorReport(
   try {
     const auto artifact = canvas::poc04::BuildCanonicalBehaviorArtifact(
         "android", std::move(latin), std::move(cjk));
-    if (!artifact.passed) return nullptr;
+    if (!artifact.passed) {
+      __android_log_print(ANDROID_LOG_ERROR, "CanvasPoc04",
+                          "Canonical behavior gate failed: %s",
+                          artifact.json.c_str());
+    }
     const std::u16string utf16 = canvas::poc04::Utf8ToUtf16(artifact.json);
     return environment->NewString(
         reinterpret_cast<const jchar*>(utf16.data()), utf16.size());
+  } catch (const std::exception& exception) {
+    __android_log_print(ANDROID_LOG_ERROR, "CanvasPoc04",
+                        "Canonical behavior recorder threw: %s",
+                        exception.what());
+    return nullptr;
   } catch (...) {
+    __android_log_print(ANDROID_LOG_ERROR, "CanvasPoc04",
+                        "Canonical behavior recorder threw an unknown exception");
     return nullptr;
   }
 }

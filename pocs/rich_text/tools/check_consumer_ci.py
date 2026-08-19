@@ -85,6 +85,7 @@ def main() -> int:
         "dumpsys activity top",
         'adb shell pidof "$package_name"',
         'test -s "files/$artifact_name"',
+        'test -s "files/$failed_artifact_name"',
     ):
         if required not in recorder:
             raise RuntimeError(f"Android recorder is missing required diagnostic: {required}")

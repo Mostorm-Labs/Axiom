@@ -4,11 +4,16 @@ set -euo pipefail
 readonly package_name="com.mostorm.canvas.poc04"
 readonly activity_name="${package_name}/.RichTextActivity"
 readonly artifact_name="android-behavior.json"
+readonly failed_artifact_name="android-behavior.failed.json"
 readonly output_dir="${GITHUB_WORKSPACE:-$(pwd)}/out/poc04-android"
 readonly apk_path="pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk"
 
 collect_diagnostics() {
   mkdir -p "$output_dir"
+  if adb shell run-as "$package_name" test -s "files/$failed_artifact_name"; then
+    adb exec-out run-as "$package_name" cat "files/$failed_artifact_name" \
+      > "$output_dir/$failed_artifact_name" || true
+  fi
   adb logcat -d -t 1000 > "$output_dir/logcat.txt" || true
   adb shell dumpsys activity top > "$output_dir/activity-top.txt" || true
   adb shell dumpsys package "$package_name" > "$output_dir/package.txt" || true
