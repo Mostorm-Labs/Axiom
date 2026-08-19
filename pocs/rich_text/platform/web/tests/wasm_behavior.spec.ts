@@ -37,6 +37,9 @@ test("WASM Runtime emits canonical SkParagraph behavior artifact", async ({ page
     fs.mkdirSync(path.dirname(output!), { recursive: true });
     fs.writeFileSync(output!, `${JSON.stringify(record)}\n`, "utf8");
   } finally {
-    server.close();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+      server.closeAllConnections();
+    });
   }
 });
