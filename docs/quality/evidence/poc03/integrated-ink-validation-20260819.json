@@ -9,7 +9,7 @@
     "POC-02 formal pressure-pen latency and Human Ink Gate"
   ],
   "source": {
-    "commit": "bdc8071f2f13d9d00737491082294d924ce6dea3",
+    "commit": "de6ce74705cd445654c86d84e06ec68830080f9d",
     "poc02_contract_commit": "35a02f8",
     "branch": "codex/poc-03-100k-scene"
   },
@@ -113,18 +113,18 @@
       "dpr": 2.625,
       "refresh_rate_hz": 90.0
     },
-    "source_commit": "bdc8071f2f13d9d00737491082294d924ce6dea3",
+    "source_commit": "de6ce74705cd445654c86d84e06ec68830080f9d",
     "sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f",
-    "apk_sha256": "08ed91e6d28375669c913320a79fd83db8145c5002d1310e96c6befc9586b239",
+    "apk_sha256": "fe4f6fc8ef6bcb0f03cb83a933c45104efb363d352553ada5ddceee5c0e49fd3",
     "elf_load_alignment": "0x4000",
     "scales": [
-      {"nodes": 1000, "historical_strokes": 200, "frame_p50_ms": 11.020, "frame_p95_ms": 13.803, "frame_p99_ms": 15.139, "frame_max_ms": 274.642, "missed_presentations": 260, "maximum_candidates": 96, "process_peak_mib": 222.559, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "79f85e40bd30c15285a1e6892f9d323fab8e82608c9a9e4b8904b3fedda11382"},
-      {"nodes": 10000, "historical_strokes": 2000, "frame_p50_ms": 11.011, "frame_p95_ms": 13.431, "frame_p99_ms": 14.881, "frame_max_ms": 220.023, "missed_presentations": 258, "maximum_candidates": 578, "process_peak_mib": 232.699, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "4d29ce9b07127c3c8337476dd5998dc780e444b31f66c2e208a015bb29e56bcc"},
-      {"nodes": 50000, "historical_strokes": 10000, "frame_p50_ms": 10.088, "frame_p95_ms": 12.878, "frame_p99_ms": 21.686, "frame_max_ms": 196.055, "missed_presentations": 139, "maximum_candidates": 2018, "process_peak_mib": 266.875, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "873e0a5c4a6c793ef19158113bd3384e390f6b6b1fe3bd9f15c7a508c8ea35fd"},
-      {"nodes": 100000, "historical_strokes": 20000, "frame_p50_ms": 9.680, "frame_p95_ms": 14.372, "frame_p99_ms": 26.651, "frame_max_ms": 185.498, "missed_presentations": 101, "maximum_candidates": 2498, "process_peak_mib": 312.895, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "31ae8ad2b396b04757f44dd83226cd77e237e77f52b990b8a83853e180416bb1"}
+      {"nodes": 1000, "historical_strokes": 200, "frame_p50_ms": 11.042, "frame_p95_ms": 13.892, "frame_p99_ms": 14.647, "frame_max_ms": 123.883, "missed_presentations": 271, "maximum_candidates": 96, "process_peak_mib": 224.445, "process_steady_growth_percent": 4.916, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "51324de808a1060810c9d224a9fe0039a4fb9d79fed0c0ec8ffe99447345c664"},
+      {"nodes": 10000, "historical_strokes": 2000, "frame_p50_ms": 10.965, "frame_p95_ms": 13.582, "frame_p99_ms": 15.637, "frame_max_ms": 117.962, "missed_presentations": 243, "maximum_candidates": 578, "process_peak_mib": 232.016, "process_steady_growth_percent": 4.751, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "470429c06c3e8c8745af88fa6682b8b88513000aa1ca814750b2630680657fbd"},
+      {"nodes": 50000, "historical_strokes": 10000, "frame_p50_ms": 10.033, "frame_p95_ms": 12.976, "frame_p99_ms": 21.978, "frame_max_ms": 71.256, "missed_presentations": 127, "maximum_candidates": 2018, "process_peak_mib": 268.988, "process_steady_growth_percent": 3.948, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "d535e577d1e4cb4d909371565b999ad2136bc0632d1d439a4444aa102a18cb4b"},
+      {"nodes": 100000, "historical_strokes": 20000, "frame_p50_ms": 9.531, "frame_p95_ms": 13.725, "frame_p99_ms": 24.951, "frame_max_ms": 44.473, "missed_presentations": 101, "maximum_candidates": 2498, "process_peak_mib": 314.398, "process_steady_growth_percent": 3.988, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "e26ff5fef287c63d02e40cb4dfc8a609afb5b95a659e55b3bd3f0079eea07e03"}
     ],
-    "long_run_100k": {"frames": 5400, "trace_wall_ms": 62348.974, "frame_p50_ms": 9.527, "frame_p95_ms": 14.014, "frame_p99_ms": 26.170, "frame_max_ms": 191.521, "missed_presentations": 832, "process_start_mib": 257.500, "process_end_mib": 301.250, "process_peak_mib": 311.895, "maximum_candidates": 2498, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "f141f46dcfd77dd30b7d0cf916baa482511dc1447278b4ccfe06a917e25004d3"},
-    "manual_actions": {"status": "passed", "actions": ["pan", "vector_write", "dab_write", "select", "select_drag"], "log_events": {"ink_preview": 95, "ink_canonical_visible": 3, "select_dragging": 41, "select_end": 2}, "process_alive_after_actions": true, "crash_or_anr_observed": false, "screenshot_sha256": "d581648fb8b2d169ae190eab23444909811a4addfa00a773e49e4d1b15bf4423", "logcat_sha256": "2476f547a0e90e644834b7e973159e06436a7db3d0efb0a6296dceefec2d5654"}
+    "long_run_100k": {"frames": 5400, "warmup_frames": 1800, "trace_wall_ms": 62263.318, "frame_p50_ms": 9.544, "frame_p95_ms": 13.928, "frame_p99_ms": 25.552, "frame_max_ms": 70.430, "missed_presentations": 832, "process_start_mib": 289.500, "process_end_mib": 301.133, "process_peak_mib": 314.070, "process_steady_growth_percent": 4.018, "maximum_candidates": 2498, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "481595989d1a4d306a19f01a5d377afc1b2167631488592cd80aaad51447e25d"},
+    "manual_actions": {"status": "passed", "apk_sha256": "fe4f6fc8ef6bcb0f03cb83a933c45104efb363d352553ada5ddceee5c0e49fd3", "actions": ["pan", "vector_write", "dab_write", "select", "select_drag"], "log_events": {"ink_preview": 84, "ink_canonical_visible": 2, "selected": 1, "select_dragging": 40, "select_end": 1}, "process_alive_after_actions": true, "crash_or_anr_observed": false, "screenshot_sha256": "de09cf72c18cf98397424d4645f81aa8b0000cfe0cea2751a59d9fe8e0a70ad0", "logcat_sha256": "24992cc2faefb21f8260497527081d2a60836f4ad993f5d1292612ff1e2892e4"}
   },
   "physical_integrated_gates": {
     "windows_d3d12": "pending",

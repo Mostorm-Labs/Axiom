@@ -13,7 +13,7 @@ immutable pre-integration physical report remains
 
 | Field | Value |
 |---|---|
-| Source commit | `bdc8071f2f13d9d00737491082294d924ce6dea3` (`test: complete Pixel 7 integrated Android harness`) |
+| Source commit | `de6ce74705cd445654c86d84e06ec68830080f9d` (`test: measure Android memory after warmup allocations`) |
 | POC-02 contract commit | `35a02f8` |
 | Branch | `codex/poc-03-100k-scene` |
 | Generator | algorithm 1, seed `0x43414e5641533033` |
@@ -46,36 +46,37 @@ the configured limits.
 
 The physical Android lane was run on a Pixel 7 (Android 17, GS201, arm64-v8a)
 at 2400x1080 landscape, DPR 2.625 and 90 Hz. The APK was built from commit
-`bdc8071f2f13d9d00737491082294d924ce6dea3`; its SHA-256 is
-`08ed91e6d28375669c913320a79fd83db8145c5002d1310e96c6befc9586b239`.
+`de6ce74705cd445654c86d84e06ec68830080f9d`; its SHA-256 is
+`fe4f6fc8ef6bcb0f03cb83a933c45104efb363d352553ada5ddceee5c0e49fd3`.
 The APK zip alignment check passed and the native library `PT_LOAD` alignment
 was `0x4000` (16 KiB) for every segment.
 
-| Base nodes | Historical Strokes | P50 ms | P95 ms | P99 ms | Max ms | Missed presentations | Max candidates | Peak PSS/HWM MiB | Correctness |
+| Base nodes | Historical Strokes | P50 ms | P95 ms | P99 ms | Max ms | Missed presentations | Max candidates | Peak VmHWM MiB | Steady RSS growth | Correctness |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 1,000 | 200 | 11.020 | 13.803 | 15.139 | 274.642 | 260 | 96 | 222.559 | pass |
-| 10,000 | 2,000 | 11.011 | 13.431 | 14.881 | 220.023 | 258 | 578 | 232.699 | pass |
-| 50,000 | 10,000 | 10.088 | 12.878 | 21.686 | 196.055 | 139 | 2,018 | 266.875 | pass |
-| 100,000 | 20,000 | 9.680 | 14.372 | 26.651 | 185.498 | 101 | 2,498 | 312.895 | pass |
+| 1,000 | 200 | 11.042 | 13.892 | 14.647 | 123.883 | 271 | 96 | 224.445 | 4.916% | pass |
+| 10,000 | 2,000 | 10.965 | 13.582 | 15.637 | 117.962 | 243 | 578 | 232.016 | 4.751% | pass |
+| 50,000 | 10,000 | 10.033 | 12.976 | 21.978 | 71.256 | 127 | 2,018 | 268.988 | 3.948% | pass |
+| 100,000 | 20,000 | 9.531 | 13.725 | 24.951 | 44.473 | 101 | 2,498 | 314.398 | 3.988% | pass |
 
-The 100K/60 second run rendered 5,400 frames in 62,348.974 ms: p50 9.527 ms,
-p95 14.014 ms, p99 26.170 ms, max 191.521 ms, 832 missed presentations,
-and peak PSS/HWM 311.895 MiB (start 257.500 MiB, end 301.250 MiB). Android
-does not add an absolute frame-time gate in this POC; these values are retained
-as device evidence. All four scales and the long run passed full/incremental
-and visual equivalence, with candidates <= 5,000 and stable digests.
+The 100K/60 second run rendered 5,400 frames in 62,263.318 ms: p50 9.544 ms,
+p95 13.928 ms, p99 25.552 ms, max 70.430 ms, 832 missed presentations,
+and peak VmHWM 314.070 MiB (warmup end RSS 289.500 MiB, end RSS 301.133 MiB,
+4.018% steady growth). Android does not add an absolute frame-time gate in this
+POC; these values are retained as device evidence. All four scales and the
+long run passed the ≤5% post-warmup memory gate, full/incremental equivalence,
+visual equivalence, and candidates ≤5,000.
 
 The manual 100K action pass used the native Android SurfaceView and exercised
 PAN, VECTOR write, DAB write, SELECT and SELECT drag. The captured log contains
-95 `INK_PREVIEW`, 3 `INK_CANONICAL_VISIBLE`, 41 `SELECT_DRAGGING` and 2
-`SELECT_END` events. The process remained alive; no crash, SIGSEGV, abort or
+84 `INK_PREVIEW`, 2 `INK_CANONICAL_VISIBLE`, 1 `SELECTED`, 40
+`SELECT_DRAGGING` and 1 `SELECT_END` events. The process remained alive; no crash, SIGSEGV, abort or
 ANR was observed. The post-action screenshot and sanitized log are retained as
 local artifacts (not committed):
 
 | Artifact | SHA-256 |
 |---|---|
-| `pixel7-after-actions.png` | `d581648fb8b2d169ae190eab23444909811a4addfa00a773e49e4d1b15bf4423` |
-| `pixel7-after-actions-logcat.txt` | `2476f547a0e90e644834b7e973159e06436a7db3d0efb0a6296dceefec2d5654` |
+| `pixel7-final-after-actions.png` | `de09cf72c18cf98397424d4645f81aa8b0000cfe0cea2751a59d9fe8e0a70ad0` |
+| `pixel7-final-after-actions-logcat.txt` | `24992cc2faefb21f8260497527081d2a60836f4ad993f5d1292612ff1e2892e4` |
 
 ## Gate disposition
 
