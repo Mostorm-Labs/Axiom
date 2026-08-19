@@ -80,10 +80,23 @@ glyph. SkParagraph + SkShaper + bundled HarfBuzz/ICU supplies line,
 grapheme/cluster, caret, and selection geometry. The lightweight host probe is
 explicitly non-canonical.
 
+`SkParagraphTextLayout::Layout()` is the complete geometry oracle. Every call
+builds and lays out a fresh Paragraph and returns lines, clusters, selection
+rectangles, and diagnostics. `LayoutForPerformance()` is an explicit
+benchmark-only entry point: every call also builds a fresh Paragraph and runs
+the same canonical shaping and width-constrained line breaking, but it does
+not issue the O(n) per-cluster or selection-rectangle diagnostic queries. The
+fixed fixture continues to require and compare the complete `Layout()` result,
+so the performance path cannot replace or weaken the geometry oracle.
+
 ## Performance and lifecycle gates
 
 - 10K-character ordinary input and caret movement: p95 no greater than 16.7 ms.
-- 10K-character full canonical layout: p95 no greater than 33.3 ms.
+- 10K-character canonical shaping and line breaking, using a fresh Paragraph
+  for every measured sample: p95 no greater than 33.3 ms.
+- Fixed-font complete canonical geometry: non-empty lines, clusters, and
+  selection rectangles, no diagnostics, and a byte-for-byte equivalent dump
+  across platforms.
 - 100 focus/unfocus/view-destroy cycles: no crash or residual composition.
 - Three-platform digest and fixed-font geometry: byte-for-byte equivalent dump.
 

@@ -216,13 +216,11 @@ CanonicalBehaviorArtifact BuildCanonicalBehaviorArtifact(
   std::vector<double> layout_times;
   layout_times.reserve(kLayoutMeasuredSamples);
   for (uint32_t iteration = 0; iteration < kLayoutWarmupSamples; ++iteration) {
-    static_cast<void>(layout.Layout(*performance_document, 800.0F,
-                                    {{0, 0}, {0, 0}}));
+    static_cast<void>(layout.LayoutForPerformance(*performance_document, 800.0F));
   }
   for (uint32_t iteration = 0; iteration < kLayoutMeasuredSamples; ++iteration) {
     const auto start = std::chrono::steady_clock::now();
-    static_cast<void>(layout.Layout(*performance_document, 800.0F,
-                                    {{0, 0}, {0, 0}}));
+    static_cast<void>(layout.LayoutForPerformance(*performance_document, 800.0F));
     const auto end = std::chrono::steady_clock::now();
     layout_times.push_back(
         std::chrono::duration<double, std::milli>(end - start).count());
