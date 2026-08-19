@@ -284,13 +284,15 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
         g_height,
     };
   };
-  std::vector<uint8_t> warmup_rgba;
+  std::vector<double> frame_ms;
+  frame_ms.reserve(static_cast<size_t>(frame_count));
+  std::vector<uint8_t> incremental_rgba;
   double warmup_ms = 0.0;
   for (int frame = 0; frame < kWarmupFrames; ++frame) {
     const ViewState view = make_view(frame);
     const ViewQueryResult query = QueryView(*g_scene, view, std::nullopt);
     if (!g_adapter->Render(*g_scene, view, query,
-                           frame == kWarmupFrames - 1, &warmup_rgba,
+                           frame == kWarmupFrames - 1, &incremental_rgba,
                            &warmup_ms, &error, g_ink_geometry.get())) {
       return Failure(env, error);
     }
@@ -299,20 +301,17 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
   const ViewQueryResult warmup_oracle_query =
       QueryView(oracle, warmup_final_view, std::nullopt);
   if (!g_adapter->Render(oracle, warmup_final_view, warmup_oracle_query, true,
-                         &warmup_rgba, &warmup_ms, &error,
+                         &incremental_rgba, &warmup_ms, &error,
                          g_ink_geometry.get())) {
     return Failure(env, error);
   }
   const double process_start_mib = ProcessStatusMib("VmRSS:");
   const auto trace_start = std::chrono::steady_clock::now();
 
-  std::vector<double> frame_ms;
-  frame_ms.reserve(static_cast<size_t>(frame_count));
   size_t maximum_candidates = 0U;
   size_t maximum_visible = 0U;
   uint64_t missed_intervals = 0U;
   const double interval_ms = refresh_rate > 0.0F ? 1000.0 / refresh_rate : 0.0;
-  std::vector<uint8_t> incremental_rgba;
   for (int frame = 0; frame < frame_count; ++frame) {
     const ViewState view = make_view(frame);
     const ViewQueryResult query = QueryView(*g_scene, view, std::nullopt);
