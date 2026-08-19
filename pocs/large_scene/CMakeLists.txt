@@ -26,6 +26,10 @@ target_include_directories(canvas_poc03_core
 )
 target_link_libraries(canvas_poc03_core PRIVATE canvas_poc03_xxhash)
 set_target_properties(canvas_poc03_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+if(TARGET canvas_runtime_scene)
+  add_subdirectory(rf01)
+endif()
 if(EMSCRIPTEN)
   target_compile_options(canvas_poc03_core PRIVATE -fexceptions)
 endif()

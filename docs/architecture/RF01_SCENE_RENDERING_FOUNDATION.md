@@ -1,6 +1,6 @@
 # RF-01 Scene Rendering Foundation 接口与迁移方案
 
-> Status: **Design Baseline / Ready for implementation**
+> Status: **Implementation Baseline / RF01-1 Validating**
 > Date: 2026-08-19
 > Scope: RF-01；后续由 RF-02 动态空间索引、RF-03 Tile/LOD/Raster 调度继续实现
 > Depends on: [ADR-0003](../adr/0003-semantic-document-runtime-scene.md)、
@@ -688,6 +688,23 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 建立 FakeRenderScene/FakeSpatialIndex，验证 prepare failure 和 no-fail commit。
 - C++ API 全部符合 Canvas style；不改 POC behavior。
 
+当前 RF01-0 host baseline 已落在 `runtime/foundation` 与 `runtime/scene`：
+
+- `canvas_runtime_foundation` 只提供强类型 `ObjectId`、revision、order key、result 和 world
+  geometry；不链接第三方或平台库。
+- `canvas_runtime_scene` 提供 `SceneRecord`、snapshot/delta、`IRenderScene`、`ISpatialIndex`、
+  `DamageTracker` 与 `Scene` 的内部接口骨架；Fake participant 位于独立 testing target。
+- `Scene::replace/apply` 统一执行 validate → prepare record/render/spatial/damage → commit，
+  并将 Scene revision 作为最后发布步骤；失败路径不触碰旧 record、participant、damage 或
+  revision。
+- `tools/check_runtime_boundaries.py` 检查 RF-01 contract include 和 CMake 依赖，拒绝 Skia、
+  Windows、Apple、JNI、Emscripten、网络/存储/线程及 public C ABI 反向依赖。
+- `docs/api/canvas_runtime_api_v1.manifest.json` 与 `tools/check_runtime_abi_manifest.py` 固定
+  当前 54 个导出函数、49 个 struct 声明和 163 个 enum 常量；RF01-0 不修改规范性 C header。
+
+RF01-0 明确不包含 SceneCompiler/SceneBinding 的 Document adapter、真实 Direct/SkSG renderer、
+动态空间索引、Tile/LOD、平台 surface 或 POC-03 行为迁移；这些在 RF01-1 及之后的批次实现。
+
 退出：C11/C++20 public ABI manifest 不变，Document/Bridge/Shell 无 Skia include。
 
 ### RF01-1：SceneRecordStore 与 full rebuild
@@ -695,6 +712,26 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 实现 SceneRecordStore、Scene::replace、DirectRenderScene 和 UniformGridSpatialIndex adapter。
 - 实现 `Poc03SceneSource`，将固定 fixture 编译为 `CompiledSceneSnapshot`。
 - 对比旧 RuntimeScene 与新 Scene 的 digest、bounds、draw order、query 和 RGBA。
+
+当前 RF01-1 实现基线：
+
+- `SceneRecordStore` 按 `orderKey + objectId` 保存确定性 record 顺序，并维护独立 ObjectId
+  索引；`prepareReplace()` 完成数值、kind、generation、重复 ID 校验，`commit()` 只交换已准备
+  的 owning state。
+- `DirectRenderScene` 保存 Canvas-owned render projection，`UniformGridSpatialIndex` 保存 full
+  snapshot 的负坐标安全 grid projection；两者不依赖 Skia、平台 surface 或 POC 类型。
+- `Scene::replace()` 以 record → render → spatial → damage → revision 顺序提交；任何 participant
+  prepare 失败都保留旧 Scene。Direct/Grid 的 delta 入口在本批次明确返回
+  `kRequiresFullRebuild`，不伪装增量能力。
+- `Poc03SceneSource` 只存在于 POC compatibility target，将 POC-03 `Document` 映射成产品
+  `CompiledSceneSnapshot`。payload slot 与旧 `RuntimeScene` 保持零基；slot 0 合法，只有
+  generation 0 无效。
+- Host oracle 覆盖 1K/10K/50K/100K 的 revision、record、digest、content bounds、visible
+  query、draw order 和 deterministic CPU reference RGBA。CPU reference 是无 Skia 的语义像素
+  等价门禁，不冒充 Skia/GPU readback；实际 Skia visual/golden 仍由 POC-03 平台门禁承担。
+- RF01 独立测试覆盖 Store validation/index、Direct draw-list/bounds hit、Grid 负坐标/去重/
+  brute-force 等价、退化 bounds、stale query、replace participant failure 原子性，以及
+  Direct/Grid delta capability 声明。
 
 退出：1K/10K/50K/100K full compile 逐项等价；replace 失败保持旧 Scene。
 

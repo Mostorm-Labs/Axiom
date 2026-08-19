@@ -3,6 +3,10 @@ include(GoogleTest)
 add_executable(canvas_poc03_tests large_scene_test.cpp)
 target_link_libraries(canvas_poc03_tests PRIVATE
   canvas_poc03_core GTest::gtest_main)
+if(TARGET canvas_poc03_rf01_adapter)
+  target_sources(canvas_poc03_tests PRIVATE rf01_scene_source_test.cpp)
+  target_link_libraries(canvas_poc03_tests PRIVATE canvas_poc03_rf01_adapter)
+endif()
 if(CANVAS_POC03_ENABLE_INK_INTEGRATION)
   target_sources(canvas_poc03_tests PRIVATE integrated_ink_test.cpp)
   target_link_libraries(canvas_poc03_tests PRIVATE

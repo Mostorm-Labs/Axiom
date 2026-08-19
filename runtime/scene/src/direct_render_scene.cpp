@@ -1,0 +1,125 @@
+#include "canvas/scene/direct_render_scene.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <new>
+#include <utility>
+
+namespace canvas {
+class DirectRenderScene::PreparedUpdate final : public IPreparedRenderSceneUpdate {
+  public:
+    SceneRevision revision;
+    std::vector<RenderRecord> records;
+    std::unordered_map<ObjectId, std::size_t, foundation::ObjectIdHash> index;
+};
+
+namespace {
+
+foundation::Error makeError(foundation::ErrorCode code, const char* message) {
+    return foundation::Error{code, message};
+}
+
+float distanceToRect(const WorldPoint& point, const WorldRect& rect) {
+    const float dx = std::max({rect.left - point.x, 0.0F, point.x - rect.right});
+    const float dy = std::max({rect.top - point.y, 0.0F, point.y - rect.bottom});
+    return std::hypot(dx, dy);
+}
+
+} // namespace
+
+foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>
+DirectRenderScene::prepareReplace(std::span<const SceneRecord> records,
+                                  SceneRevision revision) const {
+    ++_prepareCount;
+    try {
+        auto update = std::make_unique<PreparedUpdate>();
+        update->revision = revision;
+        update->records.reserve(records.size());
+        update->index.reserve(records.size());
+        for (const SceneRecord& record : records) {
+            const std::size_t index = update->records.size();
+            update->records.push_back(RenderRecord{
+                record.objectId,
+                record.orderKey,
+                record.worldBounds,
+                record.renderPayload,
+            });
+            update->index.emplace(record.objectId, index);
+        }
+        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::success(
+            std::move(update));
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+            makeError(foundation::ErrorCode::kOutOfMemory,
+                      "DirectRenderScene could not prepare replacement"));
+    }
+}
+
+foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>> DirectRenderScene::prepareApply(
+    std::span<const SceneMutation>, SceneRevision, SceneRevision) const {
+    ++_prepareCount;
+    return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+        makeError(foundation::ErrorCode::kRequiresFullRebuild,
+                  "DirectRenderScene delta support begins in RF01-2"));
+}
+
+void DirectRenderScene::commit(std::unique_ptr<IPreparedRenderSceneUpdate> prepared) noexcept {
+    auto* update = static_cast<PreparedUpdate*>(prepared.get());
+    _records.swap(update->records);
+    _index.swap(update->index);
+    _revision = update->revision;
+    ++_commitCount;
+}
+
+foundation::Result<PreciseHit>
+DirectRenderScene::preciseHitTest(const PreciseHitRequest& request) const {
+    if (!std::isfinite(request.worldPoint.x) || !std::isfinite(request.worldPoint.y) ||
+        !std::isfinite(request.tolerance) || request.tolerance < 0.0F) {
+        return foundation::Result<PreciseHit>::failure(
+            makeError(foundation::ErrorCode::kInvalidArgument, "Precise hit request is invalid"));
+    }
+    const auto found = _index.find(request.objectId);
+    if (found == _index.end()) {
+        return foundation::Result<PreciseHit>::failure(
+            makeError(foundation::ErrorCode::kMissingObject, "Precise hit ObjectId is missing"));
+    }
+    const float distance = distanceToRect(request.worldPoint, _records[found->second].worldBounds);
+    return foundation::Result<PreciseHit>::success(
+        PreciseHit{distance <= request.tolerance, distance});
+}
+
+foundation::Result<SceneDrawList>
+DirectRenderScene::buildDrawList(std::span<const ObjectId> backToFront) const {
+    try {
+        SceneDrawList drawList{.revision = _revision};
+        drawList.items.reserve(backToFront.size());
+        for (ObjectId objectId : backToFront) {
+            const auto found = _index.find(objectId);
+            if (found == _index.end()) {
+                return foundation::Result<SceneDrawList>::failure(makeError(
+                    foundation::ErrorCode::kMissingObject, "Draw-list ObjectId is missing"));
+            }
+            const RenderRecord& record = _records[found->second];
+            drawList.items.push_back(SceneDrawItem{
+                record.objectId,
+                record.orderKey,
+                record.renderPayload,
+            });
+        }
+        return foundation::Result<SceneDrawList>::success(std::move(drawList));
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<SceneDrawList>::failure(makeError(
+            foundation::ErrorCode::kOutOfMemory, "DirectRenderScene could not build draw list"));
+    }
+}
+
+RenderSceneDiagnostics DirectRenderScene::diagnostics() const {
+    return RenderSceneDiagnostics{
+        .revision = _revision,
+        .nodeCount = _records.size(),
+        .prepareCount = _prepareCount,
+        .commitCount = _commitCount,
+    };
+}
+
+} // namespace canvas
