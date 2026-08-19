@@ -21,6 +21,7 @@
 namespace {
 
 using namespace canvas::poc03;
+namespace poc02 = canvas::poc02;
 
 std::mutex g_mutex;
 std::unique_ptr<Document> g_document;
@@ -56,11 +57,11 @@ double Percentile(std::vector<double> values, double percentile) {
   return values[std::min(index, values.size() - 1U)];
 }
 
-double ProcessResidentMib() {
+double ProcessStatusMib(const char* requested_key) {
   std::ifstream status("/proc/self/status");
   std::string key;
   while (status >> key) {
-    if (key == "VmHWM:") {
+    if (key == requested_key) {
       uint64_t kib = 0;
       status >> kib;
       return static_cast<double>(kib) / 1024.0;
@@ -150,6 +151,7 @@ poc02::PointerSampleBatch AndroidInkBatch(
           .capabilities = poc02::kCapabilityPressure |
                           poc02::kCapabilityContact,
       },
+      .samples = {},
   };
   batch.samples.reserve(xs.size());
   for (size_t index = 0U; index < xs.size(); ++index) {
@@ -164,6 +166,7 @@ poc02::PointerSampleBatch AndroidInkBatch(
         .sample_sequence = g_live_sample_sequence++,
         .position = {xs[index], ys[index]},
         .pressure = std::clamp(pressures[index], 0.0F, 1.0F),
+        .tilt = {},
         .contact_size = {2.0F, 2.0F},
         .timestamp_us = static_cast<uint64_t>(timestamps_ms[index]) * 1000U,
         .phase = phase,
@@ -260,6 +263,8 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
   if (oracle.Digest() != g_scene->Digest()) {
     return Failure(env, "incremental/full scene digest differs");
   }
+  const double process_start_mib = ProcessStatusMib("VmRSS:");
+  const auto trace_start = std::chrono::steady_clock::now();
 
   std::vector<double> frame_ms;
   frame_ms.reserve(static_cast<size_t>(frame_count));
@@ -315,6 +320,10 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
     return Failure(env, error);
   }
   const bool visual_equivalent = incremental_rgba == oracle_rgba;
+  const auto trace_end = std::chrono::steady_clock::now();
+  const double process_end_mib = ProcessStatusMib("VmRSS:");
+  const double trace_wall_ms =
+      std::chrono::duration<double, std::milli>(trace_end - trace_start).count();
   g_pan_x = final_pan_x;
   g_pan_y = final_pan_y;
   g_zoom = final_zoom;
@@ -351,7 +360,10 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
          << "\"missed_presentations\":" << missed_intervals << ','
          << "\"maximum_candidates\":" << maximum_candidates << ','
          << "\"maximum_visible\":" << maximum_visible << ','
-         << "\"process_peak_mib\":" << ProcessResidentMib() << ','
+         << "\"trace_wall_ms\":" << trace_wall_ms << ','
+         << "\"process_start_mib\":" << process_start_mib << ','
+         << "\"process_end_mib\":" << process_end_mib << ','
+         << "\"process_peak_mib\":" << ProcessStatusMib("VmHWM:") << ','
          << "\"input_events\":" << g_input_events << "}";
   output << result.str() << '\n';
   output.close();

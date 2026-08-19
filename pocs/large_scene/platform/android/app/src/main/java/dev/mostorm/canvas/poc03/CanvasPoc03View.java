@@ -38,12 +38,15 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
     private int surfaceHeight;
     private Tool tool = Tool.PAN;
     private final int baseNodes;
+    private final int frameCount;
 
     public CanvasPoc03View(Context context) {
         super(context);
         getHolder().addCallback(this);
         baseNodes = ((android.app.Activity) context).getIntent()
                 .getIntExtra("poc03_nodes", 100000);
+        frameCount = Math.max(1, ((android.app.Activity) context).getIntent()
+                .getIntExtra("poc03_frames", 600));
         scaleDetector = new ScaleGestureDetector(context,
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
@@ -87,7 +90,8 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
                     density, baseNodes);
             Log.i("CanvasPOC03", attached);
             String result = attached.startsWith("FAIL") ? attached
-                    : nativeRunAcceptance(output.getAbsolutePath(), refreshRate, 600);
+                    : nativeRunAcceptance(output.getAbsolutePath(), refreshRate,
+                            frameCount);
             acceptanceRunning = false;
             if (result.startsWith("{")) {
                 Log.i("CanvasPOC03", result);

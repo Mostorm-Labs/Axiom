@@ -30,20 +30,44 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--nodes", type=int, choices=(1000, 10000, 50000, 100000),
                         default=100000)
+    parser.add_argument("--frames", type=int, default=600)
     parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
     if not args.apk.is_file():
         raise SystemExit(f"APK does not exist: {args.apk}")
+    if args.frames <= 0:
+        raise SystemExit("--frames must be positive")
     args.output.mkdir(parents=True, exist_ok=True)
     run("adb", "install", "-r", str(args.apk))
+    # Android can deliver a new intent to the existing top Activity after an
+    # in-place install. Stop the package so every scale starts a fresh native
+    # Runtime and consumes its own poc03_nodes extra.
+    run("adb", "shell", "am", "force-stop", PACKAGE)
+    for _ in range(50):
+        process = subprocess.run(
+            ("adb", "shell", "pidof", PACKAGE),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if not process.stdout.strip():
+            break
+        time.sleep(0.1)
+    else:
+        raise TimeoutError("Android package did not stop before relaunch")
+    # Let ActivityManager finish removing the old task before recreating the
+    # SurfaceView; without this short gap Android may restore its prior intent.
+    time.sleep(1.0)
     run("adb", "logcat", "-c")
-    run("adb", "shell", "am", "start", "-n", ACTIVITY, "--ei",
-        "poc03_nodes", str(args.nodes))
+    run("adb", "shell", "am", "start", "-S", "-W", "-f", "0x10008000",
+        "-n", ACTIVITY, "--ei", "poc03_nodes", str(args.nodes), "--ei",
+        "poc03_frames", str(args.frames))
     deadline = time.monotonic() + args.timeout
     log = ""
     while time.monotonic() < deadline:
         log = output("adb", "logcat", "-d", "-s", "CanvasPOC03:I")
-        if "CANVAS_POC03_RESULT" in log:
+        if ("CANVAS_POC03_RESULT" in log and
+                f'"nodes":{args.nodes}' in log):
             break
         time.sleep(1.0)
     else:
@@ -53,6 +77,16 @@ def main() -> int:
         "files/poc03-android-result.json",
     )
     result = json.loads(result_text)
+    if result.get("nodes") != args.nodes:
+        raise RuntimeError(
+            f"Android scale mismatch: requested {args.nodes}, "
+            f"received {result.get('nodes')}"
+        )
+    if result.get("frames") != args.frames:
+        raise RuntimeError(
+            f"Android frame-count mismatch: requested {args.frames}, "
+            f"received {result.get('frames')}"
+        )
     (args.output / "result.json").write_text(
         json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -77,6 +111,7 @@ def main() -> int:
         "adb_serial": output("adb", "get-serialno"),
         "properties": properties,
         "display": output("adb", "shell", "dumpsys", "display"),
+        "meminfo": output("adb", "shell", "dumpsys", "meminfo", PACKAGE),
     }
     (args.output / "device.json").write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"

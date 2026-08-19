@@ -329,9 +329,14 @@ poc02::BrushDescriptor DeterministicBrush(poc02::BrushType type) {
   if (type == poc02::BrushType::kVector) {
     return poc02::BrushDescriptor{
         .type = type,
+        .brush_version = 1U,
+        .algorithm_version = 1U,
         .size = 8.0F,
         .spacing = 0.25F,
         .opacity = 0.9F,
+        .jitter = 0.0F,
+        .resource_id = {},
+        .resource_content_hash = {},
     };
   }
   return poc02::BrushDescriptor{
@@ -364,6 +369,7 @@ poc02::PointerSampleBatch DeterministicInkBatch(
           .tool = poc02::PointerTool::kPen,
           .capabilities = poc02::kCapabilityPressure | poc02::kCapabilityTilt,
       },
+      .samples = {},
   };
   batch.samples.reserve(4U);
   for (uint32_t item = 0U; item < 4U; ++item) {
@@ -554,7 +560,14 @@ bool RunIntegratedActionCycle(
     report->maximum_candidates = std::max(report->maximum_candidates,
                                            query.candidates.size());
     const FrameGraph graph = BuildFrame(
-        *scene, query, OverlayState{.preview_ids = {ids[stroke_index]}});
+        *scene, query,
+        OverlayState{
+            .editor_ids = {},
+            .presence_ids = {},
+            .preview_ids = {ids[stroke_index]},
+            .selection_ids = {},
+            .hud_ids = {},
+        });
     if (graph.logical_passes[static_cast<size_t>(LogicalPass::kInk)]
             .item_ids.empty()) {
       return SetError(error, "action-cycle Ink pass is empty");
