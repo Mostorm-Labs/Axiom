@@ -1,6 +1,6 @@
 # POC-03 Integrated Ink validation — 2026-08-19
 
-Status: **Host matrix passed; POC-03 remains `Validating`**.
+Status: **Host matrix and Pixel 7 Android integrated lane passed; POC-03 remains `Validating`**.
 
 This report records the first integrated validation of the POC-02 Ink contract
 inside the POC-03 Scene/FrameGraph/TileCache path. It does not close the
@@ -13,14 +13,14 @@ immutable pre-integration physical report remains
 
 | Field | Value |
 |---|---|
-| Source commit | `4295fb73f31964d462b4540abede918786a08fd9` (`POC-03: integrate POC-02 Ink validation`) |
+| Source commit | `bdc8071f2f13d9d00737491082294d924ce6dea3` (`test: complete Pixel 7 integrated Android harness`) |
 | POC-02 contract commit | `35a02f8` |
 | Branch | `codex/poc-03-100k-scene` |
 | Generator | algorithm 1, seed `0x43414e5641533033` |
 | Scales | 1K/200, 10K/2K, 50K/10K, 100K/20K base nodes/historical Strokes |
 | Input fixture | 16 samples per Stroke, four batches of four samples, fixed pressure/time sequence |
 | Host backend | C++20 host core; no Skia source or platform SDK consumed |
-| Platform Skia identity | Skia `b6d106297ff9ef2ff8094033695d045e87775581`; platform SDK IDs are captured when the pending physical integrated runs are produced |
+| Platform Skia identity | Skia `b6d106297ff9ef2ff8094033695d045e87775581`; Android SDK ID `630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f` |
 
 All historical and live Strokes use the real
 `PointerSampleBatch → InputRouter → StrokeSession → AddStrokeOperation` path.
@@ -42,6 +42,41 @@ the preview-to-canonical handoff had no blank or double-dark frame in the
 automated controller trace. Queue and pending-callback bounds remained within
 the configured limits.
 
+## Pixel 7 Android integrated lane
+
+The physical Android lane was run on a Pixel 7 (Android 17, GS201, arm64-v8a)
+at 2400x1080 landscape, DPR 2.625 and 90 Hz. The APK was built from commit
+`bdc8071f2f13d9d00737491082294d924ce6dea3`; its SHA-256 is
+`08ed91e6d28375669c913320a79fd83db8145c5002d1310e96c6befc9586b239`.
+The APK zip alignment check passed and the native library `PT_LOAD` alignment
+was `0x4000` (16 KiB) for every segment.
+
+| Base nodes | Historical Strokes | P50 ms | P95 ms | P99 ms | Max ms | Missed presentations | Max candidates | Peak PSS/HWM MiB | Correctness |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1,000 | 200 | 11.020 | 13.803 | 15.139 | 274.642 | 260 | 96 | 222.559 | pass |
+| 10,000 | 2,000 | 11.011 | 13.431 | 14.881 | 220.023 | 258 | 578 | 232.699 | pass |
+| 50,000 | 10,000 | 10.088 | 12.878 | 21.686 | 196.055 | 139 | 2,018 | 266.875 | pass |
+| 100,000 | 20,000 | 9.680 | 14.372 | 26.651 | 185.498 | 101 | 2,498 | 312.895 | pass |
+
+The 100K/60 second run rendered 5,400 frames in 62,348.974 ms: p50 9.527 ms,
+p95 14.014 ms, p99 26.170 ms, max 191.521 ms, 832 missed presentations,
+and peak PSS/HWM 311.895 MiB (start 257.500 MiB, end 301.250 MiB). Android
+does not add an absolute frame-time gate in this POC; these values are retained
+as device evidence. All four scales and the long run passed full/incremental
+and visual equivalence, with candidates <= 5,000 and stable digests.
+
+The manual 100K action pass used the native Android SurfaceView and exercised
+PAN, VECTOR write, DAB write, SELECT and SELECT drag. The captured log contains
+95 `INK_PREVIEW`, 3 `INK_CANONICAL_VISIBLE`, 41 `SELECT_DRAGGING` and 2
+`SELECT_END` events. The process remained alive; no crash, SIGSEGV, abort or
+ANR was observed. The post-action screenshot and sanitized log are retained as
+local artifacts (not committed):
+
+| Artifact | SHA-256 |
+|---|---|
+| `pixel7-after-actions.png` | `d581648fb8b2d169ae190eab23444909811a4addfa00a773e49e4d1b15bf4423` |
+| `pixel7-after-actions-logcat.txt` | `2476f547a0e90e644834b7e973159e06436a7db3d0efb0a6296dceefec2d5654` |
+
 ## Gate disposition
 
 Passed locally:
@@ -59,7 +94,6 @@ Still pending and intentionally not claimed here:
 
 - Windows physical D3D12 integrated playground at 1K/10K/50K/100K.
 - Chrome Stable WebGL2 integrated playground at 1K/10K/50K/100K.
-- Pixel 7 Android integrated playground at 1K/10K/50K/100K.
 - The POC-02 formal pressure-pen latency and Human Ink Gate.
 
 The Windows shell now accepts native `WM_POINTER` select/drag messages and

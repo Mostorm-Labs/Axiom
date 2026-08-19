@@ -1,16 +1,15 @@
 {
   "schema_version": 1,
   "report_id": "poc03-integrated-ink-validation-20260819",
-  "evidence_status": "host_matrix_passed",
+  "evidence_status": "host_matrix_and_pixel7_android_passed",
   "poc_status_after_evidence": "Validating",
   "remaining_gates": [
     "Windows physical D3D12 integrated playground",
     "Chrome Stable WebGL2 integrated playground",
-    "Pixel 7 Android integrated playground",
     "POC-02 formal pressure-pen latency and Human Ink Gate"
   ],
   "source": {
-    "commit": "4295fb73f31964d462b4540abede918786a08fd9",
+    "commit": "bdc8071f2f13d9d00737491082294d924ce6dea3",
     "poc02_contract_commit": "35a02f8",
     "branch": "codex/poc-03-100k-scene"
   },
@@ -24,7 +23,7 @@
   "sdk": {
     "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
     "host_sdk_consumed": false,
-    "platform_sdk_ids": "pending physical integrated runs"
+    "android_sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f"
   },
   "results": [
     {
@@ -102,10 +101,35 @@
     "full_incremental_equivalent": true,
     "preview_canonical_handoff_le_two_frames": true
   },
+  "pixel7_android_integrated": {
+    "status": "passed",
+    "device": {
+      "model": "Pixel 7",
+      "android_release": "17",
+      "soc": "GS201",
+      "abi": "arm64-v8a",
+      "surface_width_px": 2400,
+      "surface_height_px": 1080,
+      "dpr": 2.625,
+      "refresh_rate_hz": 90.0
+    },
+    "source_commit": "bdc8071f2f13d9d00737491082294d924ce6dea3",
+    "sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f",
+    "apk_sha256": "08ed91e6d28375669c913320a79fd83db8145c5002d1310e96c6befc9586b239",
+    "elf_load_alignment": "0x4000",
+    "scales": [
+      {"nodes": 1000, "historical_strokes": 200, "frame_p50_ms": 11.020, "frame_p95_ms": 13.803, "frame_p99_ms": 15.139, "frame_max_ms": 274.642, "missed_presentations": 260, "maximum_candidates": 96, "process_peak_mib": 222.559, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "79f85e40bd30c15285a1e6892f9d323fab8e82608c9a9e4b8904b3fedda11382"},
+      {"nodes": 10000, "historical_strokes": 2000, "frame_p50_ms": 11.011, "frame_p95_ms": 13.431, "frame_p99_ms": 14.881, "frame_max_ms": 220.023, "missed_presentations": 258, "maximum_candidates": 578, "process_peak_mib": 232.699, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "4d29ce9b07127c3c8337476dd5998dc780e444b31f66c2e208a015bb29e56bcc"},
+      {"nodes": 50000, "historical_strokes": 10000, "frame_p50_ms": 10.088, "frame_p95_ms": 12.878, "frame_p99_ms": 21.686, "frame_max_ms": 196.055, "missed_presentations": 139, "maximum_candidates": 2018, "process_peak_mib": 266.875, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "873e0a5c4a6c793ef19158113bd3384e390f6b6b1fe3bd9f15c7a508c8ea35fd"},
+      {"nodes": 100000, "historical_strokes": 20000, "frame_p50_ms": 9.680, "frame_p95_ms": 14.372, "frame_p99_ms": 26.651, "frame_max_ms": 185.498, "missed_presentations": 101, "maximum_candidates": 2498, "process_peak_mib": 312.895, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "31ae8ad2b396b04757f44dd83226cd77e237e77f52b990b8a83853e180416bb1"}
+    ],
+    "long_run_100k": {"frames": 5400, "trace_wall_ms": 62348.974, "frame_p50_ms": 9.527, "frame_p95_ms": 14.014, "frame_p99_ms": 26.170, "frame_max_ms": 191.521, "missed_presentations": 832, "process_start_mib": 257.500, "process_end_mib": 301.250, "process_peak_mib": 311.895, "maximum_candidates": 2498, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "f141f46dcfd77dd30b7d0cf916baa482511dc1447278b4ccfe06a917e25004d3"},
+    "manual_actions": {"status": "passed", "actions": ["pan", "vector_write", "dab_write", "select", "select_drag"], "log_events": {"ink_preview": 95, "ink_canonical_visible": 3, "select_dragging": 41, "select_end": 2}, "process_alive_after_actions": true, "crash_or_anr_observed": false, "screenshot_sha256": "d581648fb8b2d169ae190eab23444909811a4addfa00a773e49e4d1b15bf4423", "logcat_sha256": "2476f547a0e90e644834b7e973159e06436a7db3d0efb0a6296dceefec2d5654"}
+  },
   "physical_integrated_gates": {
     "windows_d3d12": "pending",
     "chrome_webgl2": "pending",
-    "pixel7_android": "pending",
+    "pixel7_android": "passed",
     "apple": "existing physical report only; not an acceptance gate for this integration"
   },
   "reproduction_command": "cmake --preset poc03-host-debug && cmake --build --preset poc03-host-debug --parallel 4 && ctest --preset poc03-host-debug --output-on-failure; cmake --preset poc03-host-asan && cmake --build --preset poc03-host-asan --parallel 4 && ctest --preset poc03-host-asan --output-on-failure; cmake --preset poc03-host-release && cmake --build --preset poc03-host-release --parallel 4 && for nodes in 1000 10000 50000 100000; do out/poc03-host-release/pocs/large_scene/canvas_poc03_integrated_benchmark --nodes=$nodes --output=out/poc03-integrated-host/result-$nodes.json; done"

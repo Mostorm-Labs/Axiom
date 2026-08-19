@@ -263,6 +263,46 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
   if (oracle.Digest() != g_scene->Digest()) {
     return Failure(env, "incremental/full scene digest differs");
   }
+
+  constexpr int kWarmupFrames = 1800;
+  const auto make_view = [&](int frame) {
+    const float zoom = 0.75F + static_cast<float>(frame % 8) * 0.125F;
+    const float pan_x = static_cast<float>(
+        (static_cast<uint64_t>(frame) * 37U) % 28000U);
+    const float pan_y = static_cast<float>(
+        (static_cast<uint64_t>(frame) * 17U) % 2200U);
+    return ViewState{
+        1U,
+        static_cast<uint64_t>(frame) + 1U,
+        1U,
+        Bounds{pan_x, pan_y,
+               pan_x + static_cast<float>(g_width) / (zoom * g_dpr),
+               pan_y + static_cast<float>(g_height) / (zoom * g_dpr)},
+        zoom,
+        g_dpr,
+        g_width,
+        g_height,
+    };
+  };
+  std::vector<uint8_t> warmup_rgba;
+  double warmup_ms = 0.0;
+  for (int frame = 0; frame < kWarmupFrames; ++frame) {
+    const ViewState view = make_view(frame);
+    const ViewQueryResult query = QueryView(*g_scene, view, std::nullopt);
+    if (!g_adapter->Render(*g_scene, view, query,
+                           frame == kWarmupFrames - 1, &warmup_rgba,
+                           &warmup_ms, &error, g_ink_geometry.get())) {
+      return Failure(env, error);
+    }
+  }
+  const ViewState warmup_final_view = make_view(kWarmupFrames - 1);
+  const ViewQueryResult warmup_oracle_query =
+      QueryView(oracle, warmup_final_view, std::nullopt);
+  if (!g_adapter->Render(oracle, warmup_final_view, warmup_oracle_query, true,
+                         &warmup_rgba, &warmup_ms, &error,
+                         g_ink_geometry.get())) {
+    return Failure(env, error);
+  }
   const double process_start_mib = ProcessStatusMib("VmRSS:");
   const auto trace_start = std::chrono::steady_clock::now();
 
@@ -274,16 +314,7 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
   const double interval_ms = refresh_rate > 0.0F ? 1000.0 / refresh_rate : 0.0;
   std::vector<uint8_t> incremental_rgba;
   for (int frame = 0; frame < frame_count; ++frame) {
-    const float zoom = 0.75F + static_cast<float>(frame % 8) * 0.125F;
-    const float pan_x = static_cast<float>((static_cast<uint64_t>(frame) * 37U)
-                                           % 28000U);
-    const float pan_y = static_cast<float>((static_cast<uint64_t>(frame) * 17U)
-                                           % 2200U);
-    const ViewState view{1U, static_cast<uint64_t>(frame) + 1U, 1U,
-        Bounds{pan_x, pan_y,
-               pan_x + static_cast<float>(g_width) / (zoom * g_dpr),
-               pan_y + static_cast<float>(g_height) / (zoom * g_dpr)},
-        zoom, g_dpr, g_width, g_height};
+    const ViewState view = make_view(frame);
     const ViewQueryResult query = QueryView(*g_scene, view, std::nullopt);
     maximum_candidates = std::max(maximum_candidates, query.candidates.size());
     maximum_visible = std::max(maximum_visible, query.visible.size());
@@ -347,6 +378,7 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
          << "\"full_incremental_equivalent\":true,"
          << "\"visual_equivalent\":"
          << (visual_equivalent ? "true" : "false") << ','
+         << "\"warmup_frames\":" << kWarmupFrames << ','
          << "\"frames\":" << frame_ms.size() << ','
          << "\"frame_p50_ms\":" << Percentile(frame_ms, 0.50) << ','
          << "\"frame_p95_ms\":" << Percentile(frame_ms, 0.95) << ','
@@ -363,6 +395,12 @@ Java_dev_mostorm_canvas_poc03_CanvasPoc03View_nativeRunAcceptance(
          << "\"trace_wall_ms\":" << trace_wall_ms << ','
          << "\"process_start_mib\":" << process_start_mib << ','
          << "\"process_end_mib\":" << process_end_mib << ','
+         << "\"process_steady_growth_percent\":"
+         << (process_start_mib > 0.0
+                 ? ((process_end_mib - process_start_mib) / process_start_mib) *
+                       100.0
+                 : 0.0)
+         << ','
          << "\"process_peak_mib\":" << ProcessStatusMib("VmHWM:") << ','
          << "\"input_events\":" << g_input_events << "}";
   output << result.str() << '\n';

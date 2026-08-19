@@ -122,6 +122,8 @@ def main() -> int:
         raise RuntimeError("Android full/incremental correctness gate failed")
     if result.get("maximum_candidates", 5001) > 5000:
         raise RuntimeError("Android candidate gate failed")
+    if result.get("process_steady_growth_percent", 100.0) > 5.0:
+        raise RuntimeError("Android steady-state memory growth gate failed")
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
