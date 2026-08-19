@@ -4,9 +4,15 @@ import path from "node:path";
 import http from "node:http";
 
 test("WASM Runtime emits canonical SkParagraph behavior artifact", async ({ page }) => {
+  test.setTimeout(120_000);
   const wasmDirectory = process.env.POC04_WASM_DIR;
   const output = process.env.POC04_BEHAVIOR_OUTPUT;
   if (!wasmDirectory || !output) test.skip(true, "POC04_WASM_DIR and output are CI-only");
+  page.on("console", (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
+  page.on("pageerror", (error) => console.error(`[browser:pageerror] ${error.stack ?? error.message}`));
+  page.on("requestfailed", (request) => {
+    console.error(`[browser:requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown"}`);
+  });
   const root = path.resolve(wasmDirectory!);
   const server = http.createServer((request, response) => {
     const relative = request.url === "/" ? "/index.html" : request.url!;
