@@ -1,0 +1,76 @@
+name: POC-05 Hybrid Surface
+
+on:
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "docs/api/**"
+      - "docs/architecture/RF01_SCENE_RENDERING_FOUNDATION.md"
+      - "pocs/large_scene/**"
+      - "pocs/hybrid_surface/**"
+      - ".github/workflows/poc05.yml"
+  push:
+    branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "docs/api/**"
+      - "pocs/large_scene/**"
+      - "pocs/hybrid_surface/**"
+      - ".github/workflows/poc05.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: poc05-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-contract:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap core dependencies
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Public C ABI, documentation, and repository checks
+        run: |
+          python3 pocs/hybrid_surface/tools/check_contract.py
+          python3 tools/check_docs.py
+          git diff --check
+      - name: Build stable-C-ABI placement contract
+        run: |
+          cmake --preset poc05-host-debug
+          cmake --build --preset poc05-host-debug --parallel
+          ctest --preset poc05-host-debug --output-on-failure
+      - name: Sanitizer contract
+        run: |
+          cmake --preset poc05-host-asan
+          cmake --build --preset poc05-host-asan --parallel
+          ctest --preset poc05-host-asan --output-on-failure
+
+  web-overlay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: pocs/hybrid_surface/platform/web/package-lock.json
+      - name: Install locked browser harness
+        working-directory: pocs/hybrid_surface/platform/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Validate iframe/video controlled overlay
+        working-directory: pocs/hybrid_surface/platform/web
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc05-web-overlay-result
+          path: |
+            pocs/hybrid_surface/platform/web/test-results
+            pocs/hybrid_surface/platform/web/playwright-report

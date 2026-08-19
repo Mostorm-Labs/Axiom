@@ -238,6 +238,31 @@
         "CANVAS_POC03_ENABLE_SKIA": "ON",
         "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON"
       }
+    },
+    {
+      "name": "poc05-host-debug",
+      "displayName": "POC-05 Hybrid Surface core (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/poc05-host-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "OFF",
+        "CANVAS_BUILD_POC03": "ON",
+        "CANVAS_POC03_BUILD_TESTS": "OFF",
+        "CANVAS_POC03_ENABLE_SKIA": "OFF",
+        "CANVAS_BUILD_POC05": "ON",
+        "CANVAS_POC05_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "poc05-host-asan",
+      "inherits": "poc05-host-debug",
+      "displayName": "POC-05 Hybrid Surface core (sanitizers)",
+      "binaryDir": "${sourceDir}/out/poc05-host-asan",
+      "cacheVariables": {
+        "CANVAS_POC05_ENABLE_SANITIZERS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -258,7 +283,9 @@
     { "name": "poc03-host-release", "configurePreset": "poc03-host-release" },
     { "name": "poc03-web-release", "configurePreset": "poc03-web-release" },
     { "name": "poc03-windows-release", "configurePreset": "poc03-windows-release" },
-    { "name": "poc03-ios-device-release", "configurePreset": "poc03-ios-device-release" }
+    { "name": "poc03-ios-device-release", "configurePreset": "poc03-ios-device-release" },
+    { "name": "poc05-host-debug", "configurePreset": "poc05-host-debug" },
+    { "name": "poc05-host-asan", "configurePreset": "poc05-host-asan" }
   ],
   "testPresets": [
     {
@@ -314,6 +341,16 @@
     {
       "name": "poc03-windows-release",
       "configurePreset": "poc03-windows-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc05-host-debug",
+      "configurePreset": "poc05-host-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "poc05-host-asan",
+      "configurePreset": "poc05-host-asan",
       "output": { "outputOnFailure": true }
     }
   ]
