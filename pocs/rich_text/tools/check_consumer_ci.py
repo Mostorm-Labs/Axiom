@@ -37,6 +37,17 @@ def main() -> int:
     )
     if absolute_toolchain not in text:
         raise RuntimeError("Web consumer must use the checkout-absolute Emscripten toolchain path")
+    web_output = "out/poc04-web/platform/web/canvas_poc04_web"
+    for suffix in (".js", ".wasm"):
+        if f"test -s {web_output}{suffix}" not in text:
+            raise RuntimeError(f"Web consumer must verify its {suffix} target output")
+    expected_wasm_dir = 'POC04_WASM_DIR="$GITHUB_WORKSPACE/out/poc04-web/platform/web"'
+    if expected_wasm_dir not in text:
+        raise RuntimeError("Web behavior recorder must serve the CMake target output directory")
+    if 'grep -E -l "pthread|SharedArrayBuffer"' not in text:
+        raise RuntimeError("Web consumer must reject pthread and SharedArrayBuffer output")
+    if 'rg -l "pthread|SharedArrayBuffer"' in text:
+        raise RuntimeError("Web consumer must not depend on ripgrep being installed on the runner")
     if "if: ${{ false }}" not in text:
         raise RuntimeError(
             "cross-platform acceptance must stay disabled until platform recorders exist"
