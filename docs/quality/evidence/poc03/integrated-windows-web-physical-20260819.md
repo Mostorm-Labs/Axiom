@@ -73,4 +73,3 @@ The ownership boundary is fixed by
 
 POC-03 remains **Validating**. No `Accepted` state is claimed, and no Windows
 or MSVC build is performed on the macOS development host.
-

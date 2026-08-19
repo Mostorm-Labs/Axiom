@@ -49,7 +49,7 @@ class ConsumerTest(unittest.TestCase):
         self.lock = {
             "schema_version": 1,
             "format": "canvas-skia-sdk-lock-v1",
-            "repository": "Mostorm-Labs/canvas",
+            "repository": "Mostorm-Labs/Axiom",
             "tag": "skia-sdk-test",
             "set_id": canonical_sha256({
                 name: value["sdk_id"] for name, value in target_metadata.items()
@@ -174,7 +174,7 @@ class ConsumerTest(unittest.TestCase):
             self.assertEqual(
                 observed,
                 [
-                    f"https://github.com/Mostorm-Labs/canvas/releases/download/skia-sdk-test/{asset}",
+                    f"https://github.com/Mostorm-Labs/Axiom/releases/download/skia-sdk-test/{asset}",
                     f"http://127.0.0.1:{server.server_port}/skia-sdk-test/{asset}",
                 ],
             )

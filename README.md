@@ -51,6 +51,7 @@ code should bypass their documented exit gates.
 
 - [Project framework](docs/PROJECT_FRAMEWORK.md)
 - [System architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
+- [RF-01 Scene rendering foundation](docs/architecture/RF01_SCENE_RENDERING_FOUNDATION.md)
 - [Runtime Public C API contract](docs/api/RUNTIME_C_API_CONTRACT.md)
 - [Canvas C++ / C ABI style](docs/CPP_STYLE.md)
 - [Staged delivery plan](docs/planning/STAGED_DELIVERY_PLAN.md)

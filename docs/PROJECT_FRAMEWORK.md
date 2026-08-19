@@ -7,6 +7,7 @@ Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯
 本文档固定项目边界和不可随意漂移的架构决策。模块契约、阶段任务、验证方法和决策依据分别见：
 
 - [系统架构](architecture/SYSTEM_ARCHITECTURE.md)
+- [RF-01 Scene Rendering Foundation](architecture/RF01_SCENE_RENDERING_FOUNDATION.md)
 - [Runtime Public C API](api/RUNTIME_C_API_CONTRACT.md)
 - [Canvas C++ / C ABI 风格](CPP_STYLE.md)
 - [分阶段交付计划](planning/STAGED_DELIVERY_PLAN.md)

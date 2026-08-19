@@ -320,6 +320,12 @@ Skia baseline 误称为生产方案：
 RF-01～RF-03 只允许在证据完整后接入 R3 Production Rendering。POC-03 的 `Validating`
 状态、Windows 失败和 Android/Web 观察值继续按本阶段报告保留。
 
+RF-01 的可实现接口、prepare→commit 原子更新、revisioned DamageTracker、两阶段 HitTest、
+Direct/SkSG shadow migration、POC-03 类型映射、分批实施与量化退出条件见
+[RF-01 Scene Rendering Foundation](../architecture/RF01_SCENE_RENDERING_FOUNDATION.md)。该
+设计不修改 Runtime Public C ABI；RF-02/RF-03 必须复用其 Scene/participant contract，不能
+为了具体 R-tree 或 Tile 算法让 Shell、Bridge 或 Document 依赖 Skia/SkSG。
+
 ## POC-04 — RichText / IME
 
 ### 目标

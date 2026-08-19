@@ -180,6 +180,11 @@ Public ABI、Operation schema、Snapshot schema、Sync protocol 和 Renderer/Cac
 enum 数值、ownership 和 callback 时序一旦发布不得静默改变。Canvas C++ 实现遵循
 [代码风格规范](../CPP_STYLE.md)。
 
+RF-01 的内部 Scene C++ contract、`SceneCompiler → SceneBinding → Scene` 时序、
+`IRenderScene/ISpatialIndex/DamageTracker` prepare→commit 原子协议、两阶段 HitTest 和
+POC-03 迁移批次见 [Scene Rendering Foundation](RF01_SCENE_RENDERING_FOUNDATION.md)。这些
+类型属于 Runtime private interface，不安装为产品 SDK，也不增加 Public C ABI symbol。
+
 ### 2.1 Web
 
 - React/TypeScript 负责 Toolbar、Inspector、Dialog、Comment UI、Share、Account 和 Navigation。
