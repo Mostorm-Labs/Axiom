@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "canvas/poc03/large_scene.h"
+#include "canvas/poc03/ink_integration.h"
 
 namespace canvas::poc03 {
 
@@ -23,7 +24,9 @@ class AndroidGlesAdapter {
   bool Render(const RuntimeScene& scene, const ViewState& view,
               const ViewQueryResult& query, bool readback,
               std::vector<uint8_t>* rgba, double* elapsed_ms,
-              std::string* error);
+              std::string* error,
+              const InkGeometryStore* ink_geometry = nullptr,
+              const poc02::DefaultPreviewSink::State* preview = nullptr);
   void Detach();
 
  private:

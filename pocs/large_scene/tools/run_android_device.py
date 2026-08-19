@@ -28,6 +28,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apk", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--nodes", type=int, choices=(1000, 10000, 50000, 100000),
+                        default=100000)
     parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
     if not args.apk.is_file():
@@ -35,7 +37,8 @@ def main() -> int:
     args.output.mkdir(parents=True, exist_ok=True)
     run("adb", "install", "-r", str(args.apk))
     run("adb", "logcat", "-c")
-    run("adb", "shell", "am", "start", "-n", ACTIVITY)
+    run("adb", "shell", "am", "start", "-n", ACTIVITY, "--ei",
+        "poc03_nodes", str(args.nodes))
     deadline = time.monotonic() + args.timeout
     log = ""
     while time.monotonic() < deadline:

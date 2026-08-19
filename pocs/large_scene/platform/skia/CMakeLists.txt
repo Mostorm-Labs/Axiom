@@ -49,6 +49,14 @@ add_library(canvas_poc03_skia STATIC
 target_include_directories(canvas_poc03_skia PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(canvas_poc03_skia
   PUBLIC canvas_poc03_core CanvasSkia::Skia)
+if(CANVAS_POC03_ENABLE_INK_INTEGRATION)
+  if(NOT TARGET canvas_poc02_skia)
+    message(FATAL_ERROR
+      "POC-03 Skia Ink integration requires CANVAS_POC02_ENABLE_SKIA=ON")
+  endif()
+  target_link_libraries(canvas_poc03_skia PUBLIC
+    canvas_poc03_ink_integration canvas_poc02_skia)
+endif()
 
 if(ANDROID)
   add_subdirectory(../android ${CMAKE_CURRENT_BINARY_DIR}/android)
@@ -71,12 +79,12 @@ elseif(EMSCRIPTEN)
     "-sMIN_WEBGL_VERSION=2"
     "-sMAX_WEBGL_VERSION=2"
     "-sGL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=0"
-    "-sEXPORTED_FUNCTIONS=['_canvas_poc03_web_run','_canvas_poc03_web_prepare','_canvas_poc03_web_render_frame','_canvas_poc03_web_finish','_canvas_poc03_web_reset']"
-    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','HEAPU8']")
+    "-sEXPORTED_FUNCTIONS=['_malloc','_free','_canvas_poc03_web_run','_canvas_poc03_web_prepare','_canvas_poc03_web_prepare_scale','_canvas_poc03_web_render_frame','_canvas_poc03_web_finish','_canvas_poc03_web_reset','_canvas_poc03_web_ink_begin','_canvas_poc03_web_ink_push','_canvas_poc03_web_ink_visible','_canvas_poc03_web_ink_cancel','_canvas_poc03_web_transform','_canvas_poc03_web_select_begin','_canvas_poc03_web_select_move','_canvas_poc03_web_select_end']"
+    "-sEXPORTED_RUNTIME_METHODS=['UTF8ToString','HEAPU8','HEAPU32','HEAPF32']")
 elseif(WIN32)
   add_executable(canvas_poc03_windows_probe windows_probe.cpp)
   target_compile_definitions(canvas_poc03_windows_probe PRIVATE
-    NOMINMAX WIN32_LEAN_AND_MEAN)
+    NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0602 WINVER=0x0602)
   target_link_libraries(canvas_poc03_windows_probe PRIVATE
     canvas_poc03_skia d3d12 dxgi)
 elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")

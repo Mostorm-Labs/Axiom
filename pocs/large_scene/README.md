@@ -42,6 +42,11 @@ only a reserved empty pass for POC-05.
 - A Skia Ganesh compositor probe consumes only the verified prebuilt
   `CanvasSkia::Skia` SDK target. Ordinary POC-03 CI never checks out Skia source
   and never runs GN or builds Skia with Ninja.
+- Experimental Integrated Ink keeps POC-02 authoritative: historical and live
+  Vector/Dab strokes enter through `PointerSampleBatch → InputRouter →
+  StrokeSession → AddStrokeOperation`; POC-03 stores only stable Stroke IDs,
+  bounds, and revisions. Preview uses POC-02's renderer, and Canonical visible
+  acknowledgement follows successful Scene presentation.
 
 ## Build and run
 
@@ -81,8 +86,10 @@ presets. They fetch their own verified D3D12/WebGL2 SDK package; a missing or
 mismatched manifest is a hard configure error with no source fallback.
 
 The Android validation app is a native `SurfaceView`/JNI/GLES3 data path. It
-automatically runs the fixed 600-frame 100K pan/zoom trace and then accepts
-touch pan/pinch zoom through a Choreographer-coalesced native frame request:
+automatically runs the fixed 600-frame trace at a selected scale and accepts
+pan/pinch, live Vector/Dab write, and ordinary-node Select/Drag through a
+Choreographer-coalesced native frame request. Select a scale at launch with
+`--ei poc03_nodes 1000|10000|50000|100000`:
 
 ```bash
 python3 tools/skia/fetch.py --target android-arm64-v8a-gles3
@@ -93,11 +100,13 @@ cp app/build/outputs/apk/debug/app-debug.apk \
   ../../../../out/poc03-android-apks/poc03-arm64-v8a-debug.apk
 python3 ../../tools/run_android_device.py \
   --apk ../../../../out/poc03-android-apks/poc03-arm64-v8a-debug.apk \
+  --nodes 100000 \
   --output ../../reports/android-$(date +%Y%m%d)
 ```
 
-This app records Android Scene/render/input evidence but deliberately has no
-Ink tool. The `write` gate remains blocked on POC-02's shared Ink contract.
+This app records Android Scene/render/input evidence and consumes the shared
+experimental Ink contract. Its write action is an integration gate, not the
+POC-02 formal pressure-pen Human Ink Gate.
 The native target uses 16 KiB-aligned ELF load segments, and CI also requires
 each uncompressed APK JNI library to pass `zipalign -P 16`.
 
@@ -139,9 +148,10 @@ retains the observed Pixel 7 cold-start spike and an iPad warm-run scheduling
 anomaly; it is portability and experience evidence rather than a replacement
 for the same-machine Windows/Web gate.
 
-POC-03 remains `Validating` only because the Integrated Performance
-Playground's `write` path must consume the independently developed POC-02 Ink
-output instead of inventing a second Ink model here. POC-02 is still being
-validated. POC-03 does not create an Android or Apple product shell.
+POC-03 remains `Validating` until fresh Windows, Chrome Stable Web, and Pixel 7
+Integrated Performance Playground evidence passes at 1K/10K/50K/100K. POC-02
+remains `Integration Ready / Validating`; its formal pressure-pen latency and
+Human Ink Gate are independent. POC-03 does not create an Android or Apple
+product shell.
 
 See [the runbook](docs/POC03_RUNBOOK.md) for evidence commands and schemas.

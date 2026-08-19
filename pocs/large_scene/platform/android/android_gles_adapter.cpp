@@ -107,7 +107,9 @@ bool AndroidGlesAdapter::Render(const RuntimeScene& scene,
                                 const ViewState& view,
                                 const ViewQueryResult& query, bool readback,
                                 std::vector<uint8_t>* rgba,
-                                double* elapsed_ms, std::string* error) {
+                                double* elapsed_ms, std::string* error,
+                                const InkGeometryStore* ink_geometry,
+                                const poc02::DefaultPreviewSink::State* preview) {
   if (!impl_->surface || eglMakeCurrent(impl_->display, impl_->egl_surface,
       impl_->egl_surface, impl_->egl_context) != EGL_TRUE) {
     *error = "Android GLES surface is detached";
@@ -115,7 +117,7 @@ bool AndroidGlesAdapter::Render(const RuntimeScene& scene,
   }
   const auto start = std::chrono::steady_clock::now();
   DrawLargeScene(*impl_->surface->getCanvas(), scene, view,
-                 BuildFrame(scene, query, {}));
+                 BuildFrame(scene, query, {}), ink_geometry, preview);
   impl_->context->flushAndSubmit(
       impl_->surface.get(), readback ? GrSyncCpu::kYes : GrSyncCpu::kNo);
   if (readback && !ReadRgba(*impl_->surface, impl_->width, impl_->height, rgba)) {

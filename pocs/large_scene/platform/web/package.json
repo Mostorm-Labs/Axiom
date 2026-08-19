@@ -4,9 +4,22 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prepare:assets": "python3 ../../tools/prepare_web_assets.py",
+    "build": "npm run prepare:assets && tsc --noEmit -p tsconfig.app.json && vite build",
+    "dev": "npm run prepare:assets && vite",
     "test": "playwright test"
   },
+  "dependencies": {
+    "@vitejs/plugin-react": "6.0.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.2.1"
+  },
   "devDependencies": {
-    "@playwright/test": "1.62.1"
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "7.0.2"
   }
 }

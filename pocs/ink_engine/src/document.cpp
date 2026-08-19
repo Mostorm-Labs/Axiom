@@ -178,17 +178,37 @@ Status StrokeDocument::Apply(const AddStrokeOperation& operation) {
   if (internal::ValidateStroke(operation.stroke) != Status::kOk) {
     return Status::kInvalidArgument;
   }
-  if (Find(operation.stroke.id) != nullptr) return Status::kInvalidArgument;
-  strokes_.push_back(operation.stroke);
+  const auto [index, inserted] = stroke_index_.emplace(
+      operation.stroke.id, strokes_.size());
+  if (!inserted) return Status::kInvalidArgument;
+  try {
+    strokes_.push_back(operation.stroke);
+  } catch (...) {
+    stroke_index_.erase(index);
+    throw;
+  }
   operation_sequence_ = operation.sequence;
   ++revision_;
   return Status::kOk;
 }
 
 const Stroke* StrokeDocument::Find(StrokeId id) const {
-  const auto iterator = std::find_if(strokes_.begin(), strokes_.end(),
-                                     [id](const Stroke& stroke) { return stroke.id == id; });
-  return iterator == strokes_.end() ? nullptr : &*iterator;
+  const auto iterator = stroke_index_.find(id);
+  return iterator == stroke_index_.end() ? nullptr : &strokes_[iterator->second];
+}
+
+size_t StrokeDocument::EstimatedBytes() const {
+  size_t bytes = sizeof(*this) + strokes_.capacity() * sizeof(Stroke) +
+                 stroke_index_.size() * (sizeof(StrokeId) + sizeof(size_t) +
+                                         24U);
+  for (const Stroke& stroke : strokes_) {
+    bytes += stroke.brush.resource_id.capacity() +
+             stroke.brush.resource_content_hash.capacity() +
+             stroke.confirmed_samples.capacity() * sizeof(CanonicalSample) +
+             stroke.vector_points.capacity() * sizeof(VectorPoint) +
+             stroke.dabs.capacity() * sizeof(Dab);
+  }
+  return bytes;
 }
 
 std::string StrokeDocument::Digest() const {

@@ -41,6 +41,22 @@ Fetch `windows-x64-d3d12` and build with the repository-pinned clang-cl. Run
 the core tests/benchmark and `canvas_poc03_windows_probe`. WARP proves build,
 render/readback, and correctness only; it does not satisfy physical performance.
 
+### Integrated Ink matrix
+
+Host, Web, Windows, and Android run the same four scales: 1,000/200,
+10,000/2,000, 50,000/10,000, and 100,000/20,000 base nodes/canonical Strokes.
+Each scale uses real four-batch Vector/Dab history, then `pan`, `zoom`,
+`write-vector`, `write-dab`, `select`, and `drag`. Results must contain matching
+`ink_document_digest` and `document_digest`, `maximum_candidates <= 5000`, zero
+full fallbacks, and `full_incremental_equivalent = true`. Select/Drag updates
+ordinary non-Stroke nodes only; it never invents a MoveStroke operation.
+
+The Web shell is a React/Vite wrapper around the combined WASM module;
+`getCoalescedEvents()` goes directly into C++ PointerSampleBatch arrays. The
+Windows interactive probe accepts mouse input for select/drag while retaining
+the same D3D12 Scene/Ink Pass. These shells are experimental evidence surfaces,
+not product ABI commitments.
+
 ## Physical performance bundle
 
 On the registered Windows benchmark device, run native D3D12 and Chrome Stable

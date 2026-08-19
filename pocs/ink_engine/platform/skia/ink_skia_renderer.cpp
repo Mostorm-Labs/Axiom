@@ -162,8 +162,8 @@ void DrawDabs(SkCanvas& canvas, std::span<const Dab> dabs, SkColor color) {
   }
 }
 
-void DrawPreview(SkCanvas& canvas,
-                 const DefaultPreviewSink::State& preview);
+void DrawPreviewSemantics(SkCanvas& canvas,
+                          const DefaultPreviewSink::State& preview);
 
 void DrawDocumentSemantics(SkCanvas& canvas, uint32_t width, uint32_t height,
                            const StrokeDocument& document,
@@ -191,11 +191,12 @@ void DrawDocumentSemantics(SkCanvas& canvas, uint32_t width, uint32_t height,
   }
   if (active_preview != nullptr && !active_preview->committed &&
       !active_preview->visible) {
-    DrawPreview(canvas, *active_preview);
+    DrawPreviewSemantics(canvas, *active_preview);
   }
 }
 
-void DrawPreview(SkCanvas& canvas, const DefaultPreviewSink::State& preview) {
+void DrawPreviewSemantics(SkCanvas& canvas,
+                          const DefaultPreviewSink::State& preview) {
   std::vector<VectorPoint> vector_points;
   std::vector<Dab> dabs;
   const auto append = [&](const auto& primitives, bool predicted) {
@@ -221,6 +222,21 @@ void DrawPreview(SkCanvas& canvas, const DefaultPreviewSink::State& preview) {
 }
 
 }  // namespace
+
+void InkSkiaRenderer::DrawStroke(SkCanvas& canvas,
+                                 const Stroke& stroke) const {
+  const SkColor color = StrokeColor(stroke.brush, false);
+  if (stroke.brush.type == BrushType::kVector) {
+    DrawVector(canvas, stroke.vector_points, color);
+  } else {
+    DrawDabs(canvas, stroke.dabs, color);
+  }
+}
+
+void InkSkiaRenderer::DrawPreview(
+    SkCanvas& canvas, const DefaultPreviewSink::State& preview) const {
+  DrawPreviewSemantics(canvas, preview);
+}
 
 void InkSkiaRenderer::Draw(SkCanvas& canvas, uint32_t width, uint32_t height,
                            const StrokeDocument& document,

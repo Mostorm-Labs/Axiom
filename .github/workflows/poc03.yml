@@ -8,18 +8,20 @@ on:
       - "deps.lock.json"
       - "skia-sdk.lock.json"
       - "pocs/large_scene/**"
+      - "pocs/ink_engine/**"
       - "tools/bootstrap_deps.py"
       - "tools/skia/fetch.py"
       - "tools/skia/sdk.py"
       - ".github/workflows/poc03.yml"
   push:
-    branches: [main]
+    branches: [main, "codex/poc-03-100k-scene"]
     paths:
       - "CMakeLists.txt"
       - "CMakePresets.json"
       - "deps.lock.json"
       - "skia-sdk.lock.json"
       - "pocs/large_scene/**"
+      - "pocs/ink_engine/**"
       - "tools/bootstrap_deps.py"
       - "tools/skia/fetch.py"
       - "tools/skia/sdk.py"
@@ -57,6 +59,12 @@ jobs:
           out/poc03-host-release/pocs/large_scene/canvas_poc03_benchmark \
             --nodes=100000 --frames=600 --updates=1000 \
             --output=out/poc03-host-result.json
+          mkdir -p out/poc03-integrated-host
+          for nodes in 1000 10000 50000 100000; do
+            out/poc03-host-release/pocs/large_scene/canvas_poc03_integrated_benchmark \
+              --nodes=$nodes \
+              --output=out/poc03-integrated-host/result-$nodes.json
+          done
       - name: Sanitizer contract tests
         run: |
           cmake --preset poc03-host-asan
@@ -65,7 +73,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: poc03-host-result
-          path: out/poc03-host-result.json
+          path: out/poc03-integrated-host/result-100000.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc03-integrated-host-matrix
+          path: out/poc03-integrated-host
 
   web:
     runs-on: ubuntu-24.04
@@ -100,7 +112,17 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+          npm run build
           npm test
+      - name: Run deterministic WASM Integrated Ink matrix
+        shell: bash
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          mkdir -p out/poc03-integrated-web
+          for nodes in 1000 10000 50000 100000; do
+          node out/poc03-web-release/pocs/large_scene/canvas_poc03_integrated_benchmark.js \
+              --nodes=$nodes --output=out/poc03-integrated-web/result-$nodes.json
+          done
       - name: Normalize Web acceptance result
         run: |
           mkdir -p out/poc03-web-result
@@ -112,6 +134,7 @@ jobs:
           path: |
             out/poc03-web-result
             pocs/large_scene/platform/web/test-results
+            out/poc03-integrated-web
 
   windows:
     runs-on: windows-2025
@@ -146,6 +169,9 @@ jobs:
           New-Item -ItemType Directory -Force out/poc03-windows-result | Out-Null
           out/poc03-windows-release/pocs/large_scene/canvas_poc03_benchmark.exe --nodes=100000 --frames=600 --updates=1000 --output=out/poc03-windows-result/result.json
           out/poc03-windows-release/pocs/large_scene/platform/skia/canvas_poc03_windows_probe.exe | Tee-Object -FilePath out/poc03-windows-result/warp-result.json
+          foreach ($nodes in 1000, 10000, 50000, 100000) {
+            out/poc03-windows-release/pocs/large_scene/canvas_poc03_integrated_benchmark.exe --nodes=$nodes --output="out/poc03-windows-result/integrated-$nodes.json"
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -253,10 +279,11 @@ jobs:
       - name: Compare arm64, WASM, and x64 deterministic scene results
         run: >-
           python3 pocs/large_scene/tools/cross_platform_acceptance.py
-          out/acceptance/host/poc03-host-result.json
-          out/acceptance/web/out/poc03-web-result/result.json
-          out/acceptance/windows/result.json
+          out/acceptance/host/result-100000.json
+          out/acceptance/web/out/poc03-integrated-web/result-100000.json
+          out/acceptance/windows/integrated-100000.json
           out/acceptance/android/out/poc03-android-result/result.json
+          --nodes 100000 \
           --output out/acceptance/cross-platform-result.json
       - uses: actions/upload-artifact@v4
         with:

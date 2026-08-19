@@ -36,6 +36,8 @@ def main() -> int:
         "android-arm64-v8a-gles3",
         "android-x86_64-gles3",
         "pocs/large_scene/**",
+        "pocs/ink_engine/**",
+        "canvas_poc03_integrated_benchmark",
     ):
         if required not in text:
             raise RuntimeError(f"POC-03 workflow is missing {required}")

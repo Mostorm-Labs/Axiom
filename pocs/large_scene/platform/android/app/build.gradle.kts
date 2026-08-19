@@ -26,10 +26,14 @@ android {
             cmake {
                 arguments += listOf(
                     "-DCANVAS_BUILD_POC01=OFF",
-                    "-DCANVAS_BUILD_POC02=OFF",
+                    "-DCANVAS_BUILD_POC02=ON",
+                    "-DCANVAS_POC02_BUILD_TESTS=OFF",
+                    "-DCANVAS_POC02_ENABLE_SKIA=ON",
+                    "-DCANVAS_POC02_BUILD_PLATFORM_SHELLS=OFF",
                     "-DCANVAS_BUILD_POC03=ON",
                     "-DCANVAS_POC03_BUILD_TESTS=OFF",
                     "-DCANVAS_POC03_ENABLE_SKIA=ON",
+                    "-DCANVAS_POC03_ENABLE_INK_INTEGRATION=ON",
                     "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPoc03SdkTarget.get()}"
                 )
                 cppFlags += listOf("-std=c++20")

@@ -13,6 +13,7 @@ import android.view.WindowManager;
 import java.io.File;
 
 public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.Callback {
+    public enum Tool { PAN, VECTOR, DAB, SELECT }
     static {
         System.loadLibrary("canvas_poc03_android");
     }
@@ -35,10 +36,14 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
     private Surface currentSurface;
     private int surfaceWidth;
     private int surfaceHeight;
+    private Tool tool = Tool.PAN;
+    private final int baseNodes;
 
     public CanvasPoc03View(Context context) {
         super(context);
         getHolder().addCallback(this);
+        baseNodes = ((android.app.Activity) context).getIntent()
+                .getIntExtra("poc03_nodes", 100000);
         scaleDetector = new ScaleGestureDetector(context,
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
@@ -79,7 +84,7 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
         new Thread(() -> {
             float density = getResources().getDisplayMetrics().density;
             String attached = nativeAttach(currentSurface, surfaceWidth, surfaceHeight,
-                    density);
+                    density, baseNodes);
             Log.i("CanvasPOC03", attached);
             String result = attached.startsWith("FAIL") ? attached
                     : nativeRunAcceptance(output.getAbsolutePath(), refreshRate, 600);
@@ -99,6 +104,53 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (tool == Tool.SELECT && event.getPointerCount() == 1) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                Log.d("CanvasPOC03", nativeSelectBegin(event.getX(), event.getY()));
+                return true;
+            }
+            if (action == MotionEvent.ACTION_MOVE) {
+                Log.d("CanvasPOC03", nativeSelectMove(event.getX(), event.getY()));
+                return true;
+            }
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                Log.d("CanvasPOC03", nativeSelectEnd());
+                return true;
+            }
+        }
+        if ((tool == Tool.VECTOR || tool == Tool.DAB)
+                && event.getPointerCount() == 1) {
+            int action = event.getActionMasked() == MotionEvent.ACTION_DOWN ? 0
+                    : event.getActionMasked() == MotionEvent.ACTION_UP ? 2
+                    : event.getActionMasked() == MotionEvent.ACTION_CANCEL ? 3 : 1;
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN
+                    || event.getActionMasked() == MotionEvent.ACTION_MOVE
+                    || event.getActionMasked() == MotionEvent.ACTION_UP
+                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                int count = event.getHistorySize() + 1;
+                float[] xs = new float[count];
+                float[] ys = new float[count];
+                float[] pressures = new float[count];
+                long[] timestamps = new long[count];
+                for (int index = 0; index < event.getHistorySize(); ++index) {
+                    xs[index] = event.getHistoricalX(index);
+                    ys[index] = event.getHistoricalY(index);
+                    pressures[index] = event.getHistoricalPressure(index);
+                    timestamps[index] = event.getHistoricalEventTime(index);
+                }
+                int current = count - 1;
+                xs[current] = event.getX();
+                ys[current] = event.getY();
+                pressures[current] = event.getPressure();
+                timestamps[current] = event.getEventTime();
+                Log.d("CanvasPOC03", nativeInkBatch(
+                        tool == Tool.VECTOR ? 1 : 2, action,
+                        event.getPointerId(0) + 1L, xs, ys, pressures,
+                        timestamps));
+                return true;
+            }
+        }
         boolean transitionsFromPinchToOneFinger =
                 event.getActionMasked() == MotionEvent.ACTION_POINTER_UP
                         && event.getPointerCount() == 2;
@@ -127,6 +179,10 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
             return true;
         }
         return true;
+    }
+
+    public void setTool(Tool nextTool) {
+        tool = nextTool;
     }
 
     private void enqueueGesture(float previousX, float previousY,
@@ -167,12 +223,18 @@ public final class CanvasPoc03View extends SurfaceView implements SurfaceHolder.
     }
 
     private native String nativeAttach(Surface surface, int width, int height,
-                                       float density);
+                                       float density, int baseNodes);
     private native String nativeRunAcceptance(String outputPath, float refreshRate,
                                                int frameCount);
     private native String nativeTransform(float previousFocusX, float previousFocusY,
                                           float currentFocusX, float currentFocusY,
                                           float scale);
+    private native String nativeInkBatch(int brushType, int action, long pointerId,
+                                         float[] xs, float[] ys,
+                                         float[] pressures, long[] timestamps);
+    private native String nativeSelectBegin(float x, float y);
+    private native String nativeSelectMove(float x, float y);
+    private native String nativeSelectEnd();
     private native void nativeDetach();
     private native void nativeDestroy();
 }

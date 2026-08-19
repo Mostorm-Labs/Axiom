@@ -14,6 +14,11 @@ namespace canvas::poc02 {
 
 class InkSkiaRenderer {
  public:
+  // Compositor-facing entry points. These never clear the destination and are
+  // shared by POC-02's standalone shell and POC-03's Ink pass.
+  void DrawStroke(SkCanvas& canvas, const Stroke& stroke) const;
+  void DrawPreview(SkCanvas& canvas,
+                   const DefaultPreviewSink::State& preview) const;
   void Draw(SkCanvas& canvas, uint32_t width, uint32_t height,
             const StrokeDocument& document,
             const DefaultPreviewSink::State* active_preview = nullptr) const;

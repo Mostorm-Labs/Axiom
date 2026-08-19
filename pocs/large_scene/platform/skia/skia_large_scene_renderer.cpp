@@ -10,6 +10,9 @@
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkSurface.h"
+#if defined(CANVAS_POC03_INK_INTEGRATION)
+#include "ink_skia_renderer.h"
+#endif
 
 namespace canvas::poc03 {
 namespace {
@@ -29,7 +32,12 @@ SkRect ToSkRect(const Bounds& bounds) {
 }  // namespace
 
 void DrawLargeScene(SkCanvas& canvas, const RuntimeScene& scene,
-                    const ViewState& view, const FrameGraph& frame) {
+                    const ViewState& view, const FrameGraph& frame
+#if defined(CANVAS_POC03_INK_INTEGRATION)
+                    , const InkGeometryStore* ink_geometry,
+                    const poc02::DefaultPreviewSink::State* preview
+#endif
+                    ) {
   canvas.clear(SkColorSetARGB(255U, 244U, 245U, 247U));
   canvas.save();
   canvas.scale(view.zoom * view.dpr, view.zoom * view.dpr);
@@ -67,13 +75,27 @@ void DrawLargeScene(SkCanvas& canvas, const RuntimeScene& scene,
       const float middle = (record->bounds.left + record->bounds.right) * 0.5F;
       canvas.drawLine(middle, record->bounds.top, middle,
                       record->bounds.bottom, paint);
-    } else {
+    }
+#if defined(CANVAS_POC03_INK_INTEGRATION)
+    else if (record->type == NodeType::kStroke && ink_geometry != nullptr) {
+      const poc02::Stroke* stroke = ink_geometry->Find(record->resource_key);
+      if (stroke != nullptr) {
+        poc02::InkSkiaRenderer().DrawStroke(canvas, *stroke);
+      }
+    }
+#endif
+    else {
       paint.setStyle(SkPaint::kStroke_Style);
       paint.setStrokeCap(SkPaint::kRound_Cap);
       canvas.drawLine(record->bounds.left, record->bounds.top,
                       record->bounds.right, record->bounds.bottom, paint);
     }
   }
+#if defined(CANVAS_POC03_INK_INTEGRATION)
+  if (preview != nullptr) {
+    poc02::InkSkiaRenderer().DrawPreview(canvas, *preview);
+  }
+#endif
   canvas.restore();
 }
 

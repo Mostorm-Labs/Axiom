@@ -155,10 +155,14 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CANVAS_BUILD_POC01": "OFF",
-        "CANVAS_BUILD_POC02": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "OFF",
+        "CANVAS_POC02_ENABLE_SKIA": "OFF",
+        "CANVAS_POC02_BUILD_PLATFORM_SHELLS": "OFF",
         "CANVAS_BUILD_POC03": "ON",
         "CANVAS_POC03_BUILD_TESTS": "ON",
-        "CANVAS_POC03_ENABLE_SKIA": "OFF"
+        "CANVAS_POC03_ENABLE_SKIA": "OFF",
+        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON"
       }
     },
     {
@@ -189,10 +193,14 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CANVAS_BUILD_POC01": "OFF",
-        "CANVAS_BUILD_POC02": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "OFF",
+        "CANVAS_POC02_ENABLE_SKIA": "ON",
+        "CANVAS_POC02_BUILD_PLATFORM_SHELLS": "OFF",
         "CANVAS_BUILD_POC03": "ON",
         "CANVAS_POC03_BUILD_TESTS": "OFF",
-        "CANVAS_POC03_ENABLE_SKIA": "ON"
+        "CANVAS_POC03_ENABLE_SKIA": "ON",
+        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON"
       }
     },
     {
@@ -203,10 +211,14 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CANVAS_BUILD_POC01": "OFF",
-        "CANVAS_BUILD_POC02": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "OFF",
+        "CANVAS_POC02_ENABLE_SKIA": "ON",
+        "CANVAS_POC02_BUILD_PLATFORM_SHELLS": "OFF",
         "CANVAS_BUILD_POC03": "ON",
         "CANVAS_POC03_BUILD_TESTS": "ON",
-        "CANVAS_POC03_ENABLE_SKIA": "ON"
+        "CANVAS_POC03_ENABLE_SKIA": "ON",
+        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON"
       }
     },
     {
@@ -216,10 +228,15 @@
       "binaryDir": "${sourceDir}/out/poc03-ios-device-release",
       "toolchainFile": "${sourceDir}/cmake/ios.toolchain.cmake",
       "cacheVariables": {
-        "CANVAS_POC01_BUILD": "OFF",
-        "CANVAS_POC03_BUILD": "ON",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "ON",
+        "CANVAS_POC02_BUILD_TESTS": "OFF",
+        "CANVAS_POC02_ENABLE_SKIA": "ON",
+        "CANVAS_POC02_BUILD_PLATFORM_SHELLS": "OFF",
+        "CANVAS_BUILD_POC03": "ON",
         "CANVAS_POC03_BUILD_TESTS": "OFF",
-        "CANVAS_POC03_ENABLE_SKIA": "ON"
+        "CANVAS_POC03_ENABLE_SKIA": "ON",
+        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON"
       }
     }
   ],

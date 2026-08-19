@@ -258,6 +258,10 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 - 实现 L1 Raster/Tile cache 原型和严格 cache key。
 - 实现场景生成器、frame trace、内存统计、scene digest 和增量差分测试。
 - 将 POC-02 Ink Playground 接入 1K/10K/50K/100K 场景，形成 Integrated Performance Playground。
+- 集成层直接链接 POC-02 InkEngine：历史 Stroke 与实时 Vector/Dab write 均走
+  `PointerSampleBatch → InputRouter/StrokeSession → AddStrokeOperation`；POC-03
+  只保存 Stroke resource ID/bounds/revision，Preview 复用 POC-02 renderer，
+  Canonical visible acknowledgement 必须晚于成功呈现。
 
 ### 交付物
 
@@ -278,6 +282,7 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 - [ ] device loss/cache clear 可完整恢复。
 - [ ] 多 View frame scheduling、target generation 和 deterministic scene generator 语料通过。
 - [ ] Integrated Performance Playground 完成三平台评审；Android 真机不存在未分类的输入中断、交互冻结或内存无界增长。
+- [ ] Windows、Chrome Stable Web、Pixel 7 在 1K/10K/50K/100K 完成 pan/zoom/write/select/drag 证据；普通节点 drag 不伪造 MoveStroke。
 - [ ] POC-03 未提前实现 RichText 编辑或 ExternalSurface placement；仅 simple Text 和 reserved pass 进入 Scene POC。
 
 ## POC-04 — RichText / IME

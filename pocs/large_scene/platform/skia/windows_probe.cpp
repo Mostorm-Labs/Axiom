@@ -33,6 +33,7 @@
 #include "include/gpu/ganesh/d3d/GrD3DDirectContext.h"
 #include "include/gpu/ganesh/d3d/GrD3DTypes.h"
 #include "skia_large_scene_renderer.h"
+#include "canvas/poc03/ink_integration.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -47,7 +48,9 @@ constexpr uint32_t kWarmupFrames = 60U;
 
 struct Options {
   bool hardware = false;
+  bool interactive = false;
   uint32_t seconds = 0U;
+  uint32_t nodes = 100000U;
   fs::path output;
   fs::path trace_output;
 };
@@ -80,6 +83,9 @@ struct SceneState {
   canvas::poc03::Document document;
   canvas::poc03::RuntimeScene scene;
   canvas::poc03::RuntimeScene oracle;
+  std::unique_ptr<canvas::poc03::InkGeometryStore> ink_geometry;
+  canvas::poc03::TileCache* interaction_cache = nullptr;
+  bool oracle_dirty = false;
 };
 
 uint64_t ParseUnsigned(std::string_view value, std::string_view name) {
@@ -102,8 +108,12 @@ Options ParseOptions(int argc, char **argv) {
                                        : argument.substr(split + 1U);
     if (key == "--hardware" && split == std::string_view::npos) {
       options.hardware = true;
+    } else if (key == "--interactive" && split == std::string_view::npos) {
+      options.interactive = true;
     } else if (key == "--seconds") {
       options.seconds = static_cast<uint32_t>(ParseUnsigned(value, key));
+    } else if (key == "--nodes") {
+      options.nodes = static_cast<uint32_t>(ParseUnsigned(value, key));
     } else if (key == "--output") {
       options.output = fs::path(value);
     } else if (key == "--trace-output") {
@@ -117,6 +127,13 @@ Options ParseOptions(int argc, char **argv) {
   }
   if (options.hardware && options.seconds == 0U) {
     throw std::invalid_argument("physical hardware mode requires --seconds");
+  }
+  if (options.interactive && !options.hardware) {
+    throw std::invalid_argument("--interactive requires --hardware");
+  }
+  if (options.nodes != 1000U && options.nodes != 10000U &&
+      options.nodes != 50000U && options.nodes != 100000U) {
+    throw std::invalid_argument("--nodes must be 1000, 10000, 50000, or 100000");
   }
   return options;
 }
@@ -201,7 +218,127 @@ uint64_t PeakWorkingSetBytes() {
 }
 
 LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam,
+                            LPARAM lparam);
+
+struct InteractiveInput {
+  bool selecting = false;
+  uint64_t selected_id = 0U;
+  UINT pointer_id = 0U;
+  float offset_x = 0.0F;
+  float offset_y = 0.0F;
+};
+
+HWND g_input_window = nullptr;
+SceneState* g_input_scene = nullptr;
+InteractiveInput* g_input_state = nullptr;
+
+void ApplyWindowToolInput(HWND window, UINT message, WPARAM wparam,
+                          LPARAM lparam, SceneState* state,
+                          InteractiveInput* input) {
+  static_cast<void>(window);
+  if (state == nullptr || input == nullptr ||
+      (message != WM_LBUTTONDOWN && message != WM_MOUSEMOVE &&
+       message != WM_LBUTTONUP && message != WM_POINTERDOWN &&
+       message != WM_POINTERUPDATE && message != WM_POINTERUP &&
+       message != WM_POINTERCANCEL && message != WM_KEYDOWN)) return;
+  if (message == WM_KEYDOWN) {
+    // The current physical shell only exposes Select/Drag. Keep the tool
+    // switch explicit so later Vector/Dab input cannot be mistaken for a
+    // normal-node mutation.
+    if (wparam == '1' || wparam == VK_ESCAPE) {
+      input->selecting = false;
+      input->selected_id = 0U;
+    }
+    return;
+  }
+  const float x = static_cast<float>(static_cast<int16_t>(LOWORD(lparam)));
+  const float y = static_cast<float>(static_cast<int16_t>(HIWORD(lparam)));
+  const canvas::poc03::ViewState view{
+      1U, 1U, 1U, canvas::poc03::Bounds{0.0F, 0.0F, kWidth, kHeight},
+      1.0F, 1.0F, kWidth, kHeight};
+  const bool pointer_message = message == WM_POINTERDOWN ||
+                               message == WM_POINTERUPDATE ||
+                               message == WM_POINTERUP ||
+                               message == WM_POINTERCANCEL;
+  const bool pointer_begin = message == WM_POINTERDOWN;
+  const bool pointer_move = message == WM_POINTERUPDATE;
+  const bool pointer_end = message == WM_POINTERUP ||
+                           message == WM_POINTERCANCEL;
+  if (message == WM_LBUTTONDOWN || pointer_begin) {
+    if (pointer_message) {
+      input->pointer_id = GET_POINTERID_WPARAM(wparam);
+      SetCapture(window);
+    }
+    const auto hits = canvas::poc03::HitTest(state->scene, view, x, y, 12.0F);
+    std::optional<uint64_t> selected;
+    for (const uint64_t id : hits) {
+      const auto candidate = state->scene.SlotFor(id);
+      const auto node = candidate ? state->scene.RecordAt(*candidate)
+                                  : std::nullopt;
+      if (node && !node->locked && node->type != canvas::poc03::NodeType::kStroke) {
+        selected = id;
+        break;
+      }
+    }
+    if (!selected) return;
+    const auto node = state->document.Find(*selected);
+    if (!node) return;
+    input->selecting = true;
+    input->selected_id = *selected;
+    input->offset_x = x - node->bounds.left;
+    input->offset_y = y - node->bounds.top;
+  } else if ((message == WM_MOUSEMOVE && input->selecting &&
+              (wparam & MK_LBUTTON) != 0) ||
+             (pointer_move && input->selecting &&
+              GET_POINTERID_WPARAM(wparam) == input->pointer_id)) {
+    const auto current = state->document.Find(input->selected_id);
+    if (!current) return;
+    canvas::poc03::NodeRecord moved = *current;
+    const float width = moved.bounds.right - moved.bounds.left;
+    const float height = moved.bounds.bottom - moved.bounds.top;
+    moved.bounds = {x - input->offset_x, y - input->offset_y,
+                    x - input->offset_x + width, y - input->offset_y + height};
+    canvas::poc03::ChangeSet changes;
+    canvas::poc03::CompileDiagnostics diagnostics;
+    std::string error;
+    const canvas::poc03::SceneCompiler compiler;
+    if (!state->document.Apply({canvas::poc03::OperationKind::kUpdate,
+                                moved.id, moved},
+                               &changes, &error) ||
+        !compiler.ApplyIncremental(state->document, changes, &state->scene,
+                                   &diagnostics, &error)) {
+      OutputDebugStringA(("POC03 select/drag failed: " + error + "\n").c_str());
+      // Document::Apply is authoritative. If compilation fails, repair the
+      // runtime scene immediately so the next input cannot render stale data.
+      state->scene = compiler.CompileFull(state->document);
+    } else {
+      state->oracle_dirty = true;
+      if (state->interaction_cache != nullptr) {
+        state->interaction_cache->InvalidateWorld(
+            1U, diagnostics.authoritative_world_dirty, 256.0F);
+      }
+    }
+  } else if (message == WM_LBUTTONUP || pointer_end) {
+    if (pointer_end && input->selecting &&
+        GET_POINTERID_WPARAM(wparam) != input->pointer_id) {
+      return;
+    }
+    input->selecting = false;
+    input->selected_id = 0U;
+    input->pointer_id = 0U;
+    if (GetCapture() == window) {
+      ReleaseCapture();
+    }
+  }
+}
+
+LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam,
                             LPARAM lparam) {
+  if (window == g_input_window && g_input_scene != nullptr &&
+      g_input_state != nullptr) {
+    ApplyWindowToolInput(window, message, wparam, lparam, g_input_scene,
+                         g_input_state);
+  }
   if (message == WM_DESTROY) {
     PostQuitMessage(0);
     return 0;
@@ -265,28 +402,29 @@ DisplayInfo QueryDisplayInfo(HWND window) {
   return result;
 }
 
-SceneState BuildScene() {
+SceneState BuildScene(uint32_t base_nodes) {
   using namespace canvas::poc03;
   SceneState state;
-  state.document =
-      GenerateDocument({100000U, 0x43414e5641533033ULL, 1000U, 32.0F});
-  SceneCompiler compiler;
-  state.scene = compiler.CompileFull(state.document);
+  state.ink_geometry = std::make_unique<InkGeometryStore>();
+  TileCache cache(64U * 1024U * 1024U);
+  DeterministicFrameScheduler scheduler;
+  IntegratedScaleReport scale;
   std::string error;
-  for (uint32_t update = 0U; update < 1000U; ++update) {
-    const uint64_t id = 1U + (static_cast<uint64_t>(update) * 7919U) % 100000U;
-    NodeRecord changed = *state.document.Find(id);
-    changed.rgba ^= 0x00010101U;
-    ++changed.content_revision;
-    ChangeSet changes;
-    CompileDiagnostics diagnostics;
-    if (!state.document.Apply({OperationKind::kUpdate, id, changed}, &changes,
-                              &error) ||
-        !compiler.ApplyIncremental(state.document, changes, &state.scene,
-                                   &diagnostics, &error)) {
-      throw std::runtime_error("canonical incremental update failed: " + error);
-    }
+  const uint32_t historical_strokes = base_nodes / 5U;
+  if (!BuildIntegratedScale({base_nodes, historical_strokes,
+                             0x43414e5641533033ULL},
+                            &state.document, &state.scene,
+                            state.ink_geometry.get(), &cache, &scheduler,
+                            &scale, &error)) {
+    throw std::runtime_error("integrated scale failed: " + error);
   }
+  IntegratedActionReport actions;
+  if (!RunIntegratedActionCycle(base_nodes, historical_strokes, &state.document,
+                                &state.scene, state.ink_geometry.get(), &cache,
+                                &scheduler, &actions, &error)) {
+    throw std::runtime_error("integrated action cycle failed: " + error);
+  }
+  SceneCompiler compiler;
   state.oracle = compiler.CompileFull(state.document);
   if (state.scene.Digest() != state.oracle.Digest()) {
     throw std::runtime_error("incremental/full scene digest differs");
@@ -538,7 +676,8 @@ private:
 
 void DrawTraceFrame(const canvas::poc03::RuntimeScene &scene, uint32_t frame,
                     canvas::poc03::TileCache *cache, size_t *maximum_candidates,
-                    size_t *maximum_visible, SkSurface *surface) {
+                    size_t *maximum_visible, SkSurface *surface,
+                    const canvas::poc03::InkGeometryStore *ink_geometry) {
   using namespace canvas::poc03;
   const ViewState view = TraceView(frame);
   const ViewQueryResult query = QueryView(scene, view, std::nullopt);
@@ -563,7 +702,7 @@ void DrawTraceFrame(const canvas::poc03::RuntimeScene &scene, uint32_t frame,
   if (graph.VisualDigest() != visual_digest) {
     throw std::runtime_error("frame graph optimization changed visual digest");
   }
-  DrawLargeScene(*surface->getCanvas(), scene, view, graph);
+  DrawLargeScene(*surface->getCanvas(), scene, view, graph, ink_geometry);
 }
 
 void WriteTrace(const fs::path &path, const std::vector<FrameTrace> &traces) {
@@ -601,8 +740,13 @@ int Run(const Options &options) {
   const DisplayInfo display =
       options.hardware ? QueryDisplayInfo(window) : DisplayInfo{};
   D3D12Presenter presenter(window, options.hardware);
-  SceneState state = BuildScene();
+  SceneState state = BuildScene(options.nodes);
+  InteractiveInput input_state;
+  g_input_window = options.interactive ? window : nullptr;
+  g_input_scene = options.interactive ? &state : nullptr;
+  g_input_state = options.interactive ? &input_state : nullptr;
   TileCache cache(64U * 1024U * 1024U);
+  state.interaction_cache = &cache;
   size_t maximum_candidates = 0U;
   size_t maximum_visible = 0U;
   std::vector<FrameTrace> traces;
@@ -615,7 +759,7 @@ int Run(const Options &options) {
     }
     SkSurface *surface = presenter.Acquire();
     DrawTraceFrame(state.scene, warmup, &cache, &maximum_candidates,
-                   &maximum_visible, surface);
+                   &maximum_visible, surface, state.ink_geometry.get());
     presenter.SubmitAndPresent(surface);
   }
 
@@ -636,7 +780,7 @@ int Run(const Options &options) {
       traces.back().visible_us = trace.callback_us;
     const auto render_start = Clock::now();
     DrawTraceFrame(state.scene, trace.trace_frame, &cache, &maximum_candidates,
-                   &maximum_visible, surface);
+                   &maximum_visible, surface, state.ink_geometry.get());
     presenter.SubmitAndPresent(surface);
     trace.render_submit_us = MicrosSince(trace_origin);
     trace.present_us = trace.render_submit_us;
@@ -658,12 +802,17 @@ int Run(const Options &options) {
     ++frame;
   }
   const uint32_t oracle_frame = kTraceFrames - 1U;
+  if (state.oracle_dirty) {
+    state.oracle = SceneCompiler().CompileFull(state.document);
+    state.oracle_dirty = false;
+  }
   SkSurface *validation_surface = presenter.Acquire();
   if (options.hardware && !traces.empty()) {
     traces.back().visible_us = MicrosSince(trace_origin);
   }
   DrawTraceFrame(state.scene, oracle_frame, nullptr, &maximum_candidates,
-                 &maximum_visible, validation_surface);
+                 &maximum_visible, validation_surface,
+                 state.ink_geometry.get());
   presenter.FlushForReadback(validation_surface);
   std::vector<uint8_t> incremental_rgba;
   if (!ReadRgba(*validation_surface, kWidth, kHeight, &incremental_rgba)) {
@@ -671,7 +820,8 @@ int Run(const Options &options) {
   }
   const std::string pixel_digest = PixelDigest(incremental_rgba);
   DrawTraceFrame(state.oracle, oracle_frame, nullptr, &maximum_candidates,
-                 &maximum_visible, validation_surface);
+                 &maximum_visible, validation_surface,
+                 state.ink_geometry.get());
   presenter.FlushForReadback(validation_surface);
   std::vector<uint8_t> oracle_rgba;
   if (!ReadRgba(*validation_surface, kWidth, kHeight, &oracle_rgba)) {
@@ -755,7 +905,10 @@ int Run(const Options &options) {
          << "  \"hardware\": " << (options.hardware ? "true" : "false") << ",\n"
          << "  \"generator_algorithm_version\": 1,\n"
          << "  \"seed_hex\": \"0x43414e5641533033\",\n"
-         << "  \"nodes\": 100000,\n"
+         << "  \"nodes\": " << options.nodes << ",\n"
+         << "  \"historical_strokes\": " << options.nodes / 5U << ",\n"
+         << "  \"ink_document_digest\": \""
+         << state.ink_geometry->document().Digest() << "\",\n"
          << "  \"columns\": 1000,\n"
          << "  \"cell_size\": 32.0,\n"
          << "  \"document_digest\": \"" << state.document.Digest() << "\",\n"
@@ -833,6 +986,9 @@ int Run(const Options &options) {
   std::cout << result.str();
   if (window != nullptr)
     DestroyWindow(window);
+  g_input_window = nullptr;
+  g_input_scene = nullptr;
+  g_input_state = nullptr;
   const bool performance_pass =
       !options.hardware || (render_p95 <= 16.7 && render_p99 <= 33.3);
   return visual_equivalent && state.scene.Digest() == state.oracle.Digest() &&

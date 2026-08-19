@@ -30,6 +30,55 @@ if(EMSCRIPTEN)
   target_compile_options(canvas_poc03_core PRIVATE -fexceptions)
 endif()
 
+if(CANVAS_POC03_ENABLE_INK_INTEGRATION)
+  if(NOT TARGET canvas_poc02_ink)
+    message(FATAL_ERROR
+      "POC-03 Ink integration requires CANVAS_BUILD_POC02=ON")
+  endif()
+  add_library(canvas_poc03_ink_integration STATIC src/ink_integration.cpp)
+  target_include_directories(canvas_poc03_ink_integration PUBLIC include)
+  target_link_libraries(canvas_poc03_ink_integration
+    PUBLIC canvas_poc03_core canvas_poc02_ink)
+  target_compile_definitions(canvas_poc03_ink_integration
+    PUBLIC CANVAS_POC03_INK_INTEGRATION=1)
+  set_target_properties(canvas_poc03_ink_integration PROPERTIES
+    POSITION_INDEPENDENT_CODE ON)
+  if(MSVC)
+    target_compile_options(canvas_poc03_ink_integration PRIVATE
+      /W4 /permissive- /WX /EHsc)
+  else()
+    target_compile_options(canvas_poc03_ink_integration PRIVATE
+      -Wall -Wextra -Wpedantic -Werror)
+  endif()
+  if(CANVAS_POC03_ENABLE_SANITIZERS)
+    if(APPLE)
+      target_compile_options(canvas_poc03_ink_integration PRIVATE
+        -fsanitize=undefined -fno-omit-frame-pointer)
+      target_link_options(canvas_poc03_ink_integration PUBLIC
+        -fsanitize=undefined)
+    elseif(NOT MSVC)
+      target_compile_options(canvas_poc03_ink_integration PRIVATE
+        -fsanitize=address,undefined -fno-omit-frame-pointer)
+      target_link_options(canvas_poc03_ink_integration PUBLIC
+        -fsanitize=address,undefined)
+    endif()
+  endif()
+  add_executable(canvas_poc03_integrated_benchmark
+    src/integrated_benchmark_cli.cpp)
+  target_link_libraries(canvas_poc03_integrated_benchmark PRIVATE
+    canvas_poc03_ink_integration)
+  if(WIN32)
+    target_compile_definitions(canvas_poc03_integrated_benchmark PRIVATE
+      NOMINMAX WIN32_LEAN_AND_MEAN)
+  endif()
+  if(EMSCRIPTEN)
+    target_compile_options(canvas_poc03_integrated_benchmark PRIVATE
+      -fexceptions)
+    target_link_options(canvas_poc03_integrated_benchmark PRIVATE
+      "-fexceptions" "-sDISABLE_EXCEPTION_CATCHING=0")
+  endif()
+endif()
+
 if(MSVC)
   target_compile_options(canvas_poc03_core PRIVATE /W4 /permissive- /WX /EHsc)
 else()
@@ -68,12 +117,14 @@ if(CANVAS_POC03_ENABLE_SKIA)
 endif()
 
 if(CANVAS_POC03_BUILD_TESTS AND BUILD_TESTING)
-  if(NOT EXISTS ${POC03_DEPS_ROOT}/googletest/CMakeLists.txt)
-    message(FATAL_ERROR "Missing GoogleTest. Run: python3 tools/bootstrap_deps.py --core")
+  if(NOT TARGET GTest::gtest_main)
+    if(NOT EXISTS ${POC03_DEPS_ROOT}/googletest/CMakeLists.txt)
+      message(FATAL_ERROR "Missing GoogleTest. Run: python3 tools/bootstrap_deps.py --core")
+    endif()
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${POC03_DEPS_ROOT}/googletest
+                     ${CMAKE_BINARY_DIR}/_deps/googletest EXCLUDE_FROM_ALL)
   endif()
-  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-  set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
-  add_subdirectory(${POC03_DEPS_ROOT}/googletest
-                   ${CMAKE_BINARY_DIR}/_deps/googletest EXCLUDE_FROM_ALL)
   add_subdirectory(tests)
 endif()
