@@ -22,6 +22,18 @@ endif()
 
 add_test(NAME canvas_rf01_full_rebuild COMMAND canvas_rf01_full_rebuild_test)
 
+add_executable(canvas_rf01_scene_binding_test scene_binding_test.cpp)
+target_link_libraries(canvas_rf01_scene_binding_test PRIVATE canvas_runtime_scene_fakes)
+
+if(MSVC)
+    target_compile_options(canvas_rf01_scene_binding_test PRIVATE /W4 /permissive- /WX /EHsc)
+else()
+    target_compile_options(
+        canvas_rf01_scene_binding_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
+add_test(NAME canvas_rf01_scene_binding COMMAND canvas_rf01_scene_binding_test)
+
 add_library(canvas_rf01_public_abi_c OBJECT public_abi_c_test.c)
 target_include_directories(canvas_rf01_public_abi_c PRIVATE ${PROJECT_SOURCE_DIR})
 set_target_properties(canvas_rf01_public_abi_c PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
@@ -49,6 +61,8 @@ foreach(header IN ITEMS
         canvas/scene/direct_render_scene.hpp
         canvas/scene/render_scene.hpp
         canvas/scene/scene.hpp
+        canvas/scene/scene_binding.hpp
+        canvas/scene/scene_compiler.hpp
         canvas/scene/scene_query.hpp
         canvas/scene/scene_record_store.hpp
         canvas/scene/scene_types.hpp

@@ -1,6 +1,6 @@
 # RF-01 Scene Rendering Foundation 接口与迁移方案
 
-> Status: **Implementation Baseline / RF01-1 Validating**
+> Status: **Implementation Baseline / RF01-2 Validating**
 > Date: 2026-08-19
 > Scope: RF-01；后续由 RF-02 动态空间索引、RF-03 Tile/LOD/Raster 调度继续实现
 > Depends on: [ADR-0003](../adr/0003-semantic-document-runtime-scene.md)、
@@ -740,6 +740,27 @@ RF01-0 明确不包含 SceneCompiler/SceneBinding 的 Document adapter、真实 
 - 实现 SceneCompiler::compileDelta、SceneBinding::synchronize 和 prepare→commit。
 - 覆盖 create/update/remove/reorder/resource/Stroke commit。
 - 注入 record/render/index prepare failure 和 stale/malformed hints。
+
+当前 RF01-2 correctness baseline：
+
+- 新增无 Document 类型依赖的 `ICompiledSceneSource` 与 `SceneBinding`。Binding 只接收 owning
+  `CompiledSceneSnapshot/Delta`；POC-03 `Document/ChangeSet` 只由 compatibility adapter 感知。
+- `SceneBinding::synchronize()` 优先编译并应用 delta；source 或 participant 明确返回
+  `kRequiresFullRebuild` 时，从同一 source 编译 full snapshot。receipt 区分
+  `kAppliedIncremental/kRebuiltFull` 并保留触发 fallback 的结构化错误。
+- `DirectRenderScene` 与 `UniformGridSpatialIndex` 已实现 create/update/remove/reorder 的
+  prepare→commit 路径；Store、Render、Spatial、Damage 全部 prepare 成功后才依次无失败提交，
+  Scene revision 仍最后发布。
+- `Poc03SceneSource` 保留稳定 payload slot，不因 order 改变重编号；ChangeSet 必须连续、结构
+  合法且 after image 与当前 Document 一致，否则请求安全 full rebuild。
+- 自动语料覆盖真实 create/update/reorder/delete、400 次确定性混合操作、损坏 ChangeSet full
+  fallback、stale source、full compile 失败传播，以及 full/delta participant failure 后旧 Scene
+  保持不变。每一步均与旧 POC-03 full compiler 的 digest 对比。
+
+RF01-2 尚未宣称性能退出：当前 Direct/Grid oracle 在 prepare delta 时仍会复制并重建其内部
+状态。`recordsTouched` 只代表语义 mutation 数，不能冒充实际工作量。把 participant 改为真正
+局部、工作量可诊断且有界的容器结构，仍是 RF01-2 从 `Validating` 退出前的剩余工作；不得把
+这一限制推迟后伪称单节点更新已与场景规模无关。
 
 退出：任何失败都不改变 record/render/index/damage/revision；incremental/full oracle 等价。
 

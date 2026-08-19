@@ -28,26 +28,49 @@ float distanceToRect(const WorldPoint& point, const WorldRect& rect) {
 } // namespace
 
 foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>
+DirectRenderScene::prepareRecords(std::vector<RenderRecord> records, SceneRevision revision) const {
+    try {
+        std::sort(records.begin(),
+                  records.end(),
+                  [](const RenderRecord& left, const RenderRecord& right) {
+                      return left.orderKey < right.orderKey ||
+                             (left.orderKey == right.orderKey && left.objectId < right.objectId);
+                  });
+        auto update = std::make_unique<PreparedUpdate>();
+        update->revision = revision;
+        update->records = std::move(records);
+        update->index.reserve(update->records.size());
+        for (std::size_t index = 0; index < update->records.size(); ++index) {
+            if (!update->index.emplace(update->records[index].objectId, index).second) {
+                return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+                    makeError(foundation::ErrorCode::kDuplicateObject,
+                              "DirectRenderScene contains a duplicate ObjectId"));
+            }
+        }
+        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::success(
+            std::move(update));
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(makeError(
+            foundation::ErrorCode::kOutOfMemory, "DirectRenderScene could not prepare update"));
+    }
+}
+
+foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>
 DirectRenderScene::prepareReplace(std::span<const SceneRecord> records,
                                   SceneRevision revision) const {
     ++_prepareCount;
     try {
-        auto update = std::make_unique<PreparedUpdate>();
-        update->revision = revision;
-        update->records.reserve(records.size());
-        update->index.reserve(records.size());
+        std::vector<RenderRecord> nextRecords;
+        nextRecords.reserve(records.size());
         for (const SceneRecord& record : records) {
-            const std::size_t index = update->records.size();
-            update->records.push_back(RenderRecord{
+            nextRecords.push_back(RenderRecord{
                 record.objectId,
                 record.orderKey,
                 record.worldBounds,
                 record.renderPayload,
             });
-            update->index.emplace(record.objectId, index);
         }
-        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::success(
-            std::move(update));
+        return prepareRecords(std::move(nextRecords), revision);
     } catch (const std::bad_alloc&) {
         return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
             makeError(foundation::ErrorCode::kOutOfMemory,
@@ -55,12 +78,69 @@ DirectRenderScene::prepareReplace(std::span<const SceneRecord> records,
     }
 }
 
-foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>> DirectRenderScene::prepareApply(
-    std::span<const SceneMutation>, SceneRevision, SceneRevision) const {
+foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>
+DirectRenderScene::prepareApply(std::span<const SceneMutation> mutations,
+                                SceneRevision beforeRevision,
+                                SceneRevision afterRevision) const {
     ++_prepareCount;
-    return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
-        makeError(foundation::ErrorCode::kRequiresFullRebuild,
-                  "DirectRenderScene delta support begins in RF01-2"));
+    if (beforeRevision != _revision || afterRevision <= beforeRevision) {
+        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+            makeError(foundation::ErrorCode::kInvalidRevision,
+                      "DirectRenderScene delta revision is invalid"));
+    }
+    try {
+        std::vector<RenderRecord> nextRecords = _records;
+        for (const SceneMutation& mutation : mutations) {
+            const auto found = std::find_if(
+                nextRecords.begin(), nextRecords.end(), [&mutation](const RenderRecord& record) {
+                    return record.objectId == mutation.objectId;
+                });
+            switch (mutation.kind) {
+            case SceneMutationKind::kInsert:
+                if (found != nextRecords.end() || !mutation.after) {
+                    return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+                        makeError(foundation::ErrorCode::kInvalidRecord,
+                                  "DirectRenderScene insert is inconsistent"));
+                }
+                nextRecords.push_back(RenderRecord{
+                    mutation.after->objectId,
+                    mutation.after->orderKey,
+                    mutation.after->worldBounds,
+                    mutation.after->renderPayload,
+                });
+                break;
+            case SceneMutationKind::kUpdate:
+                if (found == nextRecords.end() || !mutation.before || !mutation.after) {
+                    return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+                        makeError(foundation::ErrorCode::kInvalidRecord,
+                                  "DirectRenderScene update is inconsistent"));
+                }
+                *found = RenderRecord{
+                    mutation.after->objectId,
+                    mutation.after->orderKey,
+                    mutation.after->worldBounds,
+                    mutation.after->renderPayload,
+                };
+                break;
+            case SceneMutationKind::kRemove:
+                if (found == nextRecords.end() || !mutation.before || mutation.after) {
+                    return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+                        makeError(foundation::ErrorCode::kInvalidRecord,
+                                  "DirectRenderScene remove is inconsistent"));
+                }
+                nextRecords.erase(found);
+                break;
+            default:
+                return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(
+                    makeError(foundation::ErrorCode::kInvalidRecord,
+                              "DirectRenderScene mutation kind is unknown"));
+            }
+        }
+        return prepareRecords(std::move(nextRecords), afterRevision);
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>::failure(makeError(
+            foundation::ErrorCode::kOutOfMemory, "DirectRenderScene could not prepare delta"));
+    }
 }
 
 void DirectRenderScene::commit(std::unique_ptr<IPreparedRenderSceneUpdate> prepared) noexcept {

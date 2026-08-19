@@ -2,6 +2,7 @@ add_library(canvas_runtime_scene STATIC
     src/damage_tracker.cpp
     src/direct_render_scene.cpp
     src/scene.cpp
+    src/scene_binding.cpp
     src/scene_record_store.cpp
     src/uniform_grid_spatial_index.cpp)
 target_include_directories(canvas_runtime_scene PUBLIC include)

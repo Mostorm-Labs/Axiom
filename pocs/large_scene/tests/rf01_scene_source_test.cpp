@@ -1,5 +1,6 @@
 #include "canvas/poc03/rf01/poc03_scene_source.hpp"
 #include "canvas/scene/direct_render_scene.hpp"
+#include "canvas/scene/scene_binding.hpp"
 #include "canvas/scene/uniform_grid_spatial_index.hpp"
 
 #include "gtest/gtest.h"
@@ -178,6 +179,185 @@ TEST(Rf01FullRebuild, SpatialPrepareFailurePreservesCommittedScene) {
         scene.collectDamage(SceneRevision(0), SceneRevision(document.revision() + 2U));
     EXPECT_EQ(afterDamage.fullScene, beforeDamage.fullScene);
     EXPECT_EQ(afterDamage.rects.size(), beforeDamage.rects.size());
+}
+
+TEST(Rf01Delta, Poc03AdapterAndSceneBindingApplyOperationDelta) {
+    Document document;
+    SceneCompiler compiler;
+    NodeRecord first{
+        .id = 1U,
+        .order = 10U,
+        .type = NodeType::kShape,
+        .bounds = Bounds{0.0F, 0.0F, 10.0F, 10.0F},
+        .rgba = 0xff123456U,
+        .resource_key = 0U,
+        .content_revision = 1U,
+        .locked = false,
+    };
+    ChangeSet ignored;
+    std::string error;
+    ASSERT_TRUE(
+        document.Apply(Operation{OperationKind::kCreate, first.id, first}, &ignored, &error))
+        << error;
+
+    auto render = std::make_unique<DirectRenderScene>();
+    auto spatial = std::make_unique<UniformGridSpatialIndex>();
+    Scene scene(std::move(render), std::move(spatial));
+    Poc03SceneSource boundSource(document);
+    SceneBinding binding(scene);
+    const auto rebuilt = binding.rebuild(boundSource);
+    ASSERT_TRUE(rebuilt.hasValue()) << rebuilt.error().message;
+    ASSERT_EQ(scene.read().records().size(), 1U);
+
+    auto applyAndSynchronize = [&](const Operation& operation) {
+        ChangeSet changes;
+        EXPECT_TRUE(document.Apply(operation, &changes, &error)) << error;
+        boundSource.setChangeSet(&changes);
+        const auto synchronized = binding.synchronize(boundSource);
+        EXPECT_TRUE(synchronized.hasValue()) << synchronized.error().message;
+        if (!synchronized) {
+            return;
+        }
+        EXPECT_EQ(synchronized.value().disposition, SceneSyncDisposition::kAppliedIncremental);
+        EXPECT_EQ(synchronized.value().apply.recordsTouched, 1U);
+        EXPECT_EQ(scene.revision().value(), document.revision());
+        const RuntimeScene oracle = compiler.CompileFull(document);
+        const auto digest = boundSource.projectedDigest(scene.read(), document);
+        EXPECT_TRUE(digest.hasValue()) << digest.error().message;
+        if (digest) {
+            EXPECT_EQ(digest.value(), oracle.Digest());
+        }
+    };
+
+    NodeRecord changed = first;
+    changed.bounds = Bounds{20.0F, 10.0F, 30.0F, 20.0F};
+    ++changed.content_revision;
+    applyAndSynchronize(Operation{OperationKind::kUpdate, changed.id, changed});
+    EXPECT_EQ(scene.read().find(ObjectId::fromUint64(first.id))->worldBounds,
+              (WorldRect{20.0F, 10.0F, 30.0F, 20.0F}));
+
+    NodeRecord second{
+        .id = 2U,
+        .order = 5U,
+        .type = NodeType::kStroke,
+        .bounds = Bounds{-20.0F, -10.0F, -5.0F, 5.0F},
+        .rgba = 0xff654321U,
+        .resource_key = 2U,
+        .content_revision = 1U,
+        .locked = false,
+    };
+    applyAndSynchronize(Operation{OperationKind::kCreate, second.id, second});
+    ASSERT_EQ(scene.read().records().size(), 2U);
+    EXPECT_EQ(scene.read().records().front().objectId, ObjectId::fromUint64(second.id));
+
+    second.order = 20U;
+    applyAndSynchronize(Operation{OperationKind::kReorder, second.id, second});
+    EXPECT_EQ(scene.read().records().back().objectId, ObjectId::fromUint64(second.id));
+
+    applyAndSynchronize(Operation{OperationKind::kDelete, first.id, std::nullopt});
+    EXPECT_EQ(scene.read().records().size(), 1U);
+    EXPECT_EQ(scene.read().find(ObjectId::fromUint64(first.id)), nullptr);
+}
+
+TEST(Rf01Delta, CorruptPoc03ChangeSetTriggersFullRebuildFallback) {
+    Document document = GenerateDocument({100U, 17U, 10U, 32.0F});
+    Poc03SceneSource source(document);
+    auto render = std::make_unique<DirectRenderScene>();
+    auto spatial = std::make_unique<UniformGridSpatialIndex>();
+    Scene scene(std::move(render), std::move(spatial));
+    SceneBinding binding(scene);
+    ASSERT_TRUE(binding.rebuild(source).hasValue());
+
+    NodeRecord changed = *document.Find(50U);
+    changed.rgba ^= 0x00010101U;
+    ++changed.content_revision;
+    ChangeSet changes;
+    std::string error;
+    ASSERT_TRUE(
+        document.Apply(Operation{OperationKind::kUpdate, changed.id, changed}, &changes, &error))
+        << error;
+    changes.semantic_changes[0].after->rgba ^= 1U;
+    source.setChangeSet(&changes);
+    const auto synchronized = binding.synchronize(source);
+    ASSERT_TRUE(synchronized.hasValue()) << synchronized.error().message;
+    EXPECT_EQ(synchronized.value().disposition, SceneSyncDisposition::kRebuiltFull);
+    ASSERT_TRUE(synchronized.value().incrementalFailure.has_value());
+    EXPECT_EQ(synchronized.value().incrementalFailure->code,
+              foundation::ErrorCode::kRequiresFullRebuild);
+    const auto digest = source.projectedDigest(scene.read(), document);
+    ASSERT_TRUE(digest.hasValue()) << digest.error().message;
+    EXPECT_EQ(digest.value(), SceneCompiler().CompileFull(document).Digest());
+}
+
+TEST(Rf01Delta, DeterministicOperationSequenceMatchesFullOracle) {
+    Document document = GenerateDocument({1000U, 23U, 100U, 32.0F});
+    Poc03SceneSource source(document);
+    auto render = std::make_unique<DirectRenderScene>();
+    auto spatial = std::make_unique<UniformGridSpatialIndex>();
+    Scene scene(std::move(render), std::move(spatial));
+    SceneBinding binding(scene);
+    ASSERT_TRUE(binding.rebuild(source).hasValue());
+
+    std::vector<std::uint64_t> temporaryIds;
+    std::string error;
+    for (std::uint32_t index = 0; index < 400U; ++index) {
+        Operation operation;
+        switch (index % 4U) {
+        case 0U: {
+            const std::uint64_t id = 1U + (static_cast<std::uint64_t>(index) * 37U) % 1000U;
+            NodeRecord changed = *document.Find(id);
+            changed.rgba ^= 0x00010101U;
+            changed.resource_key += 1U;
+            ++changed.content_revision;
+            operation = Operation{OperationKind::kUpdate, id, changed};
+            break;
+        }
+        case 1U: {
+            const std::uint64_t id = 1U + (static_cast<std::uint64_t>(index) * 53U) % 1000U;
+            NodeRecord reordered = *document.Find(id);
+            reordered.order = 2000U + index;
+            operation = Operation{OperationKind::kReorder, id, reordered};
+            break;
+        }
+        case 2U: {
+            const std::uint64_t id = 100000U + index;
+            NodeRecord created{
+                .id = id,
+                .order = 5000U + index,
+                .type = (index & 4U) == 0U ? NodeType::kImage : NodeType::kStroke,
+                .bounds = Bounds{-100.0F + static_cast<float>(index),
+                                 -50.0F,
+                                 -80.0F + static_cast<float>(index),
+                                 -30.0F},
+                .rgba = 0xff112233U ^ index,
+                .resource_key = id,
+                .content_revision = 1U,
+                .locked = false,
+            };
+            temporaryIds.push_back(id);
+            operation = Operation{OperationKind::kCreate, id, created};
+            break;
+        }
+        case 3U: {
+            ASSERT_FALSE(temporaryIds.empty());
+            const std::uint64_t id = temporaryIds.back();
+            temporaryIds.pop_back();
+            operation = Operation{OperationKind::kDelete, id, std::nullopt};
+            break;
+        }
+        }
+
+        ChangeSet changes;
+        ASSERT_TRUE(document.Apply(operation, &changes, &error)) << error;
+        source.setChangeSet(&changes);
+        const auto synchronized = binding.synchronize(source);
+        ASSERT_TRUE(synchronized.hasValue()) << synchronized.error().message;
+        EXPECT_EQ(synchronized.value().disposition, SceneSyncDisposition::kAppliedIncremental);
+        EXPECT_EQ(synchronized.value().apply.recordsTouched, 1U);
+        const auto digest = source.projectedDigest(scene.read(), document);
+        ASSERT_TRUE(digest.hasValue()) << digest.error().message;
+        EXPECT_EQ(digest.value(), SceneCompiler().CompileFull(document).Digest());
+    }
 }
 
 } // namespace

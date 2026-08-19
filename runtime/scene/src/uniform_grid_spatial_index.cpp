@@ -9,13 +9,14 @@
 #include <utility>
 
 namespace canvas {
-namespace {
-
-struct PreparedGridUpdate final : public IPreparedSpatialUpdate {
+class UniformGridSpatialIndex::PreparedGridUpdate final : public IPreparedSpatialUpdate {
+  public:
     SceneRevision revision;
     std::vector<SpatialRecord> records;
     std::unordered_map<std::int64_t, std::vector<std::uint32_t>> cells;
 };
+
+namespace {
 
 foundation::Error makeError(foundation::ErrorCode code, const char* message) {
     return foundation::Error{code, message};
@@ -88,15 +89,14 @@ UniformGridSpatialIndex::UniformGridSpatialIndex(float cellSize) : _cellSize(cel
 }
 
 foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>
-UniformGridSpatialIndex::prepareReplace(std::span<const SpatialRecord> records,
+UniformGridSpatialIndex::prepareRecords(std::vector<SpatialRecord> records,
                                         SceneRevision revision) const {
-    ++_prepareCount;
     try {
         auto update = std::make_unique<PreparedGridUpdate>();
         update->revision = revision;
-        update->records.assign(records.begin(), records.end());
-        for (std::size_t index = 0; index < records.size(); ++index) {
-            auto cellsResult = cellsFor(records[index].worldBounds, _cellSize);
+        update->records = std::move(records);
+        for (std::size_t index = 0; index < update->records.size(); ++index) {
+            auto cellsResult = cellsFor(update->records[index].worldBounds, _cellSize);
             if (!cellsResult) {
                 return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
                     cellsResult.error());
@@ -110,16 +110,79 @@ UniformGridSpatialIndex::prepareReplace(std::span<const SpatialRecord> records,
     } catch (const std::bad_alloc&) {
         return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
             makeError(foundation::ErrorCode::kOutOfMemory,
+                      "UniformGridSpatialIndex could not prepare update"));
+    }
+}
+
+foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>
+UniformGridSpatialIndex::prepareReplace(std::span<const SpatialRecord> records,
+                                        SceneRevision revision) const {
+    ++_prepareCount;
+    try {
+        return prepareRecords(std::vector<SpatialRecord>(records.begin(), records.end()), revision);
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+            makeError(foundation::ErrorCode::kOutOfMemory,
                       "UniformGridSpatialIndex could not prepare replacement"));
     }
 }
 
-foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>> UniformGridSpatialIndex::prepareApply(
-    std::span<const SpatialMutation>, SceneRevision, SceneRevision) const {
+foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>
+UniformGridSpatialIndex::prepareApply(std::span<const SpatialMutation> mutations,
+                                      SceneRevision beforeRevision,
+                                      SceneRevision afterRevision) const {
     ++_prepareCount;
-    return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
-        makeError(foundation::ErrorCode::kRequiresFullRebuild,
-                  "UniformGridSpatialIndex delta support begins in RF01-2"));
+    if (beforeRevision != _revision || afterRevision <= beforeRevision) {
+        return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+            makeError(foundation::ErrorCode::kInvalidRevision,
+                      "UniformGridSpatialIndex delta revision is invalid"));
+    }
+    try {
+        std::vector<SpatialRecord> nextRecords = _records;
+        for (const SpatialMutation& mutation : mutations) {
+            const auto found = std::find_if(
+                nextRecords.begin(), nextRecords.end(), [&mutation](const SpatialRecord& record) {
+                    return record.objectId == mutation.objectId;
+                });
+            switch (mutation.kind) {
+            case SceneMutationKind::kInsert:
+                if (found != nextRecords.end() || mutation.before || !mutation.after) {
+                    return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+                        makeError(foundation::ErrorCode::kInvalidRecord,
+                                  "UniformGridSpatialIndex insert is inconsistent"));
+                }
+                nextRecords.push_back(SpatialRecord{mutation.objectId, *mutation.after});
+                break;
+            case SceneMutationKind::kUpdate:
+                if (found == nextRecords.end() || !mutation.before || !mutation.after ||
+                    found->worldBounds != *mutation.before) {
+                    return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+                        makeError(foundation::ErrorCode::kBeforeImageMismatch,
+                                  "UniformGridSpatialIndex update is inconsistent"));
+                }
+                found->worldBounds = *mutation.after;
+                break;
+            case SceneMutationKind::kRemove:
+                if (found == nextRecords.end() || !mutation.before || mutation.after ||
+                    found->worldBounds != *mutation.before) {
+                    return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+                        makeError(foundation::ErrorCode::kBeforeImageMismatch,
+                                  "UniformGridSpatialIndex remove is inconsistent"));
+                }
+                nextRecords.erase(found);
+                break;
+            default:
+                return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+                    makeError(foundation::ErrorCode::kInvalidRecord,
+                              "UniformGridSpatialIndex mutation kind is unknown"));
+            }
+        }
+        return prepareRecords(std::move(nextRecords), afterRevision);
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>::failure(
+            makeError(foundation::ErrorCode::kOutOfMemory,
+                      "UniformGridSpatialIndex could not prepare delta"));
+    }
 }
 
 void UniformGridSpatialIndex::commit(std::unique_ptr<IPreparedSpatialUpdate> prepared) noexcept {

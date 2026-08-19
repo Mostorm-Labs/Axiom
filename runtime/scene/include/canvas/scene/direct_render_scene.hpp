@@ -37,6 +37,9 @@ class DirectRenderScene final : public IRenderScene {
         RenderPayloadRef renderPayload;
     };
 
+    foundation::Result<std::unique_ptr<IPreparedRenderSceneUpdate>>
+    prepareRecords(std::vector<RenderRecord> records, SceneRevision revision) const;
+
     mutable std::uint64_t _prepareCount = 0;
     std::uint64_t _commitCount = 0;
     SceneRevision _revision;

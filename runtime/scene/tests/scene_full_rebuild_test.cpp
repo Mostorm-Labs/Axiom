@@ -9,8 +9,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
-#include <stdexcept>
 #include <span>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -125,10 +125,18 @@ void testDirectRenderSceneFullReplace(TestContext& context) {
     EXPECT(context, near.hasValue() && near.value().hit);
     EXPECT(context, outside.hasValue() && !outside.value().hit);
 
-    const auto delta =
+    auto delta =
         render.prepareApply(std::vector<SceneMutation>{}, SceneRevision(7U), SceneRevision(8U));
-    EXPECT(context, !delta.hasValue());
-    EXPECT(context, delta.error().code == ErrorCode::kRequiresFullRebuild);
+    EXPECT(context, delta.hasValue());
+    if (delta) {
+        render.commit(std::move(delta.value()));
+        EXPECT(context, render.diagnostics().revision == SceneRevision(8U));
+        EXPECT(context, render.diagnostics().nodeCount == 2U);
+    }
+    const auto stale =
+        render.prepareApply(std::vector<SceneMutation>{}, SceneRevision(7U), SceneRevision(9U));
+    EXPECT(context, !stale.hasValue());
+    EXPECT(context, stale.error().code == ErrorCode::kInvalidRevision);
 }
 
 std::vector<ObjectId> bruteForce(std::span<const canvas::SpatialRecord> records,
@@ -184,10 +192,18 @@ void testUniformGridMatchesBruteForce(TestContext& context) {
 
     const auto pointQuery = index.query(WorldRect{512.0F, -512.0F, 512.0F, -512.0F});
     EXPECT(context, pointQuery.hasValue());
-    const auto delta =
+    auto delta =
         index.prepareApply(std::vector<SpatialMutation>{}, SceneRevision(3U), SceneRevision(4U));
-    EXPECT(context, !delta.hasValue());
-    EXPECT(context, delta.error().code == ErrorCode::kRequiresFullRebuild);
+    EXPECT(context, delta.hasValue());
+    if (delta) {
+        index.commit(std::move(delta.value()));
+        EXPECT(context, index.diagnostics().revision == SceneRevision(4U));
+        EXPECT(context, index.diagnostics().recordCount == records.size());
+    }
+    const auto stale =
+        index.prepareApply(std::vector<SpatialMutation>{}, SceneRevision(3U), SceneRevision(5U));
+    EXPECT(context, !stale.hasValue());
+    EXPECT(context, stale.error().code == ErrorCode::kInvalidRevision);
 }
 
 void testSceneFullReplaceAndStaleDrawList(TestContext& context) {
@@ -229,10 +245,15 @@ void testSceneFullReplaceAndStaleDrawList(TestContext& context) {
         }},
     };
     const auto deltaResult = scene.apply(std::move(delta));
-    EXPECT(context, !deltaResult.hasValue());
-    EXPECT(context, deltaResult.error().code == ErrorCode::kRequiresFullRebuild);
-    EXPECT(context, scene.revision() == SceneRevision(2U));
-    EXPECT(context, scene.read().records().size() == 1U);
+    EXPECT(context, deltaResult.hasValue());
+    EXPECT(context, scene.revision() == SceneRevision(3U));
+    EXPECT(context, scene.read().records().size() == 2U);
+    const auto updatedQuery = scene.query(SceneQuery{WorldRect{-50.0F, -50.0F, 50.0F, 50.0F}});
+    EXPECT(context, updatedQuery.hasValue());
+    if (updatedQuery) {
+        EXPECT(context, updatedQuery.value().backToFront[0] == second.objectId);
+        EXPECT(context, updatedQuery.value().backToFront[1] == first.objectId);
+    }
 }
 
 void testSpatialPrepareFailurePreservesScene(TestContext& context) {
@@ -267,6 +288,44 @@ void testSpatialPrepareFailurePreservesScene(TestContext& context) {
     EXPECT(context, spatialRaw->diagnostics().commitCount == spatialCommits);
 }
 
+void testDeltaSpatialPrepareFailurePreservesScene(TestContext& context) {
+    auto render = std::make_unique<DirectRenderScene>();
+    DirectRenderScene* renderRaw = render.get();
+    auto spatial = std::make_unique<UniformGridSpatialIndex>();
+    UniformGridSpatialIndex* spatialRaw = spatial.get();
+    Scene scene(std::move(render), std::move(spatial));
+    const SceneRecord initial = makeRecord(1U, 10U, WorldRect{-10.0F, -10.0F, 10.0F, 10.0F});
+    EXPECT(context,
+           scene
+               .replace(CompiledSceneSnapshot{
+                   .sourceRevision = SceneRevision(1U),
+                   .records = {initial},
+               })
+               .hasValue());
+    const std::uint64_t renderCommits = renderRaw->diagnostics().commitCount;
+    const std::uint64_t spatialCommits = spatialRaw->diagnostics().commitCount;
+    SceneRecord oversized = initial;
+    oversized.worldBounds = WorldRect{0.0F, 0.0F, 1'000'000'000.0F, 1'000'000'000.0F};
+    oversized.contentRevision = ContentRevision(2U);
+    const auto rejected = scene.apply(CompiledSceneDelta{
+        .beforeRevision = SceneRevision(1U),
+        .afterRevision = SceneRevision(2U),
+        .mutations = {SceneMutation{
+            .kind = SceneMutationKind::kUpdate,
+            .objectId = initial.objectId,
+            .before = initial,
+            .after = oversized,
+        }},
+    });
+    EXPECT(context, !rejected.hasValue());
+    EXPECT(context, rejected.error().code == ErrorCode::kInvalidArgument);
+    EXPECT(context, scene.revision() == SceneRevision(1U));
+    EXPECT(context, scene.read().records().size() == 1U);
+    EXPECT(context, scene.read().records()[0] == initial);
+    EXPECT(context, renderRaw->diagnostics().commitCount == renderCommits);
+    EXPECT(context, spatialRaw->diagnostics().commitCount == spatialCommits);
+}
+
 } // namespace
 
 int main() {
@@ -276,6 +335,7 @@ int main() {
     testUniformGridMatchesBruteForce(context);
     testSceneFullReplaceAndStaleDrawList(context);
     testSpatialPrepareFailurePreservesScene(context);
+    testDeltaSpatialPrepareFailurePreservesScene(context);
     if (context.failures != 0) {
         std::cerr << context.failures << " RF01-1 full rebuild expectations failed\n";
         return EXIT_FAILURE;

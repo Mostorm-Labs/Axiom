@@ -25,6 +25,11 @@ class UniformGridSpatialIndex final : public ISpatialIndex {
     [[nodiscard]] SpatialIndexDiagnostics diagnostics() const override;
 
   private:
+    class PreparedGridUpdate;
+
+    foundation::Result<std::unique_ptr<IPreparedSpatialUpdate>>
+    prepareRecords(std::vector<SpatialRecord> records, SceneRevision revision) const;
+
     float _cellSize;
     mutable std::uint64_t _prepareCount = 0;
     mutable std::uint64_t _lastExaminedRecords = 0;
