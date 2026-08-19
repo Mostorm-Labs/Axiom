@@ -3,11 +3,13 @@ package com.mostorm.canvas.poc04
 import android.content.Context
 import android.text.InputType
 import android.util.AttributeSet
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 
 // This native View is the Android text data plane. React Native may host it,
 // but committed or composing text never travels through the RN JS bridge.
@@ -15,6 +17,10 @@ class NativeCanvasView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : View(context, attrs) {
+    private companion object {
+        const val IME_EVIDENCE_TAG = "CanvasPoc04Ime"
+    }
+
     private val session = NativeRichText.nativeCreate()
     private var composing = false
 
@@ -29,6 +35,7 @@ class NativeCanvasView @JvmOverloads constructor(
         outAttrs.inputType = InputType.TYPE_CLASS_TEXT or
             InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        Log.i(IME_EVIDENCE_TAG, "onCreateInputConnection")
         return object : BaseInputConnection(this, true) {
             override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
                 if (!composing) {
@@ -37,12 +44,17 @@ class NativeCanvasView @JvmOverloads constructor(
                 }
                 val preview = text?.toString().orEmpty()
                 val cursor = compositionCursor(preview.length, newCursorPosition)
+                Log.i(
+                    IME_EVIDENCE_TAG,
+                    "setComposingText length=${preview.length} cursor=$cursor",
+                )
                 requireOk(NativeRichText.nativeUpdateComposition(session, preview, cursor, cursor))
                 invalidate()
                 return true
             }
 
             override fun finishComposingText(): Boolean {
+                Log.i(IME_EVIDENCE_TAG, "finishComposingText active=$composing")
                 if (composing) requireOk(NativeRichText.nativeFinishComposition(session, true))
                 composing = false
                 invalidate()
@@ -50,6 +62,10 @@ class NativeCanvasView @JvmOverloads constructor(
             }
 
             override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
+                Log.i(
+                    IME_EVIDENCE_TAG,
+                    "commitText length=${text?.length ?: 0} composing=$composing",
+                )
                 if (composing) {
                     val committed = text?.toString().orEmpty()
                     requireOk(NativeRichText.nativeUpdateComposition(
@@ -68,12 +84,17 @@ class NativeCanvasView @JvmOverloads constructor(
             }
 
             override fun setSelection(start: Int, end: Int): Boolean {
+                Log.i(IME_EVIDENCE_TAG, "setSelection start=$start end=$end")
                 // POC demo hosts one paragraph; Runtime owns canonical mapping.
                 requireOk(NativeRichText.nativeSetSelection(session, 0, start, 0, end))
                 return true
             }
 
             override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+                Log.i(
+                    IME_EVIDENCE_TAG,
+                    "deleteSurroundingText before=$beforeLength after=$afterLength",
+                )
                 requireOk(NativeRichText.nativeDeleteSurrounding(
                     session,
                     beforeLength,
@@ -98,6 +119,18 @@ class NativeCanvasView @JvmOverloads constructor(
         if (!gainFocus) composing = false
         requireOk(NativeRichText.nativeFocus(session, gainFocus))
         super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (hasWindowFocus && isFocused) {
+            post {
+                context.getSystemService(InputMethodManager::class.java).showSoftInput(
+                    this,
+                    InputMethodManager.SHOW_IMPLICIT,
+                )
+            }
+        }
     }
 
     override fun onDetachedFromWindow() {

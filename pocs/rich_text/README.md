@@ -98,6 +98,12 @@ from Web/Chromium, Windows, and Android/emulator consumers. It does not claim
 to synthesize native pinyin IME keystrokes: real browser IME, Win32 IMM, and
 Android InputConnection event evidence remains a separate manual/device gate.
 
+The physical Android gate was executed on a Pixel 7 and is recorded in
+[`docs/quality/evidence/poc04/android-physical-20260819.md`](../../docs/quality/evidence/poc04/android-physical-20260819.md).
+It closes the Android physical performance and Gboard `InputConnection`
+evidence only; browser and Windows native IME evidence remain pending, so
+POC-04 stays `Validating`.
+
 The final three-platform evidence must cover English, simplified Chinese,
 pinyin composition, newline, mixed runs, selection, caret, clipboard,
 undo/redo, cancel/commit atomicity, digest, fixed-font line/cluster/selection
