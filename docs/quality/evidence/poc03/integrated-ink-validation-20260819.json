@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "report_id": "poc03-integrated-ink-validation-20260819",
+  "evidence_status": "host_matrix_passed",
+  "poc_status_after_evidence": "Validating",
+  "remaining_gates": [
+    "Windows physical D3D12 integrated playground",
+    "Chrome Stable WebGL2 integrated playground",
+    "Pixel 7 Android integrated playground",
+    "POC-02 formal pressure-pen latency and Human Ink Gate"
+  ],
+  "source": {
+    "commit": "4295fb73f31964d462b4540abede918786a08fd9",
+    "poc02_contract_commit": "35a02f8",
+    "branch": "codex/poc-03-100k-scene"
+  },
+  "generator": {
+    "algorithm_version": 1,
+    "seed_hex": "0x43414e5641533033",
+    "input_samples_per_stroke": 16,
+    "input_batches_per_stroke": 4,
+    "historical_stroke_ratio": 0.2
+  },
+  "sdk": {
+    "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "host_sdk_consumed": false,
+    "platform_sdk_ids": "pending physical integrated runs"
+  },
+  "results": [
+    {
+      "base_nodes": 1000,
+      "historical_strokes": 200,
+      "ink_document_digest": "78cfbfef60ea606b77b8bb9753a22733",
+      "document_digest": "992b9776596d824d8ce2ea4e63ff278c",
+      "scene_digest": "992b9776596d824d8ce2ea4e63ff278c",
+      "maximum_candidates": 130,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 0.533,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-1000.json",
+      "raw_artifact_sha256": "59a870340290fdbbf93fa5448771bf9471877804341f0545ebe5c07c21f674a7"
+    },
+    {
+      "base_nodes": 10000,
+      "historical_strokes": 2000,
+      "ink_document_digest": "3c67a77040df4b290e139b319f8ec69f",
+      "document_digest": "07b91f337ce46a2496badcf43498df61",
+      "scene_digest": "07b91f337ce46a2496badcf43498df61",
+      "maximum_candidates": 770,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 4.933,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-10000.json",
+      "raw_artifact_sha256": "7f7d10567378f1a5cdb54a0260c04eb98a7cc44bc4346cfc5f38009697805466"
+    },
+    {
+      "base_nodes": 50000,
+      "historical_strokes": 10000,
+      "ink_document_digest": "1816f3b03a083098ef4e96ef8340d52f",
+      "document_digest": "3d6365692eb24487fb70819805d8d964",
+      "scene_digest": "3d6365692eb24487fb70819805d8d964",
+      "maximum_candidates": 3524,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 24.453,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-50000.json",
+      "raw_artifact_sha256": "ac573d38a1ad75d009f0e819c1012b5112be77d71d90ceca82ac30fdfef0317f"
+    },
+    {
+      "base_nodes": 100000,
+      "historical_strokes": 20000,
+      "ink_document_digest": "0bc9cc0db2e708bac474b23f8a52db71",
+      "document_digest": "002e438d90f6ae775e60eb41bda93735",
+      "scene_digest": "002e438d90f6ae775e60eb41bda93735",
+      "maximum_candidates": 4805,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 48.895,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-100000.json",
+      "raw_artifact_sha256": "b6d53441f03390af232b7ef5e0a02f6835dc002d2cfcaa27113cd6d574397515"
+    }
+  ],
+  "automated_gates": {
+    "poc03_host_debug_tests": "26/26",
+    "poc03_host_asan_tests": "26/26",
+    "poc02_host_tests": "25/25",
+    "candidate_limit_passed": true,
+    "single_record_incremental_update_passed": true,
+    "zero_full_fallbacks": true,
+    "full_incremental_equivalent": true,
+    "preview_canonical_handoff_le_two_frames": true
+  },
+  "physical_integrated_gates": {
+    "windows_d3d12": "pending",
+    "chrome_webgl2": "pending",
+    "pixel7_android": "pending",
+    "apple": "existing physical report only; not an acceptance gate for this integration"
+  },
+  "reproduction_command": "cmake --preset poc03-host-debug && cmake --build --preset poc03-host-debug --parallel 4 && ctest --preset poc03-host-debug --output-on-failure; cmake --preset poc03-host-asan && cmake --build --preset poc03-host-asan --parallel 4 && ctest --preset poc03-host-asan --output-on-failure; cmake --preset poc03-host-release && cmake --build --preset poc03-host-release --parallel 4 && for nodes in 1000 10000 50000 100000; do out/poc03-host-release/pocs/large_scene/canvas_poc03_integrated_benchmark --nodes=$nodes --output=out/poc03-integrated-host/result-$nodes.json; done"
+}
