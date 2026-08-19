@@ -166,9 +166,9 @@ jobs:
         run: python3 tools/skia/fetch.py --profile "$PROFILE" --lock "$LOCK" --install-root "$INSTALL" --target "${{ matrix.target }}" --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Build Native CanvasView JNI data plane
         run: |
-          gradle -p pocs/rich_text/platform/android :app:assembleDebug -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
+          gradle -p pocs/rich_text/platform/android :app:assembleRelease -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
           mkdir -p out/poc04-android
-          unzip -Z1 pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk > out/poc04-android/apk-files.txt
+          unzip -Z1 pocs/rich_text/platform/android/app/build/outputs/apk/release/app-release.apk > out/poc04-android/apk-files.txt
           grep -Fx 'assets/fonts/Roboto-Regular.ttf' out/poc04-android/apk-files.txt
           grep -Fx 'assets/fonts/NotoSansCJK-VF-subset.otf.ttc' out/poc04-android/apk-files.txt
       - name: Enable Android emulator hardware acceleration

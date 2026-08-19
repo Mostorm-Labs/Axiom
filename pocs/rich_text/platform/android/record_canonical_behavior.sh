@@ -6,7 +6,7 @@ readonly activity_name="${package_name}/.RichTextActivity"
 readonly artifact_name="android-behavior.json"
 readonly failed_artifact_name="android-behavior.failed.json"
 readonly output_dir="${GITHUB_WORKSPACE:-$(pwd)}/out/poc04-android"
-readonly apk_path="pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk"
+readonly apk_path="pocs/rich_text/platform/android/app/build/outputs/apk/release/app-release.apk"
 
 collect_diagnostics() {
   mkdir -p "$output_dir"

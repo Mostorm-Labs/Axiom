@@ -55,6 +55,8 @@ def main() -> int:
         )
     if "bash pocs/rich_text/platform/android/record_canonical_behavior.sh" not in text:
         raise RuntimeError("Android emulator job must invoke the atomic recorder script")
+    if ":app:assembleRelease" not in text or ":app:assembleDebug" in text:
+        raise RuntimeError("Android performance gate must use optimized Release native code")
     android_bootstrap_start = text.index("- name: Install pinned Android NDK and core dependencies")
     android_bootstrap_end = text.index("- name: Install Android emulator image", android_bootstrap_start)
     android_bootstrap = text[android_bootstrap_start:android_bootstrap_end]
@@ -80,6 +82,8 @@ def main() -> int:
     if expected_root not in android:
         raise RuntimeError("Android consumer SDK path does not resolve to repository .deps")
     recorder = ANDROID_RECORDER.read_text(encoding="utf-8")
+    if "outputs/apk/release/app-release.apk" not in recorder:
+        raise RuntimeError("Android recorder must install the measured Release APK")
     for required in (
         "adb logcat -d -t 1000",
         "dumpsys activity top",

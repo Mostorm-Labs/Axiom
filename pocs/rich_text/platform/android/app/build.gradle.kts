@@ -44,6 +44,13 @@ android {
 
     sourceSets["main"].java.srcDir("../src/main/java")
     buildFeatures { buildConfig = true }
+    buildTypes {
+        getByName("release") {
+            // The canonical performance gate must measure optimized native code.
+            // Debug signing only makes this POC-only APK installable in CI.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     externalNativeBuild {
         cmake {
             path = file("../../../CMakeLists.txt")
