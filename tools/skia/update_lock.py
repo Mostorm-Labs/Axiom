@@ -16,7 +16,7 @@ from sdk import file_sha256
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True)
-    parser.add_argument("--repository", default="Mostorm-Labs/canvas")
+    parser.add_argument("--repository", default="Mostorm-Labs/Axiom")
     parser.add_argument("--output", type=Path, default=LOCK_PATH)
     args = parser.parse_args()
 

@@ -50,7 +50,7 @@ def main() -> int:
         "profile": profile["profile"],
         "profile_hash": profile_hash(profile),
         "skia_commit": profile["skia_commit"],
-        "source_repository": os.environ.get("GITHUB_REPOSITORY", "Mostorm-Labs/canvas"),
+        "source_repository": os.environ.get("GITHUB_REPOSITORY", "Mostorm-Labs/Axiom"),
         "source_commit": os.environ.get("GITHUB_SHA", "local"),
         "targets": targets,
     }

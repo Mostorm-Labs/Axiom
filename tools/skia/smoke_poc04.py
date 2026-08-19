@@ -32,21 +32,23 @@ def main() -> int:
     work.mkdir(parents=True)
     verified = verify_archive(args.archive.resolve(), profile_path, args.target, sdk)
     command = [
-        "cmake", "-S", str(ROOT / "pocs/rich_text"), "-B", str(build), "-G", "Ninja",
+        "cmake", "-S", str(ROOT / "pocs/rich_text"), "-B", str(build),
         "-DCMAKE_BUILD_TYPE=Release", "-DCANVAS_POC04_BUILD_TESTS=OFF",
         "-DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON",
         f"-DCANVAS_POC04_SKIA_SDK_ROOT={sdk}",
         f"-DCANVAS_POC04_SKIA_EXPECTED_ID={verified['sdk_id']}",
+        f"-DCANVAS_POC04_SKIA_PROFILE={profile_path}",
     ]
     platform = target["platform"]
     if platform == "web":
         command += [
+            "-G", "Ninja",
             f"-DCMAKE_TOOLCHAIN_FILE={ROOT / '.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'}",
             "-DCANVAS_POC04_BUILD_WEB=ON",
         ]
         build_target = "canvas_poc04_web"
     elif platform == "windows":
-        command += ["-DCANVAS_POC04_BUILD_WINDOWS=ON"]
+        command += ["-G", "Ninja", "-DCANVAS_POC04_BUILD_WINDOWS=ON"]
         if args.cc:
             command.append(f"-DCMAKE_C_COMPILER={Path(args.cc).resolve()}")
         if args.cxx:
@@ -56,11 +58,28 @@ def main() -> int:
         if not args.ndk:
             raise RuntimeError("Android smoke requires --ndk")
         command += [
+            "-G", "Ninja",
             f"-DCMAKE_TOOLCHAIN_FILE={Path(args.ndk) / 'build/cmake/android.toolchain.cmake'}",
             f"-DANDROID_ABI={target['arch']}", "-DANDROID_PLATFORM=android-26",
             "-DANDROID_STL=c++_static", "-DCANVAS_POC04_BUILD_ANDROID=ON",
         ]
         build_target = "canvas_poc04_android"
+    elif platform == "macos":
+        command += ["-G", "Ninja", "-DCMAKE_OSX_ARCHITECTURES=arm64"]
+        build_target = "canvas_poc04_canonical_behavior_report"
+    elif platform in ("ios", "ios-simulator"):
+        toolchain = (
+            "ios.toolchain.cmake"
+            if platform == "ios"
+            else "ios-simulator.toolchain.cmake"
+        )
+        command += [
+            "-G", "Xcode",
+            f"-DCMAKE_TOOLCHAIN_FILE={ROOT / 'cmake' / toolchain}",
+            "-DCMAKE_OSX_ARCHITECTURES=arm64",
+            "-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO",
+        ]
+        build_target = "canvas_poc04_canonical_behavior_report"
     else:
         raise RuntimeError(f"unsupported POC-04 platform: {platform}")
     hidden = ROOT / ".deps/skia-source-disabled"
@@ -69,10 +88,12 @@ def main() -> int:
     SKIA_ROOT.rename(hidden)
     try:
         subprocess.run(command, cwd=ROOT, check=True)
-        subprocess.run(
-            ["cmake", "--build", str(build), "--target", build_target, "--parallel"],
-            cwd=ROOT, check=True,
-        )
+        build_command = [
+            "cmake", "--build", str(build), "--target", build_target, "--parallel",
+        ]
+        if platform in ("ios", "ios-simulator"):
+            build_command += ["--config", "Release"]
+        subprocess.run(build_command, cwd=ROOT, check=True)
         if platform == "windows":
             report = build / "windows-producer-smoke.json"
             completed = subprocess.run([
@@ -96,6 +117,27 @@ def main() -> int:
             library = build / "platform/android/libcanvas_poc04_android.so"
             if not library.is_file():
                 raise RuntimeError("Android source-free smoke did not produce JNI library")
+        elif platform == "macos":
+            report = build / "apple-producer-smoke.json"
+            completed = subprocess.run([
+                str(build / "canvas_poc04_canonical_behavior_report"),
+                "--platform=macos-producer-smoke",
+                f"--output={report}",
+            ], cwd=build, check=False)
+            if report.is_file():
+                print(report.read_text(encoding="utf-8"), end="")
+            if completed.returncode != 0:
+                raise RuntimeError(
+                    "macOS canonical behavior recorder rejected the source-free SDK "
+                    f"with exit code {completed.returncode}"
+                )
+        elif platform in ("ios", "ios-simulator"):
+            products = list(build.rglob("canvas_poc04_canonical_behavior_report"))
+            if not any(path.is_file() for path in products):
+                raise RuntimeError(
+                    "Apple mobile source-free smoke did not produce the linked "
+                    "canonical behavior executable"
+                )
     finally:
         hidden.rename(SKIA_ROOT)
     print(f"source-free POC-04 build passed: {args.target}")

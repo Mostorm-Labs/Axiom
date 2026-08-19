@@ -226,6 +226,33 @@ class SdkMetadataTest(unittest.TestCase):
             windows_config.index("unset(_CANVAS_SKIA_PREFIX)"),
         )
 
+    def test_richtext_v2_adds_exact_apple_sdk_targets(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/poc04-richtext-v2.json"
+        profile = load_profile(profile_path)
+        self.assertEqual(set(profile["targets"]), {
+            "windows-x64-d3d12", "web-wasm-webgl2",
+            "macos-arm64-metal", "ios-arm64-metal",
+            "ios-simulator-arm64-metal", "android-arm64-v8a-gles3",
+            "android-x86_64-gles3",
+        })
+        self.assertEqual(
+            profile["targets"]["ios-arm64-metal"]["toolchain"],
+            {"deployment_target": "17.0", "sdk": "iphoneos"},
+        )
+        self.assertEqual(
+            profile["targets"]["ios-simulator-arm64-metal"]["toolchain"],
+            {"deployment_target": "17.0", "sdk": "iphonesimulator"},
+        )
+        for target_name in (
+            "macos-arm64-metal", "ios-arm64-metal",
+            "ios-simulator-arm64-metal",
+        ):
+            target = profile["targets"][target_name]
+            self.assertEqual(target["backend"], "metal")
+            self.assertIn("libskparagraph.a", target["libraries"])
+            self.assertIn("libskunicode_icu.a", target["libraries"])
+            self.assertTrue(target["gn_args"]["skia_use_metal"])
+
     def test_private_sdk_header_has_header_role(self) -> None:
         self.assertEqual(role("src/core/SkUTF.h"), "header")
 

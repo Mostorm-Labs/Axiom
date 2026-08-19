@@ -126,6 +126,67 @@ std::vector<Paragraph> Inflate(const StyledText& flat) {
   return result;
 }
 
+void AppendRun(std::vector<TextRun>* runs, std::u16string text,
+               const TextStyle& style) {
+  if (text.empty()) return;
+  if (!runs->empty() && runs->back().style == style) {
+    runs->back().text += std::move(text);
+    return;
+  }
+  runs->push_back({std::move(text), style});
+}
+
+void AppendStyledText(std::vector<TextRun>* runs, const StyledText& text) {
+  if (text.text.empty()) return;
+  size_t begin = 0;
+  for (size_t index = 1; index <= text.text.size(); ++index) {
+    if (index != text.text.size() && text.styles[index] == text.styles[begin]) {
+      continue;
+    }
+    AppendRun(runs, text.text.substr(begin, index - begin), text.styles[begin]);
+    begin = index;
+  }
+}
+
+bool ReplaceCollapsedWithoutNewline(Paragraph* paragraph, uint32_t offset,
+                                    const StyledText& inserted) {
+  if (paragraph == nullptr || inserted.text.empty() ||
+      inserted.text.find(u'\n') != std::u16string::npos) {
+    return false;
+  }
+
+  std::vector<TextRun> replacement;
+  replacement.reserve(paragraph->runs.size() + 1);
+  uint32_t remaining = offset;
+  bool inserted_text = false;
+  for (size_t run_index = 0; run_index < paragraph->runs.size(); ++run_index) {
+    const TextRun& run = paragraph->runs[run_index];
+    if (remaining > run.text.size()) {
+      AppendRun(&replacement, run.text, run.style);
+      remaining -= static_cast<uint32_t>(run.text.size());
+      continue;
+    }
+    const size_t split = remaining;
+    AppendRun(&replacement, run.text.substr(0, split), run.style);
+    AppendStyledText(&replacement, inserted);
+    inserted_text = true;
+    AppendRun(&replacement, run.text.substr(split), run.style);
+    for (size_t following = run_index + 1; following < paragraph->runs.size();
+         ++following) {
+      AppendRun(&replacement, paragraph->runs[following].text,
+                paragraph->runs[following].style);
+    }
+    break;
+  }
+  if (!inserted_text) {
+    // An empty paragraph has no run to split, or the offset is at the end of
+    // the final run. Both cases append at the paragraph end.
+    AppendStyledText(&replacement, inserted);
+  }
+  paragraph->runs = std::move(replacement);
+  return true;
+}
+
 uint64_t FlatOffset(const std::vector<Paragraph>& paragraphs,
                     LogicalPosition position) {
   if (position.paragraph >= paragraphs.size()) {
@@ -156,7 +217,19 @@ TextRange TextRange::Normalized() const {
 
 TextDocument::TextDocument() : paragraphs_(1) {}
 
-std::u16string TextDocument::PlainText() const { return Flatten().text; }
+std::u16string TextDocument::PlainText() const {
+  std::u16string result;
+  for (size_t paragraph_index = 0; paragraph_index < paragraphs_.size();
+       ++paragraph_index) {
+    const Paragraph& paragraph = paragraphs_[paragraph_index];
+    for (const TextRun& run : paragraph.runs) {
+      ValidateStyle(run.style);
+      result += run.text;
+    }
+    if (paragraph_index + 1 < paragraphs_.size()) result.push_back(u'\n');
+  }
+  return result;
+}
 
 bool TextDocument::IsValidPosition(LogicalPosition position) const {
   try {
@@ -222,6 +295,7 @@ StyledText TextDocument::Extract(TextRange range) const {
   range = range.Normalized();
   const uint64_t start = FlatOffset(paragraphs_, range.anchor);
   const uint64_t end = FlatOffset(paragraphs_, range.focus);
+  if (start == end) return {};
   const StyledText flat = Flatten();
   return {flat.text.substr(start, end - start),
           {flat.styles.begin() + static_cast<std::ptrdiff_t>(start),
@@ -233,6 +307,24 @@ void TextDocument::ReplaceUnchecked(TextRange range, const StyledText& inserted)
     throw std::invalid_argument("replacement styles do not match replacement text");
   }
   range = range.Normalized();
+  if (range.collapsed() && !inserted.text.empty() &&
+      inserted.text.find(u'\n') == std::u16string::npos) {
+    if (range.anchor.paragraph >= paragraphs_.size()) {
+      throw std::out_of_range("paragraph position is outside the document");
+    }
+    uint64_t paragraph_size = 0;
+    for (const TextRun& run : paragraphs_[range.anchor.paragraph].runs) {
+      paragraph_size += run.text.size();
+    }
+    if (range.anchor.offset_utf16 > paragraph_size) {
+      throw std::out_of_range("UTF-16 position is outside the paragraph");
+    }
+    if (ReplaceCollapsedWithoutNewline(&paragraphs_[range.anchor.paragraph],
+                                       range.anchor.offset_utf16, inserted)) {
+      ++revision_;
+      return;
+    }
+  }
   const uint64_t start = FlatOffset(paragraphs_, range.anchor);
   const uint64_t end = FlatOffset(paragraphs_, range.focus);
   StyledText flat = Flatten();

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,6 +29,25 @@ double Percentile(std::vector<double> values, double percentile) {
   std::sort(values.begin(), values.end());
   const size_t index = static_cast<size_t>((values.size() - 1) * percentile);
   return values[index];
+}
+
+double Maximum(const std::vector<double>& values) {
+  return *std::max_element(values.begin(), values.end());
+}
+
+double Median(const std::vector<double>& values) {
+  return Percentile(values, 0.50);
+}
+
+void AppendPerformanceJson(std::ostringstream* output, std::string_view name,
+                           const std::vector<double>& samples,
+                           uint32_t warmup_samples) {
+  *output << '"' << name << "_samples\":" << samples.size()
+          << ",\"" << name << "_warmup_samples\":" << warmup_samples
+          << ",\"" << name << "_p50_ms\":" << Median(samples)
+          << ",\"" << name << "_p95_ms\":" << Percentile(samples, 0.95)
+          << ",\"" << name << "_p99_ms\":" << Percentile(samples, 0.99)
+          << ",\"" << name << "_max_ms\":" << Maximum(samples);
 }
 
 std::string BehaviorJson(const BehaviorResults& result) {
@@ -112,8 +132,18 @@ int main(int argc, char** argv) {
   TextEditSession perf(perf_document);
   perf.Focus();
   perf.InsertText(std::u16string(10000, u'a'));
+  constexpr uint32_t kInputWarmupSamples = 20;
+  constexpr uint32_t kInputMeasuredSamples = 120;
+  constexpr uint32_t kLayoutWarmupSamples = 5;
+  constexpr uint32_t kLayoutMeasuredSamples = 30;
   std::vector<double> input_times;
-  for (int iteration = 0; iteration < 120; ++iteration) {
+  input_times.reserve(kInputMeasuredSamples);
+  for (uint32_t iteration = 0; iteration < kInputWarmupSamples; ++iteration) {
+    perf.SetSelection({{0, iteration}, {0, iteration}});
+    perf.InsertText(u"x");
+  }
+  for (uint32_t iteration = kInputWarmupSamples;
+       iteration < kInputWarmupSamples + kInputMeasuredSamples; ++iteration) {
     const auto start = std::chrono::steady_clock::now();
     perf.SetSelection({{0, static_cast<uint32_t>(iteration)},
                        {0, static_cast<uint32_t>(iteration)}});
@@ -123,7 +153,11 @@ int main(int argc, char** argv) {
   }
   DeterministicTextLayout layout;
   std::vector<double> layout_times;
-  for (int iteration = 0; iteration < 30; ++iteration) {
+  layout_times.reserve(kLayoutMeasuredSamples);
+  for (uint32_t iteration = 0; iteration < kLayoutWarmupSamples; ++iteration) {
+    static_cast<void>(layout.Layout(*perf_document, 800.0F, {{0, 0}, {0, 0}}));
+  }
+  for (uint32_t iteration = 0; iteration < kLayoutMeasuredSamples; ++iteration) {
     const auto start = std::chrono::steady_clock::now();
     static_cast<void>(layout.Layout(*perf_document, 800.0F, {{0, 0}, {0, 0}}));
     const auto end = std::chrono::steady_clock::now();
@@ -134,9 +168,14 @@ int main(int argc, char** argv) {
       "\",\"behavior\":" + BehaviorJson(behavior) +
       ",\"layout\":{\"backend\":\"deterministic-probe\",\"corpus\":\"v1\"},"
       "\"lifecycle\":{\"cycles\":100,\"failures\":" +
-      std::to_string(lifecycle_failures) + "},\"performance\":{"
-      "\"input_caret_p95_ms\":" + std::to_string(Percentile(input_times, 0.95)) +
-      ",\"full_layout_p95_ms\":" + std::to_string(Percentile(layout_times, 0.95)) + "}}\n";
+      std::to_string(lifecycle_failures) + "},\"performance\":{";
+  std::ostringstream performance_json;
+  AppendPerformanceJson(&performance_json, "input_caret", input_times,
+                        kInputWarmupSamples);
+  performance_json << ',';
+  AppendPerformanceJson(&performance_json, "full_layout", layout_times,
+                        kLayoutWarmupSamples);
+  json += performance_json.str() + "}}\n";
   if (output.empty()) {
     std::cout << json;
   } else {

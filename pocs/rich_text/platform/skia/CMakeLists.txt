@@ -10,13 +10,33 @@ elseif(ANDROID)
   else()
     message(FATAL_ERROR "POC-04 Android supports arm64-v8a and x86_64")
   endif()
+elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  if(CMAKE_OSX_SYSROOT MATCHES "simulator")
+    set(CANVAS_POC04_SDK_TARGET "ios-simulator-arm64-metal")
+  else()
+    set(CANVAS_POC04_SDK_TARGET "ios-arm64-metal")
+  endif()
+elseif(APPLE)
+  set(CANVAS_POC04_SDK_TARGET "macos-arm64-metal")
 else()
-  message(FATAL_ERROR "POC-04 SkParagraph target supports Web, Windows, or Android")
+  message(FATAL_ERROR
+    "POC-04 SkParagraph target supports Web, Windows, Apple, or Android")
 endif()
 
 set(CANVAS_POC04_SKIA_SDK_ROOT
     "${CANVAS_REPOSITORY_ROOT}/.deps/skia-sdk-poc04/${CANVAS_POC04_SDK_TARGET}"
     CACHE PATH "Verified POC-04 RichText Skia SDK")
+if(CANVAS_POC04_SDK_TARGET MATCHES "^(macos|ios)-")
+  set(_CANVAS_POC04_DEFAULT_SKIA_PROFILE
+      "${CANVAS_REPOSITORY_ROOT}/tools/skia/profiles/poc04-richtext-v2.json")
+else()
+  set(_CANVAS_POC04_DEFAULT_SKIA_PROFILE
+      "${CANVAS_REPOSITORY_ROOT}/tools/skia/profiles/poc04-richtext-v1.json")
+endif()
+set(CANVAS_POC04_SKIA_PROFILE
+    "${_CANVAS_POC04_DEFAULT_SKIA_PROFILE}"
+    CACHE FILEPATH "POC-04 RichText SDK profile used for fetch guidance")
+unset(_CANVAS_POC04_DEFAULT_SKIA_PROFILE)
 set(CANVAS_POC04_SKIA_LOCK
     "${CMAKE_CURRENT_SOURCE_DIR}/../../skia-sdk.lock.json" CACHE FILEPATH
     "POC-04 RichText SDK lock")
@@ -30,7 +50,7 @@ endif()
 if(NOT EXISTS "${CANVAS_POC04_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
   message(FATAL_ERROR
     "Missing verified RichText SDK. Run: python3 tools/skia/fetch.py --profile "
-    "tools/skia/profiles/poc04-richtext-v1.json --lock pocs/rich_text/skia-sdk.lock.json "
+    "${CANVAS_POC04_SKIA_PROFILE} --lock pocs/rich_text/skia-sdk.lock.json "
     "--install-root .deps/skia-sdk-poc04 --target ${CANVAS_POC04_SDK_TARGET}")
 endif()
 

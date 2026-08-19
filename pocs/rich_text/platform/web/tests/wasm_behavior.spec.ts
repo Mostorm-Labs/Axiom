@@ -4,20 +4,44 @@ import path from "node:path";
 import http from "node:http";
 
 test("WASM Runtime emits canonical SkParagraph behavior artifact", async ({ page }) => {
+  test.setTimeout(120_000);
   const wasmDirectory = process.env.POC04_WASM_DIR;
   const output = process.env.POC04_BEHAVIOR_OUTPUT;
   if (!wasmDirectory || !output) test.skip(true, "POC04_WASM_DIR and output are CI-only");
+  page.on("console", (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
+  page.on("pageerror", (error) => console.error(`[browser:pageerror] ${error.stack ?? error.message}`));
+  page.on("requestfailed", (request) => {
+    console.error(`[browser:requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "unknown"}`);
+  });
   const root = path.resolve(wasmDirectory!);
   const server = http.createServer((request, response) => {
     const relative = request.url === "/" ? "/index.html" : request.url!;
-    const file = path.join(root, path.basename(relative));
     if (relative === "/index.html") {
       response.setHeader("Content-Type", "text/html");
-      response.end("<!doctype html><html></html>");
+      response.end('<!doctype html><html><head><link rel="icon" href="data:," /></head></html>');
       return;
     }
-    response.setHeader("Content-Type", file.endsWith(".wasm") ? "application/wasm" : "application/javascript");
-    fs.createReadStream(file).pipe(response);
+    const asset = path.basename(new URL(relative, "http://localhost").pathname);
+    const allowedAssets = new Set([
+      "canvas_poc04_web.data",
+      "canvas_poc04_web.js",
+      "canvas_poc04_web.wasm",
+    ]);
+    if (!allowedAssets.has(asset)) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    const file = path.join(root, asset);
+    const contentType = file.endsWith(".wasm")
+      ? "application/wasm"
+      : file.endsWith(".js")
+        ? "application/javascript"
+        : "application/octet-stream";
+    response.setHeader("Content-Type", contentType);
+    const stream = fs.createReadStream(file);
+    stream.on("error", (error) => response.destroy(error));
+    stream.pipe(response);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
@@ -37,6 +61,9 @@ test("WASM Runtime emits canonical SkParagraph behavior artifact", async ({ page
     fs.mkdirSync(path.dirname(output!), { recursive: true });
     fs.writeFileSync(output!, `${JSON.stringify(record)}\n`, "utf8");
   } finally {
-    server.close();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+      server.closeAllConnections();
+    });
   }
 });

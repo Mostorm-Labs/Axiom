@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -140,7 +141,11 @@ canvas_poc04_status_t canvas_poc04_session_update_composition_utf8(
   }
   return Guard([&] {
     std::u16string value = Utf8ToUtf16({text == nullptr ? "" : text, text_size});
-    Lookup(session)->UpdateComposition(value, value.size(), value.size());
+    if (value.size() > std::numeric_limits<uint32_t>::max()) {
+      throw std::invalid_argument("composition exceeds the UTF-16 offset limit");
+    }
+    const auto value_size = static_cast<uint32_t>(value.size());
+    Lookup(session)->UpdateComposition(value, value_size, value_size);
   });
 }
 

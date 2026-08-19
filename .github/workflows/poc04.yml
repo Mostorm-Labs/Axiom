@@ -86,19 +86,27 @@ jobs:
           source .deps/emsdk/emsdk_env.sh
           cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
           cmake --build out/poc04-web --parallel
+          test -s out/poc04-web/platform/web/canvas_poc04_web.data
           test -s out/poc04-web/platform/web/canvas_poc04_web.js
           test -s out/poc04-web/platform/web/canvas_poc04_web.wasm
           ! grep -E -l "pthread|SharedArrayBuffer" out/poc04-web/platform/web/canvas_poc04_web.js
-      - name: Record canonical Web Runtime behavior in Chromium
+      - name: Install Web test dependencies
+        timeout-minutes: 5
         working-directory: pocs/rich_text/platform/web
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+      - name: Validate browser IME event adapter
+        timeout-minutes: 5
+        working-directory: pocs/rich_text/platform/web
+        run: |
           npm run build
           npm test
-          POC04_WASM_DIR="$GITHUB_WORKSPACE/out/poc04-web/platform/web" POC04_BEHAVIOR_OUTPUT="$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json" npm run record:wasm
-      - name: Validate browser IME event adapter
+      - name: Record canonical Web Runtime behavior in Chromium
+        timeout-minutes: 5
         working-directory: pocs/rich_text/platform/web
+        run: |
+          POC04_WASM_DIR="$GITHUB_WORKSPACE/out/poc04-web/platform/web" POC04_BEHAVIOR_OUTPUT="$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json" npm run record:wasm
+      - name: Validate canonical Web behavior artifact
         run: |
           test -s "$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json"
       - uses: actions/upload-artifact@v4
