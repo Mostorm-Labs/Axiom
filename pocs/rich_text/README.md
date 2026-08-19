@@ -63,17 +63,34 @@ identity, probe geometry, lifecycle, and performance harness.
 ## RichText Skia SDK bootstrap
 
 POC-01's `poc01-minimal-v1` SDK disables HarfBuzz and ICU, so it cannot satisfy
-POC-04. The separate `poc04-richtext-v1` producer profile builds and packages
+POC-04. The historical `poc04-richtext-v1` release built and packaged
 SkParagraph, SkShaper, SkUnicode, bundled HarfBuzz/ICU, the platform Ganesh
-backend, and fixed Latin/CJK font fixtures for these targets:
+backend, and fixed Latin/CJK font fixtures for these four targets:
 
 - `windows-x64-d3d12`
 - `web-wasm-webgl2`
 - `android-arm64-v8a-gles3`
 - `android-x86_64-gles3`
 
-Run the `POC-04 RichText Skia SDK Producer` workflow from `main`, then generate
-the immutable consumer lock:
+That four-target profile and its committed lock remain immutable for the
+already recorded Web/Windows/Android evidence. The current producer workflow
+uses the successor `poc04-richtext-v2` profile, which retains those four
+targets and adds the Apple SDK supply-chain targets:
+
+- `macos-arm64-metal`
+- `ios-arm64-metal`
+- `ios-simulator-arm64-metal`
+
+The iOS device archive is shared by iPhone and iPad hardware; the simulator
+archive is shared by iPhone and iPad simulator devices. These SDK producer
+targets prove deterministic packaging and source-free RichText linking. They
+do not, by themselves, claim AppKit `NSTextInputClient`, UIKit `UITextInput`,
+or macOS/iOS/iPadOS behavior acceptance. The consumer lock remains on v1 until
+the seven-target v2 prerelease is published and reviewed.
+
+The `POC-04 RichText Skia SDK Producer` workflow now uses the seven-target
+`poc04-richtext-v2` profile. After its immutable prerelease is published,
+generate the replacement consumer lock with:
 
 ```sh
 python3 tools/skia/update_lock.py \

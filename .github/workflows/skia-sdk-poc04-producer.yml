@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROFILE: tools/skia/profiles/poc04-richtext-v1.json
+  PROFILE: tools/skia/profiles/poc04-richtext-v2.json
 
 jobs:
   preflight:
@@ -33,7 +33,7 @@ jobs:
       - name: Validate SDK tools and RichText profile
         run: |
           python -m unittest discover -s tools/skia/tests -v
-          python -c "from pathlib import Path; import sys; sys.path.insert(0, 'tools/skia'); from sdk import load_profile; p=load_profile(Path('$PROFILE')); assert len(p['targets']) == 4"
+          python -c "from pathlib import Path; import sys; sys.path.insert(0, 'tools/skia'); from sdk import load_profile; p=load_profile(Path('$PROFILE')); assert len(p['targets']) == 7"
           git diff --check
 
   build:
@@ -44,6 +44,9 @@ jobs:
         include:
           - { target: windows-x64-d3d12, os: windows-2025, family: windows }
           - { target: web-wasm-webgl2, os: ubuntu-24.04, family: web }
+          - { target: macos-arm64-metal, os: macos-15, family: apple }
+          - { target: ios-arm64-metal, os: macos-15, family: apple }
+          - { target: ios-simulator-arm64-metal, os: macos-15, family: apple }
           - { target: android-arm64-v8a-gles3, os: ubuntu-24.04, family: android }
           - { target: android-x86_64-gles3, os: ubuntu-24.04, family: android }
     runs-on: ${{ matrix.os }}
@@ -93,6 +96,11 @@ jobs:
         run: |
           python tools/skia/identify_toolchain.py --profile "$PROFILE" --target "${{ matrix.target }}" --ndk "$ANDROID_NDK_ROOT" --output out/skia-sdk/toolchain.json
           python tools/skia/build.py --profile "$PROFILE" --target "${{ matrix.target }}" --ndk "$ANDROID_NDK_ROOT"
+      - name: Build Apple SDK
+        if: matrix.family == 'apple'
+        run: |
+          python tools/skia/identify_toolchain.py --profile "$PROFILE" --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
+          python tools/skia/build.py --profile "$PROFILE" --target "${{ matrix.target }}"
       - name: Package twice and verify deterministic SDK
         shell: bash
         run: |
@@ -113,6 +121,9 @@ jobs:
       - name: Source-free POC-04 smoke (Android)
         if: matrix.family == 'android'
         run: python tools/skia/smoke_poc04.py --profile "$PROFILE" --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --ndk "$ANDROID_NDK_ROOT"
+      - name: Source-free POC-04 smoke (Apple)
+        if: matrix.family == 'apple'
+        run: python tools/skia/smoke_poc04.py --profile "$PROFILE" --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: poc04-skia-sdk-${{ matrix.target }}
