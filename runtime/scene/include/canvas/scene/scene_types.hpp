@@ -59,6 +59,9 @@ enum class InvalidationHintFlags : std::uint32_t {
 struct InvalidationHints final {
     std::optional<WorldRect> worldDirty;
     InvalidationHintFlags flags = InvalidationHintFlags::kNone;
+    // A hint is trusted only when both stamps match the delta that carries it.
+    std::optional<SceneRevision> beforeRevision;
+    std::optional<SceneRevision> afterRevision;
 };
 
 struct SceneRecord final {

@@ -277,6 +277,30 @@ foundation::Result<SceneDrawList> Scene::buildDrawList(const SceneQueryResult& v
     return _renderScene->buildDrawList(visible.backToFront);
 }
 
+foundation::Result<SceneFrameInput> Scene::buildFrame(const SceneQuery& request,
+                                                       SceneRevision afterExclusive) const {
+    if (afterExclusive > _revision) {
+        return foundation::Result<SceneFrameInput>::failure(makeError(
+            foundation::ErrorCode::kInvalidRevision,
+            "Frame damage revision cannot be newer than the current Scene"));
+    }
+    auto queryResult = query(request);
+    if (!queryResult) {
+        return foundation::Result<SceneFrameInput>::failure(queryResult.error());
+    }
+    auto drawListResult = buildDrawList(queryResult.value());
+    if (!drawListResult) {
+        return foundation::Result<SceneFrameInput>::failure(drawListResult.error());
+    }
+    SceneFrameInput frame{
+        .revision = _revision,
+        .damage = collectDamage(afterExclusive, _revision),
+        .query = std::move(queryResult.value()),
+        .drawList = std::move(drawListResult.value()),
+    };
+    return foundation::Result<SceneFrameInput>::success(std::move(frame));
+}
+
 DamageSet Scene::collectDamage(SceneRevision afterExclusive, SceneRevision throughInclusive) const {
     return _damageTracker.collect(afterExclusive, throughInclusive);
 }

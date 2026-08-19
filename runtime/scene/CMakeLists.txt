@@ -4,6 +4,7 @@ add_library(canvas_runtime_scene STATIC
     src/scene.cpp
     src/scene_binding.cpp
     src/scene_record_store.cpp
+    src/scene_view.cpp
     src/uniform_grid_spatial_index.cpp)
 target_include_directories(canvas_runtime_scene PUBLIC include)
 target_link_libraries(canvas_runtime_scene PUBLIC canvas_runtime_foundation)

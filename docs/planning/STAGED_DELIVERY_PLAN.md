@@ -313,7 +313,7 @@ Skia baseline 误称为生产方案：
 
 | 工作包 | 设计项 | 验证语料 | 实现项 | 交付物 | 退出条件 |
 | --- | --- | --- | --- | --- | --- |
-| RF-01 Scene rendering foundation | `Scene` facade、SceneBinding、RenderScene/SkSG 私有边界、DamageTracker API、两阶段 HitTest | SkSG 类型隔离、full/incremental 等价、damage fault injection、负坐标/退化 bounds | SkSGRenderScene adapter、world-space DamageSet、candidate→precise hit pipeline | 模块依赖图、RenderScene contract、damage trace | Document/Bridge/Shell 不依赖 SkSG；damage 可重建且不进入 digest；当前 RF01-0/1 已验证，RF01-2 correctness baseline 为 `Validating`，局部 participant 性能与 RF01-3+ 仍 Pending |
+| RF-01 Scene rendering foundation | `Scene` facade、SceneBinding、RenderScene/SkSG 私有边界、DamageTracker API、两阶段 HitTest | SkSG 类型隔离、full/incremental 等价、damage fault injection、负坐标/退化 bounds | SkSGRenderScene adapter、world-space DamageSet、candidate→precise hit pipeline | 模块依赖图、RenderScene contract、damage trace | Document/Bridge/Shell 不依赖 SkSG；damage 可重建且不进入 digest；当前 RF01-0/1 已验证，RF01-2 correctness baseline 与 RF01-3 bounded journal/multi-view/frame contract 为 `Validating`，局部 participant 性能、平台 present 接入与 RF01-4+ 仍 Pending |
 | RF-02 Dynamic spatial query | `ISpatialIndex` 动态 insert/remove/update/query、viewport culling、Selection/Eraser 查询 | brute-force oracle、20 万次随机增删改、负坐标、局部更新扫描量和命中顺序 | DynamicRTreeSpatialIndex、索引诊断和迁移 fallback | R-tree/Hybrid 评估报告、查询基准和失败缩减语料 | 结果逐字节等价；局部操作不全量扫描；内存和退化策略有界 |
 | RF-03 Tiled raster and scheduling | TileGrid、TilingSet/LOD、TilePriority、IRasterSource、TileManager、RasterTaskScheduler、MemoryBudget/Eviction | 1K～100K 多 zoom/pan、prefetch/取消、cache clear、device loss、内存压力、负世界坐标 | 分层 Tile renderer、raster task queue、prefetch 和可观测 eviction | Tile/LOD 设计 ADR、frame/memory/raster trace、R3 迁移报告 | visible tile 及时可用；不出现无界增长；清缓存/设备丢失后 digest 与视觉恢复；固定 Windows/Web 门禁重新通过 |
 

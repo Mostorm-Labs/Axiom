@@ -1,6 +1,6 @@
 # RF-01 Scene Rendering Foundation 接口与迁移方案
 
-> Status: **Implementation Baseline / RF01-2 Validating**
+> Status: **Implementation Baseline / RF01-3 Validating**
 > Date: 2026-08-19
 > Scope: RF-01；后续由 RF-02 动态空间索引、RF-03 Tile/LOD/Raster 调度继续实现
 > Depends on: [ADR-0003](../adr/0003-semantic-document-runtime-scene.md)、
@@ -99,6 +99,8 @@ src/
 │   ├── scene_compiler.hpp
 │   ├── scene_delta.hpp
 │   ├── scene_query.hpp
+│   ├── scene_frame.hpp
+│   ├── scene_view.hpp
 │   ├── render_scene.hpp
 │   ├── spatial_index.hpp
 │   └── damage_tracker.hpp
@@ -355,6 +357,9 @@ public:
     Result<SceneQueryResult> query(const SceneQuery& query) const;
     Result<HitTestResult> hitTest(const HitTestRequest& request) const;
     Result<SceneDrawList> buildDrawList(const SceneQueryResult& visible) const;
+    Result<SceneFrameInput> buildFrame(
+        const SceneQuery& query,
+        SceneRevision afterExclusive) const;
 
     [[nodiscard]] DamageSet collectDamage(
         SceneRevision afterExclusive,
@@ -769,6 +774,29 @@ RF01-2 尚未宣称性能退出：当前 Direct/Grid oracle 在 prepare delta �
 - 实现 revisioned DamageTracker、journal collapse、multi-view collect/compact。
 - FrameBuilder 改用 `SceneDrawList + DamageSet`，但仍走 direct renderer。
 - Ink visible acknowledgement 继续绑定成功呈现的 Scene revision。
+
+当前 RF01-3 correctness baseline：
+
+- `DamageTracker` 以 `(afterExclusive, throughInclusive]` 保存 world-space damage，默认限制为
+  256 条 journal、4096 个 rect 和 1 MiB 估算内存。任一限制超出时，prepare 阶段把现有记录
+  保守折叠为单个 `fullScene` marker；commit 前旧 journal、frontier 和 diagnostics 均不改变。
+- authoritative damage 始终来自 mutation 的 old/new bounds。`InvalidationHints` 必须携带与 delta
+  一致的 before/after revision、有限有序且完整覆盖 authoritative bounds，才允许 union/扩大并
+  映射 order/resource/layout reason；缺失 hint 不影响正确性，过期、NaN、未知 flag 或缩小 hint
+  被拒绝并计入 diagnostics。
+- `compactThrough()` 只前移 compact frontier，并删除所有已被全部 live View 呈现的记录；若某
+  View 请求的起始 revision 早于 frontier，`collect()` 返回 `fullScene`，不会静默漏 damage。
+- `SceneViewRegistry` 为每个非零 View ID 独立维护单调 presented revision，并提供所有 live View
+  的最小 revision。duplicate attach、missing View 和 revision 倒退均返回结构化错误。
+- `Scene::buildFrame()` 从同一 Scene revision 生成 `SceneQueryResult`、`SceneDrawList` 和
+  `DamageSet`；新增 `SceneFrameInput` 只包含 owning frame 数据，不暴露 participant 或 Skia 类型。
+- RF01 独立测试覆盖 entry/rect/byte collapse、stale collect、hint 扩大/过期/非法、View attach/
+  present/detach 与 frame revision 一致性；新增 public headers 继续参加 self-contained compile。
+
+RF01-3 仍为 `Validating`：当前仅建立 direct renderer 的 frame input contract。把
+`SceneViewRegistry::minimumPresentedRevision()` 接入平台 present/visible acknowledgement，以及
+10,000 revisions 的双 View 速率差语料，仍需在后续 Frame/Shell integration 中完成；不得把
+registry 单元测试写成已完成真机多 View 调度。
 
 退出：两个 View 不互相消费 damage；journal 有界；Preview/Canonical 不空白、不重复加深。
 

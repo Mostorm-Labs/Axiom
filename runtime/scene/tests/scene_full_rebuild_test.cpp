@@ -326,6 +326,34 @@ void testDeltaSpatialPrepareFailurePreservesScene(TestContext& context) {
     EXPECT(context, spatialRaw->diagnostics().commitCount == spatialCommits);
 }
 
+void testFrameInputUsesOneSceneRevision(TestContext& context) {
+    Scene scene(std::make_unique<DirectRenderScene>(),
+                std::make_unique<UniformGridSpatialIndex>());
+    EXPECT(context,
+           scene
+               .replace(CompiledSceneSnapshot{
+                   .sourceRevision = SceneRevision(1U),
+                   .records = {
+                       makeRecord(1U, 1U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F}),
+                   },
+               })
+               .hasValue());
+    const auto frame = scene.buildFrame(SceneQuery{WorldRect{-1.0F, -1.0F, 11.0F, 11.0F}},
+                                        SceneRevision(0U));
+    EXPECT(context, frame.hasValue());
+    if (frame) {
+        EXPECT(context, frame.value().revision == SceneRevision(1U));
+        EXPECT(context, frame.value().query.revision == frame.value().revision);
+        EXPECT(context, frame.value().drawList.revision == frame.value().revision);
+        EXPECT(context, frame.value().damage.throughInclusive == frame.value().revision);
+        EXPECT(context, frame.value().drawList.items.size() == 1U);
+    }
+    const auto future = scene.buildFrame(
+        SceneQuery{WorldRect{-1.0F, -1.0F, 11.0F, 11.0F}}, SceneRevision(2U));
+    EXPECT(context, !future.hasValue());
+    EXPECT(context, future.error().code == ErrorCode::kInvalidRevision);
+}
+
 } // namespace
 
 int main() {
@@ -336,6 +364,7 @@ int main() {
     testSceneFullReplaceAndStaleDrawList(context);
     testSpatialPrepareFailurePreservesScene(context);
     testDeltaSpatialPrepareFailurePreservesScene(context);
+    testFrameInputUsesOneSceneRevision(context);
     if (context.failures != 0) {
         std::cerr << context.failures << " RF01-1 full rebuild expectations failed\n";
         return EXIT_FAILURE;

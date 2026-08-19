@@ -3,6 +3,7 @@
 #include "canvas/foundation/result.hpp"
 #include "canvas/scene/damage_tracker.hpp"
 #include "canvas/scene/render_scene.hpp"
+#include "canvas/scene/scene_frame.hpp"
 #include "canvas/scene/scene_query.hpp"
 #include "canvas/scene/scene_record_store.hpp"
 #include "canvas/scene/scene_types.hpp"
@@ -74,6 +75,8 @@ class Scene final {
 
     foundation::Result<SceneQueryResult> query(const SceneQuery& query) const;
     foundation::Result<SceneDrawList> buildDrawList(const SceneQueryResult& visible) const;
+    foundation::Result<SceneFrameInput> buildFrame(const SceneQuery& query,
+                                                    SceneRevision afterExclusive) const;
 
     [[nodiscard]] DamageSet collectDamage(SceneRevision afterExclusive,
                                           SceneRevision throughInclusive) const;
@@ -81,6 +84,9 @@ class Scene final {
 
     [[nodiscard]] SceneCommitDiagnostics commitDiagnostics() const {
         return _commitDiagnostics;
+    }
+    [[nodiscard]] DamageDiagnostics damageDiagnostics() const {
+        return _damageTracker.diagnostics();
     }
 
   private:

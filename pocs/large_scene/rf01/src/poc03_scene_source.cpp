@@ -336,6 +336,8 @@ Poc03SceneSource::compileDelta(const Document& document, const ChangeSet& change
             changes.hints->world_dirty->IsFiniteAndOrdered()) {
             delta.hints = canvas::InvalidationHints{
                 .worldDirty = toWorldRect(*changes.hints->world_dirty),
+                .beforeRevision = SceneRevision(changes.before_revision),
+                .afterRevision = SceneRevision(changes.after_revision),
             };
             const bool orderChanged = std::any_of(changes.semantic_changes.begin(),
                                                   changes.semantic_changes.end(),
