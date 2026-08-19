@@ -235,7 +235,7 @@ jobs:
       - name: Run AppKit recorder
         if: matrix.platform == 'macos'
         run: |
-          out/poc04-macos/Release/canvas_poc04_macos_ime_recorder | tee out/poc04-macos/macos-ime-behavior.json
+          out/poc04-macos/platform/apple/Release/canvas_poc04_macos_ime_recorder | tee out/poc04-macos/macos-ime-behavior.json
           test -s out/poc04-macos/macos-ime-behavior.json
       - name: Run iPhone simulator recorder
         if: matrix.platform == 'ios'
