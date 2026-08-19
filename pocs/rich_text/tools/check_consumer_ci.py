@@ -52,6 +52,10 @@ def main() -> int:
         raise RuntimeError(
             "cross-platform acceptance must stay disabled until platform recorders exist"
         )
+    if "adb logcat -d -t 1000" not in text or "dumpsys activity top" not in text:
+        raise RuntimeError("Android recorder must preserve diagnostics when canonical behavior is missing")
+    if "always() && matrix.emulator == true" not in text:
+        raise RuntimeError("Android diagnostics artifact must upload after recorder failure")
     for target in ("web-wasm-webgl2", "windows-x64-d3d12",
                    "android-arm64-v8a-gles3", "android-x86_64-gles3"):
         if target not in text:
