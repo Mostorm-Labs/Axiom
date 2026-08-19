@@ -7,12 +7,13 @@ readonly artifact_name="android-behavior.json"
 readonly failed_artifact_name="android-behavior.failed.json"
 readonly output_dir="${GITHUB_WORKSPACE:-$(pwd)}/out/poc04-android"
 readonly apk_path="pocs/rich_text/platform/android/app/build/outputs/apk/release/app-release.apk"
+readonly device_output_dir="/sdcard/Android/data/${package_name}/files"
 
 collect_diagnostics() {
   mkdir -p "$output_dir"
-  if adb shell run-as "$package_name" test -s "files/$failed_artifact_name"; then
-    adb exec-out run-as "$package_name" cat "files/$failed_artifact_name" \
-      > "$output_dir/$failed_artifact_name" || true
+  if adb shell test -s "$device_output_dir/$failed_artifact_name"; then
+    adb pull "$device_output_dir/$failed_artifact_name" \
+      "$output_dir/$failed_artifact_name" || true
   fi
   adb logcat -d -t 1000 > "$output_dir/logcat.txt" || true
   adb shell dumpsys activity top > "$output_dir/activity-top.txt" || true
@@ -25,12 +26,13 @@ mkdir -p "$output_dir"
 adb install -r "$apk_path"
 adb logcat -c
 adb shell am force-stop "$package_name"
+adb shell rm -f "$device_output_dir/$artifact_name" \
+  "$device_output_dir/$failed_artifact_name" || true
 adb shell am start -W -n "$activity_name" --ez recordCanonicalBehavior true
 
 for attempt in $(seq 1 180); do
-  if adb shell run-as "$package_name" test -s "files/$artifact_name"; then
-    adb exec-out run-as "$package_name" cat "files/$artifact_name" \
-      > "$output_dir/$artifact_name"
+  if adb shell test -s "$device_output_dir/$artifact_name"; then
+    adb pull "$device_output_dir/$artifact_name" "$output_dir/$artifact_name"
     adb logcat -d -t 300 > "$output_dir/logcat.txt" || true
     exit 0
   fi

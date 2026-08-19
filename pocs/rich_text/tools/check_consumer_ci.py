@@ -88,8 +88,10 @@ def main() -> int:
         "adb logcat -d -t 1000",
         "dumpsys activity top",
         'adb shell pidof "$package_name"',
-        'test -s "files/$artifact_name"',
-        'test -s "files/$failed_artifact_name"',
+        'test -s "$device_output_dir/$artifact_name"',
+        'test -s "$device_output_dir/$failed_artifact_name"',
+        'adb pull "$device_output_dir/$artifact_name"',
+        'adb pull "$device_output_dir/$failed_artifact_name"',
     ):
         if required not in recorder:
             raise RuntimeError(f"Android recorder is missing required diagnostic: {required}")

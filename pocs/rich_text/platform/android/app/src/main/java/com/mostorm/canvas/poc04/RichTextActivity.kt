@@ -27,13 +27,16 @@ class RichTextActivity : Activity() {
                 latin.absolutePath,
                 cjk.absolutePath,
             ) ?: error("Canvas POC-04 canonical behavior recorder failed")
+            val reportDirectory = checkNotNull(getExternalFilesDir(null)) {
+                "Canvas POC-04 canonical behavior requires external files storage"
+            }
             try {
                 validateCanonicalBehavior(report)
             } catch (failure: Throwable) {
-                File(filesDir, "android-behavior.failed.json").writeText(report)
+                File(reportDirectory, "android-behavior.failed.json").writeText(report)
                 throw failure
             }
-            File(filesDir, "android-behavior.json").writeText(report)
+            File(reportDirectory, "android-behavior.json").writeText(report)
         }
     }
 
