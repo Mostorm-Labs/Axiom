@@ -37,6 +37,25 @@ double Percentile(std::vector<double> values, double percentile) {
   return values[static_cast<size_t>((values.size() - 1) * percentile)];
 }
 
+double Maximum(const std::vector<double>& values) {
+  return *std::max_element(values.begin(), values.end());
+}
+
+double Median(const std::vector<double>& values) {
+  return Percentile(values, 0.50);
+}
+
+void AppendPerformanceJson(std::ostringstream* output, std::string_view name,
+                           const std::vector<double>& samples,
+                           uint32_t warmup_samples) {
+  *output << '"' << name << "_samples\":" << samples.size()
+          << ",\"" << name << "_warmup_samples\":" << warmup_samples
+          << ",\"" << name << "_p50_ms\":" << Median(samples)
+          << ",\"" << name << "_p95_ms\":" << Percentile(samples, 0.95)
+          << ",\"" << name << "_p99_ms\":" << Percentile(samples, 0.99)
+          << ",\"" << name << "_max_ms\":" << Maximum(samples);
+}
+
 std::string GeometryJson(const TextLayoutResult& layout) {
   std::ostringstream output;
   output << std::fixed << std::setprecision(4);
@@ -175,8 +194,18 @@ CanonicalBehaviorArtifact BuildCanonicalBehaviorArtifact(
   TextEditSession performance(performance_document);
   performance.Focus();
   performance.InsertText(std::u16string(10000, u'a'));
+  constexpr uint32_t kInputWarmupSamples = 20;
+  constexpr uint32_t kInputMeasuredSamples = 120;
+  constexpr uint32_t kLayoutWarmupSamples = 5;
+  constexpr uint32_t kLayoutMeasuredSamples = 30;
   std::vector<double> input_times;
-  for (uint32_t iteration = 0; iteration < 120; ++iteration) {
+  input_times.reserve(kInputMeasuredSamples);
+  for (uint32_t iteration = 0; iteration < kInputWarmupSamples; ++iteration) {
+    performance.SetSelection({{0, iteration}, {0, iteration}});
+    performance.InsertText(u"x");
+  }
+  for (uint32_t iteration = kInputWarmupSamples;
+       iteration < kInputWarmupSamples + kInputMeasuredSamples; ++iteration) {
     const auto start = std::chrono::steady_clock::now();
     performance.SetSelection({{0, iteration}, {0, iteration}});
     performance.InsertText(u"x");
@@ -185,7 +214,12 @@ CanonicalBehaviorArtifact BuildCanonicalBehaviorArtifact(
         std::chrono::duration<double, std::milli>(end - start).count());
   }
   std::vector<double> layout_times;
-  for (int iteration = 0; iteration < 30; ++iteration) {
+  layout_times.reserve(kLayoutMeasuredSamples);
+  for (uint32_t iteration = 0; iteration < kLayoutWarmupSamples; ++iteration) {
+    static_cast<void>(layout.Layout(*performance_document, 800.0F,
+                                    {{0, 0}, {0, 0}}));
+  }
+  for (uint32_t iteration = 0; iteration < kLayoutMeasuredSamples; ++iteration) {
     const auto start = std::chrono::steady_clock::now();
     static_cast<void>(layout.Layout(*performance_document, 800.0F,
                                     {{0, 0}, {0, 0}}));
@@ -199,9 +233,13 @@ CanonicalBehaviorArtifact BuildCanonicalBehaviorArtifact(
        << document->Digest() << "\",\"behavior\":" << BehaviorJson(behavior)
        << ",\"layout\":" << GeometryJson(fixture)
        << ",\"lifecycle\":{\"cycles\":100,\"failures\":"
-       << lifecycle_failures << "},\"performance\":{\"input_caret_p95_ms\":"
-       << Percentile(input_times, 0.95) << ",\"full_layout_p95_ms\":"
-       << Percentile(layout_times, 0.95) << "}}\n";
+       << lifecycle_failures << "},\"performance\":{";
+  AppendPerformanceJson(&json, "input_caret", input_times,
+                        kInputWarmupSamples);
+  json << ',';
+  AppendPerformanceJson(&json, "full_layout", layout_times,
+                        kLayoutWarmupSamples);
+  json << "}}\n";
   const bool layout_passed = fixture.diagnostics.empty() &&
                              !fixture.lines.empty() &&
                              !fixture.clusters.empty() &&

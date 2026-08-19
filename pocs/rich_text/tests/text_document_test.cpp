@@ -56,5 +56,49 @@ TEST(TextDocumentTest, CanonicalFontIdentityAndFallbackAffectDigest) {
   EXPECT_NE(first.Digest(), second.Digest());
 }
 
+TEST(TextDocumentTest, CollapsedInsertPreservesRunStructure) {
+  TextDocument document;
+  TextStyle red;
+  red.rgba = 0xff0000ffU;
+  TextStyle blue;
+  blue.rgba = 0x0000ffffU;
+  TextOperationEngine::Apply(
+      document,
+      {1, "seed", {{{{0, 0}, {0, 0}}, {u"abcd", {red, red, red, red}}}}});
+
+  TextOperationEngine::Apply(
+      document,
+      {2, "insert", {{{{0, 2}, {0, 2}}, {u"XY", {blue, blue}}}}});
+
+  ASSERT_EQ(document.paragraphs().size(), 1U);
+  ASSERT_EQ(document.paragraphs().front().runs.size(), 3U);
+  EXPECT_EQ(document.PlainText(), u"abXYcd");
+  EXPECT_EQ(document.paragraphs().front().runs[0].text, u"ab");
+  EXPECT_EQ(document.paragraphs().front().runs[1].text, u"XY");
+  EXPECT_EQ(document.paragraphs().front().runs[2].text, u"cd");
+  EXPECT_EQ(document.paragraphs().front().runs[0].style, red);
+  EXPECT_EQ(document.paragraphs().front().runs[1].style, blue);
+  EXPECT_EQ(document.paragraphs().front().runs[2].style, red);
+}
+
+TEST(TextDocumentTest, LargeCollapsedInsertDoesNotCreatePerUnitRuns) {
+  TextDocument document;
+  TextStyle style;
+  const std::u16string text(10000, u'a');
+  TextOperationEngine::Apply(
+      document,
+      {1, "large", {{{{0, 0}, {0, 0}},
+                     {text, std::vector<TextStyle>(text.size(), style)}}}});
+  for (uint32_t index = 0; index < 120; ++index) {
+    TextOperationEngine::Apply(
+        document,
+        {static_cast<uint64_t>(index + 2), "typing",
+         {{{{0, index}, {0, index}}, {u"x", {style}}}}});
+  }
+  ASSERT_EQ(document.paragraphs().size(), 1U);
+  ASSERT_EQ(document.paragraphs().front().runs.size(), 1U);
+  EXPECT_EQ(document.paragraphs().front().runs.front().text.size(), 10120U);
+}
+
 }  // namespace
 }  // namespace canvas::poc04

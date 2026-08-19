@@ -31,8 +31,18 @@ class BehaviorConformanceTest(unittest.TestCase):
             },
             "lifecycle": {"cycles": 100, "failures": 0},
             "performance": {
+                "input_caret_samples": 120,
+                "input_caret_warmup_samples": 20,
+                "input_caret_p50_ms": 1.0,
                 "input_caret_p95_ms": 1.0,
+                "input_caret_p99_ms": 1.0,
+                "input_caret_max_ms": 1.0,
+                "full_layout_samples": 30,
+                "full_layout_warmup_samples": 5,
+                "full_layout_p50_ms": 2.0,
                 "full_layout_p95_ms": 2.0,
+                "full_layout_p99_ms": 2.0,
+                "full_layout_max_ms": 2.0,
             },
         }
 
@@ -63,6 +73,12 @@ class BehaviorConformanceTest(unittest.TestCase):
         records = [self.record("web"), self.record("windows"), self.record("android")]
         for record in records:
             record["layout"]["clusters"] = []
+        result = self.run_records(records)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_rejects_incomplete_performance_distribution(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        del records[0]["performance"]["input_caret_p99_ms"]
         result = self.run_records(records)
         self.assertNotEqual(result.returncode, 0)
 

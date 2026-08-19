@@ -13,6 +13,13 @@ REQUIRED_BEHAVIOR = {
     "english", "simplified_chinese", "pinyin_composition", "newline",
     "mixed_runs", "selection", "caret", "clipboard", "undo", "redo",
 }
+REQUIRED_PERFORMANCE = {
+    "input_caret_samples", "input_caret_warmup_samples",
+    "input_caret_p50_ms", "input_caret_p95_ms", "input_caret_p99_ms",
+    "input_caret_max_ms", "full_layout_samples",
+    "full_layout_warmup_samples", "full_layout_p50_ms",
+    "full_layout_p95_ms", "full_layout_p99_ms", "full_layout_max_ms",
+}
 
 
 def main() -> int:
@@ -51,6 +58,30 @@ def main() -> int:
             raise RuntimeError(f"{value['platform']}: canonical layout has diagnostics")
         if lifecycle.get("cycles") != 100 or lifecycle.get("failures") != 0:
             raise RuntimeError(f"{value['platform']}: lifecycle gate failed")
+        if set(performance) != REQUIRED_PERFORMANCE:
+            raise RuntimeError(
+                f"{value['platform']}: performance schema is incomplete")
+        for prefix, samples, warmup in (
+            ("input_caret", performance["input_caret_samples"],
+             performance["input_caret_warmup_samples"]),
+            ("full_layout", performance["full_layout_samples"],
+             performance["full_layout_warmup_samples"]),
+        ):
+            if not isinstance(samples, int) or samples <= 0:
+                raise RuntimeError(f"{value['platform']}: {prefix} sample count invalid")
+            if not isinstance(warmup, int) or warmup < 0:
+                raise RuntimeError(f"{value['platform']}: {prefix} warmup count invalid")
+            metrics = [
+                performance[f"{prefix}_p50_ms"],
+                performance[f"{prefix}_p95_ms"],
+                performance[f"{prefix}_p99_ms"],
+                performance[f"{prefix}_max_ms"],
+            ]
+            if any(not isinstance(metric, (int, float)) or metric < 0
+                   for metric in metrics):
+                raise RuntimeError(f"{value['platform']}: {prefix} metrics invalid")
+            if metrics != sorted(metrics):
+                raise RuntimeError(f"{value['platform']}: {prefix} metrics unordered")
         if performance.get("input_caret_p95_ms", 1e9) > 16.7:
             raise RuntimeError(f"{value['platform']}: input/caret p95 gate failed")
         if performance.get("full_layout_p95_ms", 1e9) > 33.3:

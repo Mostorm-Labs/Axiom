@@ -57,6 +57,12 @@ class RichTextActivity : Activity() {
             "Canvas POC-04 canonical layout gate failed"
         }
         val performance = value.getJSONObject("performance")
+        check(performance.getInt("input_caret_samples") == 120 &&
+            performance.getInt("input_caret_warmup_samples") == 20 &&
+            performance.getInt("full_layout_samples") == 30 &&
+            performance.getInt("full_layout_warmup_samples") == 5) {
+            "Canvas POC-04 canonical performance sample schema failed"
+        }
         check(performance.getDouble("input_caret_p95_ms") <= 16.7 &&
             performance.getDouble("full_layout_p95_ms") <= 33.3) {
             "Canvas POC-04 canonical performance gate failed"
