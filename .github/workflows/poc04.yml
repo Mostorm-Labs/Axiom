@@ -89,12 +89,11 @@ jobs:
           test -s out/poc04-web/platform/web/canvas_poc04_web.js
           test -s out/poc04-web/platform/web/canvas_poc04_web.wasm
           ! grep -E -l "pthread|SharedArrayBuffer" out/poc04-web/platform/web/canvas_poc04_web.js
-      - name: Install Web test dependencies and Chromium
-        timeout-minutes: 10
+      - name: Install Web test dependencies
+        timeout-minutes: 5
         working-directory: pocs/rich_text/platform/web
         run: |
           npm ci
-          npx playwright install --with-deps chromium
       - name: Validate browser IME event adapter
         timeout-minutes: 5
         working-directory: pocs/rich_text/platform/web
