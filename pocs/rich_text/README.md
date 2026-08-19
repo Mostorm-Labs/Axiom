@@ -85,8 +85,11 @@ The iOS device archive is shared by iPhone and iPad hardware; the simulator
 archive is shared by iPhone and iPad simulator devices. These SDK producer
 targets prove deterministic packaging and source-free RichText linking. They
 do not, by themselves, claim AppKit `NSTextInputClient`, UIKit `UITextInput`,
-or macOS/iOS/iPadOS behavior acceptance. The consumer lock remains on v1 until
-the seven-target v2 prerelease is published and reviewed.
+or macOS/iOS/iPadOS behavior acceptance. The seven-target
+`skia-sdk-poc04-richtext-v2-72f006b19ac77233` prerelease is now published from
+`main` and locked by `skia-sdk.lock.json`. The lock uses the renamed
+`Mostorm-Labs/Axiom` repository; the historical v1 lock remains unchanged in
+Git history.
 
 The `POC-04 RichText Skia SDK Producer` workflow now uses the seven-target
 `poc04-richtext-v2` profile. After its immutable prerelease is published,
@@ -98,9 +101,23 @@ python3 tools/skia/update_lock.py \
   --output pocs/rich_text/skia-sdk.lock.json
 ```
 
-Consumer CI never checks out or builds Skia source. Until that real release and
-lock exist, only the host-core job runs; Web/Windows/Android acceptance is
-intentionally not reported as passed.
+Consumer CI never checks out or builds Skia source. Web, Windows, and Android
+consume the v2 lock, and the Apple job source-free builds the AppKit/UIKit
+adapter against the macOS and iOS-simulator SDK targets.
+
+## Apple native IME adapter
+
+`platform/apple/apple_ime_adapter.mm` is an Objective-C++ bridge over the same
+`TextEditSession`, not a second text model. On macOS it implements the required
+`NSTextInputClient` methods, including replacement ranges, marked text,
+selection queries, attributed substrings, screen-coordinate composition
+geometry, and point hit-testing. On iOS and iPadOS it implements `UITextInput`
+plus `UIKeyInput`, custom UTF-16 `UITextPosition`/`UITextRange`/
+`UITextSelectionRect`, selection and composition callbacks, caret/selection
+geometry, and hit-testing. The simulator recorder runs once on an iPhone and
+once on an iPad; both reuse `ios-simulator-arm64-metal` while producing
+separate behavior artifacts. Real hardware keyboard/pinyin evidence remains a
+separate gate.
 
 The Windows RichText SDK also packages the pinned `icudtl.dat` next to the
 static archives. CMake copies it beside the demo executable because Skia's
@@ -120,6 +137,15 @@ The physical Android gate was executed on a Pixel 7 and is recorded in
 It closes the Android physical performance and Gboard `InputConnection`
 evidence only; browser and Windows native IME evidence remain pending, so
 POC-04 stays `Validating`.
+
+The Apple physical bring-up gate was executed on an iPhone 15 Pro and an iPad
+Air 4 and is recorded in
+[`docs/quality/evidence/poc04/apple-physical-20260820.md`](../../docs/quality/evidence/poc04/apple-physical-20260820.md).
+Both devices displayed the editor, showed the system keyboard, and delivered
+real UIKit callbacks into the shared C++ session with an identical deterministic
+digest. These runs did not observe a `setMarkedText` Chinese-Pinyin callback;
+that marked-text evidence remains an explicit manual gate and POC-04 stays
+`Validating`.
 
 The final three-platform evidence must cover English, simplified Chinese,
 pinyin composition, newline, mixed runs, selection, caret, clipboard,

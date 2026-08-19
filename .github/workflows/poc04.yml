@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROFILE: tools/skia/profiles/poc04-richtext-v1.json
+  PROFILE: tools/skia/profiles/poc04-richtext-v2.json
   LOCK: pocs/rich_text/skia-sdk.lock.json
   INSTALL: .deps/skia-sdk-poc04
 
@@ -198,9 +198,75 @@ jobs:
           name: poc04-android
           path: out/poc04-android/
 
+  apple:
+    needs: sdk-lock
+    if: needs.sdk-lock.outputs.available == 'true'
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sdk: macosx, target: macos-arm64-metal, platform: macos, deployment: "15.0" }
+          - { sdk: iphonesimulator, target: ios-simulator-arm64-metal, platform: ios, deployment: "17.0" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap core dependencies and fetch verified Apple SDK
+        run: |
+          python3 tools/bootstrap_deps.py --core --font-only
+          python3 tools/skia/fetch.py --profile "$PROFILE" --lock "$LOCK" --install-root "$INSTALL" --target "${{ matrix.target }}" --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Build real Apple IME adapter and recorder
+        run: |
+          extra=()
+          if [[ "${{ matrix.platform }}" == "ios" ]]; then
+            extra+=("-DCMAKE_TOOLCHAIN_FILE=$GITHUB_WORKSPACE/cmake/ios-simulator.toolchain.cmake")
+          fi
+          cmake -S pocs/rich_text -B "out/poc04-${{ matrix.platform }}" -G Xcode \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_SYSROOT="${{ matrix.sdk }}" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${{ matrix.deployment }}" \
+            -DCANVAS_POC04_BUILD_TESTS=OFF \
+            -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON \
+            -DCANVAS_POC04_BUILD_APPLE=ON \
+            "${extra[@]}"
+          cmake --build "out/poc04-${{ matrix.platform }}" --config Release --parallel
+      - name: Run AppKit recorder
+        if: matrix.platform == 'macos'
+        run: |
+          out/poc04-macos/Release/canvas_poc04_macos_ime_recorder | tee out/poc04-macos/macos-ime-behavior.json
+          test -s out/poc04-macos/macos-ime-behavior.json
+      - name: Run iPhone simulator recorder
+        if: matrix.platform == 'ios'
+        run: |
+          app=$(find out/poc04-ios -name canvas_poc04_ios_ime_recorder.app -type d | head -1)
+          xcrun simctl list devices available -j > out/poc04-ios/simulators.json
+          device=$(python3 -c 'import json; d=json.load(open("out/poc04-ios/simulators.json")); print(next(x["udid"] for xs in d["devices"].values() for x in xs if x.get("isAvailable") and "iPhone" in x["name"]))')
+          xcrun simctl boot "$device" || true
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" "$app"
+          xcrun simctl launch "$device" dev.mostorm.canvas.poc04.ime
+          for i in $(seq 1 180); do
+            container=$(xcrun simctl get_app_container "$device" dev.mostorm.canvas.poc04.ime data 2>/dev/null || true)
+            if test -s "$container/Documents/poc04-ime-result.json"; then
+              cp "$container/Documents/poc04-ime-result.json" out/poc04-ios/ios-ime-behavior.json
+              break
+            fi
+            sleep 1
+          done
+          test -s out/poc04-ios/ios-ime-behavior.json
+          xcrun simctl terminate "$device" dev.mostorm.canvas.poc04.ime || true
+          xcrun simctl shutdown "$device" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc04-apple-${{ matrix.platform }}
+          path: out/poc04-${{ matrix.platform }}/
+
   cross-platform-acceptance:
-    if: ${{ false }} # Enabled after real platform behavior recorders land.
-    needs: [web, windows, android]
+    if: ${{ false }} # Enabled after physical browser/IMM/Apple IME evidence review.
+    needs: [web, windows, android, apple]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

@@ -28,6 +28,18 @@ typedef struct canvas_poc04_create_info {
   uint32_t abi_version;
 } canvas_poc04_create_info_t;
 
+typedef struct canvas_poc04_utf16_range {
+  uint64_t location;
+  uint64_t length;
+} canvas_poc04_utf16_range_t;
+
+typedef struct canvas_poc04_rect {
+  float x;
+  float y;
+  float width;
+  float height;
+} canvas_poc04_rect_t;
+
 /* Experimental POC ABI. No source or binary compatibility is promised. */
 canvas_poc04_status_t canvas_poc04_session_create(
     const canvas_poc04_create_info_t* info, canvas_poc04_handle_t* out_session);
@@ -38,6 +50,11 @@ canvas_poc04_status_t canvas_poc04_session_set_selection(
     canvas_poc04_handle_t session, uint32_t anchor_paragraph,
     uint32_t anchor_offset_utf16, uint32_t focus_paragraph,
     uint32_t focus_offset_utf16);
+canvas_poc04_status_t canvas_poc04_session_set_selection_flat_utf16(
+    canvas_poc04_handle_t session, uint64_t anchor_utf16,
+    uint64_t focus_utf16);
+canvas_poc04_status_t canvas_poc04_session_selection_flat_utf16(
+    canvas_poc04_handle_t session, canvas_poc04_utf16_range_t* out_range);
 canvas_poc04_status_t canvas_poc04_session_begin_composition(
     canvas_poc04_handle_t session);
 canvas_poc04_status_t canvas_poc04_session_update_composition_utf8(
@@ -70,6 +87,33 @@ canvas_poc04_status_t canvas_poc04_session_text_after_cursor_utf8(
 canvas_poc04_status_t canvas_poc04_session_surrounding_text_utf8(
     canvas_poc04_handle_t session, uint32_t max_utf16_units, char* buffer,
     size_t buffer_size, size_t* out_required_size);
+/* Queries below expose the composition-aware text presentation required by
+ * NSTextInputClient and UITextInput. Offsets are flat UTF-16 code units. */
+canvas_poc04_status_t canvas_poc04_session_presented_utf16_length(
+    canvas_poc04_handle_t session, uint64_t* out_length);
+canvas_poc04_status_t canvas_poc04_session_presented_text_range_utf8(
+    canvas_poc04_handle_t session, uint64_t location_utf16,
+    uint64_t length_utf16, char* buffer, size_t buffer_size,
+    size_t* out_required_size);
+canvas_poc04_status_t canvas_poc04_session_replace_range_utf8(
+    canvas_poc04_handle_t session, uint64_t location_utf16,
+    uint64_t length_utf16, const char* text, size_t text_size);
+canvas_poc04_status_t canvas_poc04_session_composition_range_flat_utf16(
+    canvas_poc04_handle_t session, canvas_poc04_utf16_range_t* out_range,
+    uint32_t* out_active);
+canvas_poc04_status_t canvas_poc04_session_composition_selection_utf16(
+    canvas_poc04_handle_t session, canvas_poc04_utf16_range_t* out_range,
+    uint32_t* out_active);
+canvas_poc04_status_t canvas_poc04_session_first_rect_for_range_utf16(
+    canvas_poc04_handle_t session, uint64_t location_utf16,
+    uint64_t length_utf16, float layout_width, canvas_poc04_rect_t* out_rect,
+    canvas_poc04_utf16_range_t* out_actual_range);
+canvas_poc04_status_t canvas_poc04_session_caret_rect_for_offset_utf16(
+    canvas_poc04_handle_t session, uint64_t offset_utf16, float layout_width,
+    canvas_poc04_rect_t* out_rect);
+canvas_poc04_status_t canvas_poc04_session_character_offset_for_point(
+    canvas_poc04_handle_t session, float x, float y, float layout_width,
+    uint64_t* out_offset_utf16);
 canvas_poc04_status_t canvas_poc04_document_digest(
     canvas_poc04_handle_t session, char* buffer, size_t buffer_size,
     size_t* out_required_size);
