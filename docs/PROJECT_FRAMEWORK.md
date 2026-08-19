@@ -1,15 +1,18 @@
 # Canvas v2 项目总体框架
 
-> 状态：Architecture Baseline v1.2；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 已解除启动阻塞，POC-04 / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
+> 状态：Architecture Baseline v1.3；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
 
 Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯的白板应用、Skia Renderer 或跨平台 UI 框架，而是整个产品体系共享的语义文档、编辑、笔迹、文本、场景、渲染、持久化与协作运行时。
 
 本文档固定项目边界和不可随意漂移的架构决策。模块契约、阶段任务、验证方法和决策依据分别见：
 
 - [系统架构](architecture/SYSTEM_ARCHITECTURE.md)
+- [Runtime Public C API](api/RUNTIME_C_API_CONTRACT.md)
+- [Canvas C++ / C ABI 风格](CPP_STYLE.md)
 - [分阶段交付计划](planning/STAGED_DELIVERY_PLAN.md)
 - [验证策略](quality/VERIFICATION_STRATEGY.md)
 - [Vibe 架构研究结论](research/VIBE_ARCHITECTURE_FINDINGS.md)
+- [POC-03 渲染架构审查](research/POC03_RENDERING_ARCHITECTURE_REVIEW.md)
 - [架构决策记录](adr/README.md)
 
 ## 1. 产品定义
@@ -23,7 +26,8 @@ Canvas v2 为 Web、Windows、macOS、iOS、iPadOS、Android 和复用 Web targe
 - Vector、Dab/Pixel 与 Hybrid Ink，以及独立低延迟 FastInk。
 - RichText、Table、Sticky、Comment Anchor 和语义搜索。
 - Selection、Tools、History、Clipboard、Text Edit 与 Presence。
-- SceneCompiler、FrameGraph、Compositor、多级 Tile Cache。
+- SceneCompiler、Runtime Scene facade、RenderScene、动态 SpatialIndex、DamageTracker、
+  FrameGraph、Compositor 与多级 Tile/LOD/Cache。
 - 本地持久化、离线编辑、多人协作、导出和 Headless 渲染。
 
 这些能力属于架构容量，不代表全部进入 V1 实现。
@@ -75,7 +79,7 @@ V1 包含 Collaboration MVP：
 | Reuse Target | ChromiumOS | 复用 Web target | 继承 Web 产品语义；平台 FastInk 为可选 capability |
 | Utility Target | Headless | internal runner | test/reference/golden 与内部受控 export；无 V1 公共 server/batch API |
 
-跨平台共享的是 Runtime，不是 UI 框架。Toolbar、Inspector、Dialog、Share、Account 和 Navigation 留在 Shell；Document、Operations、Ink、Text、Scene、HitTest、Renderer 与 Persistence 留在 C++ Runtime。Serialization 是 Operations、Persistence 和 Bridge 使用的版本化 codec 机制，不是独立领域状态所有者。
+跨平台共享的是 Runtime，不是 UI 框架。Toolbar、Inspector、Dialog、Share、Account 和 Navigation 留在 Shell；Document、Operations、Ink、Text、Scene、HitTest 与 Renderer 留在 C++ Runtime。Persistence、Sync 和 Resource provider 是 Runtime 外部 ports，通过 Snapshot/Operation/Resource/Event C ABI 连接；Runtime 不拥有数据库、文件、网络或服务器配置。Serialization 是 Operations、Persistence 和 Bridge 使用的版本化 codec 机制，不是独立领域状态所有者。
 
 React/Tauri 和 React Native 是当前接受的 Tier A 产品选择；长期不变量是窄 Bridge、native canvas/surface 边界以及高频 Pointer/IME/Render 数据面不经过不必要的 JS 往返。替换 Shell framework 需要产品/平台决策和 contract regression evidence；只有改变上述 Runtime 边界时才构成架构变更。
 
@@ -110,13 +114,19 @@ flowchart TB
     Layout["Layout"]
     HitTest["HitTest"]
     Compiler["SceneCompiler"]
-    Scene["RuntimeScene"]
+    RuntimeScene["RuntimeScene"]
+    Binding["SceneBinding"]
+    Scene["Scene facade"]
+    RenderScene["RenderScene<br/>SkSG private implementation"]
+    Spatial["ISpatialIndex"]
+    Damage["DamageTracker"]
     View["ViewQuery / FrameState"]
     Builder["FrameBuilder"]
     FrameInvalidation["FrameInvalidationSink"]
     Graph["FrameGraph"]
     Comp["Compositor"]
     Renderer["RendererBackend"]
+    Tiles["TileGrid / TilingSet / TileManager"]
     Cache["RasterCache / TileCache / TileStore"]
     Budget["ResourceBudgetCoordinator"]
     Resources["Resources"]
@@ -163,14 +173,22 @@ flowchart TB
   Text --> Ops
   Ops --> Doc
   Doc --> Compiler
-  Compiler --> Scene
+  Compiler --> RuntimeScene
+  RuntimeScene --> Binding
+  Binding --> Scene
+  Scene --> RenderScene
+  Scene --> Spatial
+  Scene --> Damage
   Layout --> Compiler
   Scene --> HitTest
   Scene --> View
+  Spatial --> View
   Editor --> View
   View --> Builder
-  Scene --> Builder
+  RenderScene --> Builder
   Builder --> Graph
+  Damage --> Tiles
+  Tiles --> Cache
   Editor --> FrameInvalidation
   Ink --> FrameInvalidation
   Compiler --> FrameInvalidation
@@ -202,8 +220,9 @@ flowchart TB
 
 ```text
 Semantic Document
-    → SceneCompiler
-    → RuntimeScene
+    → SceneCompiler / SceneBinding
+    → RuntimeScene / Scene facade
+    → RenderScene + SpatialIndex + DamageTracker
     → ViewQuery / FrameState
     → Render Tree
     → FrameBuilder
@@ -215,6 +234,19 @@ Semantic Document
 ```
 
 `PlatformSurfaceAdapter` 在平台侧拥有 HTML Canvas/WebGL context、HWND/swapchain、ANativeWindow/EGLSurface、CAMetalLayer/drawable 和 Headless surface 的生命周期，通过 acquire/resize/present/recover 契约提供 `RenderTarget`。`RendererBackend` 不拥有窗口、View 或 native surface handle。Skia 是 GFX backend，不拥有 Document、Editor、Ink 或 Text 语义；Graphite/WebGPU 只能作为未来 RendererBackend，不得反向改变上层接口。
+
+`RenderScene` 的首个产品候选可以在内部使用 Skia SkSG，但 SkSG 类型不得进入 Document、
+Bridge 或 Shell。Object SpatialIndex、DamageTracker、TileGrid/TilingSet/TileManager、Raster
+调度和 memory/eviction policy 始终由 Canvas Runtime 自己拥有；Chromium cc 只作为 tiling/
+priority/raster scheduler 的源码级参考，不作为依赖。完整边界见
+[ADR-0021](adr/0021-render-scene-spatial-index-tiling-boundaries.md)。
+
+跨语言 Public API 统一使用 [稳定 C ABI](api/RUNTIME_C_API_CONTRACT.md)：Control Path 可由
+React/Qt/ObjC++/JNI/WASM wrapper 调用；PointerSampleBatch、VSync、Preview 和 Render 是
+Native Hot Path，不得逐 sample 经 RN JS/QML/React state。ABI 只暴露 generation handle、
+fixed-width value、`struct_size + abi_version`、caller-provided buffer 和 borrowed event，
+不暴露 Document/RuntimeScene/Tile/Skia/platform pointer。C++20 内部实现遵循
+[Canvas 代码风格](CPP_STYLE.md)。
 
 ## 5. Runtime 模块
 
@@ -233,12 +265,17 @@ Semantic Document
 | HitTest | 基于 RuntimeScene/SpatialIndex 的 world-space 命中查询 | Tool state、Selection ownership |
 | SceneCompiler | Document 到 RuntimeScene 的确定性增量编译 | 文档写入 |
 | RuntimeScene | 多视口共享的布局、world bounds、空间索引、render/hit-test records、资源引用和 world-space invalidation | Viewport、可见集合、screen damage、Selection/HUD |
+| Scene / SceneBinding | 接受 SceneDelta，协调 RenderScene、SpatialIndex、DamageTracker 和查询/渲染门面 | Document 写入、向 Shell 暴露 SkSG 类型 |
+| RenderScene | 内部渲染 DAG；首个候选为私有 SkSG adapter | Document 业务模型、Operation、协作或无限画布 Query |
+| ISpatialIndex | 动态对象 insert/remove/update/query 与候选 culling | 精确几何命中、Document ownership |
+| DamageTracker | 可重算的 world-space DamageSet，向 Tile/Frame invalidation 投影 | 持久语义或跨 View screen damage |
 | ViewQuery / FrameState | 单视口可见集合、clip、LOD、scale bucket、target 参数和 screen damage | 共享场景真相、持久状态 |
 | FrameBuilder | 合并 Scene、View、Editor overlay、Preview、Presence 和 ExternalSurface placement，生成不可变帧计划 | 文档写入和平台 surface 生命周期 |
 | FrameGraph | Pass、依赖、资源生命周期 | 工具和文档规则 |
 | Compositor | Background/Content/Ink/Overlay/Selection/HUD 合成 | 文档操作 |
 | RendererBackend | 将帧计划通过 Ganesh 绘制到调用方提供的 RenderTarget | HWND/ANativeWindow/CAMetalLayer 生命周期 |
 | TileCache | L1/L2/L3 缓存契约、预算、失效 | 权威内容存储 |
+| TileManager / IRasterSource | 负坐标 TileGrid、LOD、优先级、预取、raster task 和 eviction；按 world rect 请求内容 | 拥有 Canvas Object、修改 Document |
 | ResourceBudgetCoordinator | 统一协调 decoded resource、Canvas/Skia cache、transient 和 surface 内存预算/压力 | Document 语义、假装完全拥有 Skia 内部 cache |
 | Resources | 图片、字体、外部资源加载与版本 | 平台文件对话框 |
 | Persistence | 快照、操作日志、迁移、崩溃恢复 | 网络 transport |
@@ -429,7 +466,7 @@ canvas/
 | --- | --- | --- |
 | POC-01 | Shared Engine | Web、Windows、macOS、iOS、iPadOS、Android 共享同一 C++ Runtime |
 | POC-02 | Ink Engine | Pointer batch、Vector/Dab、Preview/Canonical 双路径成立 |
-| POC-03 | 100K Scene | SceneCompiler、空间索引、FrameGraph、Tile 接口满足规模目标 |
+| POC-03 | 100K Scene | 基础 Scene 正确性、跨端效果与 Integrated Ink；生产 R-tree/Tile/LOD 仍走 RF-01～03 |
 | POC-04 | RichText / IME | Web/Windows/Android 文本编辑语义成立 |
 | POC-05 | Hybrid Surface | 非 V1 future-capability risk proof：Overlay 与 z-order 边界可行 |
 | POC-06 | FastInk | 应用级低延迟预览与 Canonical 交接可行 |
@@ -444,10 +481,13 @@ flowchart LR
   P2 -->|"Integration Ready contracts"| P6["POC-06 FastInk"]
   P2 -->|"Integration Ready Ink"| P3Gate["POC-03 integrated ink gate"]
   P3 --> P3Gate
+  P3 --> RF1["RF-01 Scene rendering foundation"]
+  RF1 --> RF2["RF-02 Dynamic spatial query"]
+  RF2 --> RF3["RF-03 Tiled raster"]
   P3 --> P5["POC-05 Hybrid Surface risk proof"]
 ```
 
-POC-02/03/04 的核心工作可以在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后即可解除 POC-03 integrated ink gate、POC-06 和 R1 foundation 的启动阻塞；该资格只允许消费实验性契约，不等于 POC-02 `Accepted` 或产品 ABI 冻结。POC-03 的集成体验验收负责联合验证历史对象规模、Dirty Region 和 Raster/Tile cache 下的 Ink 性能；POC-05 只证明未来扩展边界，不进入 V1；POC-06 可与 R1 工程化并行，但在通过前阻塞 R3 FastInk 产品化。
+POC-02/03/04 的核心工作可以在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后即可解除 POC-03 integrated ink gate、POC-06 和 R1 foundation 的启动阻塞；该资格只允许消费实验性契约，不等于 POC-02 `Accepted` 或产品 ABI 冻结。POC-03 的集成体验验收负责联合验证历史对象规模、Dirty Region 和 Raster/Tile cache 下的 Ink 性能，但当前 direct Skia、Linear/Uniform Grid 和 L1 原型只作为 baseline；RF-01～RF-03 再完成 Scene/SkSG 边界、动态空间查询和分层 Tile/raster scheduling。POC-05 只证明未来 ExternalSurface 扩展边界，不进入 V1；POC-06 可与 R1 工程化并行，但在通过前阻塞 R3 FastInk 产品化。
 
 ### 产品化层
 
@@ -465,7 +505,7 @@ R1 acceptance 的最低架构证据是 POC-01～04；POC-05 不阻塞 V1，POC-0
 
 ## 11. 已接受与待验证决策
 
-已经接受：Visual Document Runtime 定位、可替换 Shell 与平台支持分级、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权、共享 Preview Model/FastInk sink、坐标/DPI、资源身份、Undo 补偿 Operation、数值确定性、平台帧调度、输入背压、ChangeSet/hints 和 DocumentSnapshot/Operation continuation 恢复边界。
+已经接受：Visual Document Runtime 定位、可替换 Shell 与平台支持分级、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权、共享 Preview Model/FastInk sink、坐标/DPI、资源身份、Undo 补偿 Operation、数值确定性、平台帧调度、输入背压、ChangeSet/hints、DocumentSnapshot/Operation continuation 恢复边界、Runtime Scene/SkSG、动态空间索引、DamageTracker、Tile/LOD 的所有权边界，以及 Runtime Public C ABI、Control/Hot Path、Persistence/Sync/Resource ports 和 Canvas C++ 风格。
 
 仍需实验型 ADR：
 

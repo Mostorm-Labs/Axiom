@@ -3,9 +3,9 @@
   "report_id": "poc03-integrated-ink-validation-20260819",
   "evidence_status": "host_matrix_and_pixel7_android_passed",
   "poc_status_after_evidence": "Validating",
-  "remaining_gates": [
-    "Windows physical D3D12 integrated playground",
-    "Chrome Stable WebGL2 integrated playground",
+    "remaining_gates": [
+        "Windows physical D3D12 hard frame gate failed twice; RF-01/RF-02/RF-03 investigation and a passing rerun remain required",
+        "Chrome Stable WebGL2 initial run failed; bounded rerun passed, stability review remains required",
     "POC-02 formal pressure-pen latency and Human Ink Gate"
   ],
   "source": {
@@ -126,9 +126,9 @@
     "long_run_100k": {"frames": 5400, "warmup_frames": 1800, "trace_wall_ms": 62263.318, "frame_p50_ms": 9.544, "frame_p95_ms": 13.928, "frame_p99_ms": 25.552, "frame_max_ms": 70.430, "missed_presentations": 832, "process_start_mib": 289.500, "process_end_mib": 301.133, "process_peak_mib": 314.070, "process_steady_growth_percent": 4.018, "maximum_candidates": 2498, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "481595989d1a4d306a19f01a5d377afc1b2167631488592cd80aaad51447e25d"},
     "manual_actions": {"status": "passed", "apk_sha256": "fe4f6fc8ef6bcb0f03cb83a933c45104efb363d352553ada5ddceee5c0e49fd3", "actions": ["pan", "vector_write", "dab_write", "select", "select_drag"], "log_events": {"ink_preview": 84, "ink_canonical_visible": 2, "selected": 1, "select_dragging": 40, "select_end": 1}, "process_alive_after_actions": true, "crash_or_anr_observed": false, "screenshot_sha256": "de09cf72c18cf98397424d4645f81aa8b0000cfe0cea2751a59d9fe8e0a70ad0", "logcat_sha256": "24992cc2faefb21f8260497527081d2a60836f4ad993f5d1292612ff1e2892e4"}
   },
-  "physical_integrated_gates": {
-    "windows_d3d12": "pending",
-    "chrome_webgl2": "pending",
+    "physical_integrated_gates": {
+        "windows_d3d12": "failed_reproducibly",
+        "chrome_webgl2": "initial_failed_bounded_rerun_passed",
     "pixel7_android": "passed",
     "apple": "existing physical report only; not an acceptance gate for this integration"
   },

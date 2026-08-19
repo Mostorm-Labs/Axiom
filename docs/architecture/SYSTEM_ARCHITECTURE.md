@@ -27,6 +27,8 @@ flowchart TB
     FrameScheduler["PlatformFrameScheduler"]
   end
 
+  CApi["Runtime Public C ABI<br/>generation handles / spans / events"]
+
   subgraph Core["C++20 Canvas Runtime"]
     Facade["RuntimeFacade / Commands"]
     Input["InputRouter"]
@@ -39,13 +41,19 @@ flowchart TB
     Ops["Operations"]
     Doc["Semantic Document"]
     Compiler["SceneCompiler"]
-    Scene["RuntimeScene"]
+    RuntimeScene["RuntimeScene"]
+    Binding["SceneBinding"]
+    SceneFacade["Scene facade"]
+    RenderScene["RenderScene / private SkSG DAG"]
+    Spatial["ISpatialIndex"]
+    Damage["DamageTracker"]
     ViewState["ViewQuery / FrameState"]
     FrameBuilder["FrameBuilder"]
     FrameInvalidation["FrameInvalidationSink"]
     Frame["FrameGraph"]
     Compositor["Compositor"]
     Renderer["RendererBackend"]
+    Tiles["TileGrid / TilingSet / TileManager"]
     Cache["RasterCache / TileCache / TileStore"]
     Budget["ResourceBudgetCoordinator"]
     Resources["Resources"]
@@ -61,6 +69,10 @@ flowchart TB
   Tauri --> CAbi
   RN --> Jni
   Apple --> CAbi
+  Wasm --> CApi
+  CAbi --> CApi
+  Jni --> CApi
+  CApi --> Facade
   ReactWeb --> Pointer
   Tauri --> Pointer
   RN --> Pointer
@@ -76,9 +88,6 @@ flowchart TB
   Tauri --> FrameScheduler
   RN --> FrameScheduler
   Apple --> FrameScheduler
-  Wasm --> Facade
-  CAbi --> Facade
-  Jni --> Facade
   Pointer --> Input
   TextInput --> Text
   Facade --> Editor
@@ -95,12 +104,17 @@ flowchart TB
   Ops --> Doc
   Collab <--> Ops
   Doc --> Compiler
-  Compiler --> Scene
+  Compiler --> RuntimeScene
+  RuntimeScene --> Binding
+  Binding --> SceneFacade
+  SceneFacade --> RenderScene
+  SceneFacade --> Spatial
+  SceneFacade --> Damage
   Layout --> Compiler
-  Scene --> HitTest
-  Scene --> ViewState
+  Spatial --> HitTest
+  Spatial --> ViewState
   Editor --> ViewState
-  Scene --> FrameBuilder
+  RenderScene --> FrameBuilder
   ViewState --> FrameBuilder
   FrameBuilder --> Frame
   Editor --> FrameInvalidation
@@ -109,6 +123,8 @@ flowchart TB
   FrameScheduler -.->|implements / consumes| FrameInvalidation
   FrameScheduler -.->|frame callback| Facade
   Frame --> Compositor
+  Damage --> Tiles
+  Tiles --> Cache
   Cache <--> Compositor
   Budget --> Cache
   Budget --> Resources
@@ -125,9 +141,44 @@ flowchart TB
   Ink --> FastInk
 ```
 
-依赖只能自上而下：Shell 的低频产品命令依赖 Application API；Pointer 与 IME 分别通过专用 adapter 进入 InputRouter 和 TextEditSession。Bridge 依赖 Runtime 的公开 facade，Document 不依赖 Editor、ResourceManager、Persistence、Skia、网络或平台，Renderer 不拥有 Document 写入口或平台 surface 生命周期。Serialization 是 Bridge、Operations 与 Persistence 使用的版本化 codec 机制，不是独立权威状态模块。
+依赖只能自上而下：Shell 的低频产品命令依赖 Runtime Public C ABI；Pointer、VSync 与 IME
+分别通过专用 adapter 进入 InputRouter、FrameScheduler 和 TextEditSession。C ABI 只提供
+generation handles、fixed-width values、explicit-length spans、caller buffers 和 borrowed
+events；Bridge 依赖 Runtime 的公开 facade，Document 不依赖 Editor、ResourceManager、
+Persistence、Skia、网络或平台，Renderer 不拥有 Document 写入口或 platform surface 生命周期。
+Persistence、Sync 和 Resource provider 通过 port/event 与 Runtime 连接，不进入 Runtime Core。
+Serialization 是 Bridge、Operations 和 Persistence 使用的版本化 codec 机制，不是独立权威状态模块。
 
 ## 2. 平台边界
+
+### 2.0 Public C ABI、Control Path 与 Hot Path
+
+[Runtime Public C API](../api/RUNTIME_C_API_CONTRACT.md) 是 Web/WASM、Windows、Android/JNI、
+Apple ObjC++ 和未来 Qt/其它 wrapper 的共同 contract。它不等同于 POC-01 `canvas_poc_*`，
+也不暴露 C++/STL/Skia/platform object。生命周期固定为：
+
+```text
+runtime create
+  → document open
+  → view create
+  → platform surface attach
+  → input / command / VSync / render
+  → surface detach
+  → view destroy
+  → document close
+  → runtime destroy
+```
+
+Control Path 包括 openDocument、setTool/Brush/Eraser、executeCommand、undo/redo 和状态查询，
+允许经过跨语言 wrapper。Native Hot Path 包括 PointerSampleBatch、IME composition、VSync、
+Preview、render/present，必须由 native adapter 批量进入 C++，不得逐 sample 经过 RN JS、
+QML/React state 或 JSON。Runtime callback 是 borrowed synchronous notification，不允许重入；
+Persistence/Sync/Resource provider 复制所需 payload 后异步处理。
+
+Public ABI、Operation schema、Snapshot schema、Sync protocol 和 Renderer/Cache schema 各自
+版本化。公共 ABI 新字段只能追加在 `struct_size + abi_version` struct 尾部；handle domain、
+enum 数值、ownership 和 callback 时序一旦发布不得静默改变。Canvas C++ 实现遵循
+[代码风格规范](../CPP_STYLE.md)。
 
 ### 2.1 Web
 
@@ -530,7 +581,75 @@ FrameGraph 管理 pass 依赖和临时资源，不拥有文档语义。上述是
 backend 可以 merge、elide、reuse 或按依赖安全重排。RendererBackend 接口要允许未来
 Graphite，但 V1 只验收 Ganesh。
 
-### 9.1 RenderTarget 与 PlatformSurfaceAdapter
+### 9.1 Scene facade、RenderScene 与空间/失效边界
+
+`RuntimeScene` 是跨 View 共享的派生数据；它不是 SkSG `Scene` 的别名，也不是一个可以由
+Shell 直接操作的 Render Tree。Runtime 对外提供自己的 `Scene` facade，由 `SceneBinding`
+把 Document/`SceneDelta` 投影到渲染和查询所需的内部结构：
+
+```mermaid
+flowchart LR
+  Doc[Semantic Document] --> Binding[SceneBinding]
+  Binding --> Facade[Runtime Scene facade]
+  Facade --> Render[RenderScene]
+  Facade --> Spatial[ISpatialIndex]
+  Facade --> Damage[DamageTracker]
+  Render --> SkSG[SkSG Render DAG]
+  SkSG --> Ganesh[Skia Ganesh]
+  Spatial --> Query[ViewQuery / HitTest candidates]
+  Damage --> Tiles[Tile invalidation boundary]
+```
+
+SkSG `Group`、`Transform`、`Draw`、`CustomRenderNode`、bounds/revalidation 和精确几何命中
+可以作为 `SkSGRenderScene` 的内部实现；SkSG 类型不得进入 Document、Operations、Bridge
+或产品 Shell。SkSG 不承担业务节点、稳定 ID、协作关系、持久化或无限世界 Query。后端仍
+允许在不改变 Runtime facade 的情况下替换 RenderScene 实现。
+
+空间查询固定为两阶段：`ISpatialIndex` 先给出可能命中的 world-space candidates，随后
+Geometry/SkSG 执行精确命中、clip 和 z-order 选择。POC-03 的 deterministic uniform-grid/
+linear 实现只用于正确性和实验性局部更新；RF-02 再引入 `DynamicRTreeSpatialIndex`，可与
+POC-04 RichText/IME 并行但不改变其编号和职责。
+Skia `SkRTree` 是 bulk-load 工具，不能直接充当动态对象索引。索引接口必须支持 insert、
+remove、update、query，并覆盖负坐标、退化 bounds 和 checked overflow。
+
+`DamageTracker` 是 Runtime 的唯一对外失效抽象，输出可重算的 world-space `DamageSet`。
+POC-03 可以封装 SkSG invalidation controller；它不能把 SkSG dirty region 暴露为 Document、
+Operation 或跨 View 状态。未来 Tile 阶段将 `DamageSet` 映射到 TileKey/content revision，
+而不是改变上层 Scene API。
+
+### 9.2 Tile、LOD 与 Raster 调度边界
+
+POC-03 只验证 `TileCache` 接口、严格 key、清空/设备丢失恢复和直接 Skia baseline；它不
+声称已实现生产 Tile renderer。后续 `TileGrid`、`TilingSet`、`TileManager`、`TilePriority`、
+`IRasterSource`、`RasterTaskScheduler`、`MemoryBudget` 和 eviction 由 Runtime 自己拥有，
+算法参考 Chromium cc 但不引入 Chromium 依赖：
+
+```cpp
+struct TileKey { int64_t x; int64_t y; uint8_t level; };
+
+class TileManager {
+public:
+    void updateViewport(const ViewportState&);
+    void invalidate(const DamageSet&);
+    void prepareTiles(const FrameContext&);
+    void onMemoryPressure(MemoryPressure);
+    TileSet visibleTiles() const;
+};
+
+class IRasterSource {
+public:
+    virtual void raster(SkCanvas&, const RectD& worldRect,
+                        const RasterContext&) = 0;
+};
+```
+
+Tile 只缓存一个 world rect 在 content/raster revision 下的结果，不拥有 Document object。
+`TileKey` 必须支持负坐标；world→tile 的取整、溢出和 LOD 规则由后续实验语料冻结。多级
+tiling 至少区分 Visible、NearViewport、Prefetch、Background 优先级，并受可取消的 task、
+soft/hard memory budget 和 eviction 约束，避免预取或缓存无界增长。具体 L2/L3 格式仍由
+缓存 ADR 决定。
+
+### 9.3 RenderTarget 与 PlatformSurfaceAdapter
 
 `PlatformSurfaceAdapter` 位于平台边界，拥有 HTML Canvas/WebGL context、HWND/DXGI swapchain、Android Surface/ANativeWindow/EGLSurface、CAMetalLayer/Metal drawable 或 Headless surface。它负责 acquire/resize/present/recover，并为每帧提供带尺寸、DPR、颜色空间、backend capability 和 generation 的 `RenderTarget`。
 
@@ -641,12 +760,27 @@ POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序�
 ## 16. 架构不变量
 
 - Shell 不拥有 Document 业务真相。
+- Runtime Public API 使用稳定 C ABI；C++/STL/Skia/platform/network/storage 类型不越过 ABI，
+  POC `canvas_poc_*` 不等于产品 ABI。
+- Control Path 可以跨语言；PointerSampleBatch、IME、VSync、Preview 和 render Native Hot Path
+  不逐 sample 经 RN JS、QML/React state 或 JSON。
+- Persistence、Sync 和 Resource provider 通过 Snapshot/Operation/Resource/Event ports 连接，
+  Runtime 不拥有数据库、文件、网络、token、URL 或服务器 transport。
 - Document 不依赖 Skia、平台或网络。
 - Document 只保存资源引用，不依赖 ResourceManager 或 Persistence。
 - ResourceManifest binding 是版本化语义事实；同 ResourceId 的内容不能在原 hash 下静默变化。
 - 所有跨模块 geometry 声明坐标空间；DPR、screen coordinates 和像素取整不进入 Document。
 - RuntimeScene 可由 Document 完整重建。
 - RuntimeScene 不拥有 per-view visible set、screen damage 或 Editor overlay。
+- Runtime `Scene` facade 与内部 `RenderScene` 分离；SkSG 只能作为 Render DAG 实现，不能成为
+  Document Model、Bridge 或 Shell API。
+- SpatialIndex 负责候选查询，Geometry/SkSG 负责精确 HitTest；POC-03 的 Linear/Uniform
+  Grid 只是实验实现，动态 R-tree 和生产 viewport culling 必须经过后续证据。
+- DamageTracker 是 Runtime 的对外失效边界；SkSG invalidation 可以被封装但不得泄漏为
+  Document/Operation 状态。
+- Tile 只缓存 world rect 的 raster 结果，不拥有 Canvas Object；TileGrid/TilingSet/LOD、
+  TileManager、RasterScheduler、Prefetch 和 Eviction 属于后续 Runtime 实现，并支持负坐标
+  的无限 WorldSpace。
 - Renderer 和 cache 无 Document 写入口。
 - RendererBackend 不拥有平台 window/view/surface 生命周期；PlatformSurfaceAdapter 不拥有 Document 语义。
 - FastInk 失败不阻断 Canonical Stroke。

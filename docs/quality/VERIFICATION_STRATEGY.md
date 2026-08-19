@@ -33,6 +33,10 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
     deterministic clock/seed/PRNG 是 POC common oracle。
 21. `DocumentSnapshot@F + committed OperationContinuation F→T` 必须恢复相同 target
     revision/frontier/digest；Snapshot 不能用于普通编辑或 Undo/Redo。
+22. Runtime Public C ABI 不暴露 C++/STL/Skia/platform pointer；同一 ABI version 的 handle
+    domain、struct prefix、enum numeric value、ownership 和 callback 时序跨平台一致。
+23. Control Path 可以跨语言，PointerSampleBatch/VSync/IME/Preview/render Native Hot Path 不得
+    逐 sample 经 RN JS、QML/React state 或 JSON；Persistence/Sync/Resource port 不进入 Core。
 
 ## 2. 结果 Oracle
 
@@ -119,6 +123,27 @@ checkpoint。未证明 Snapshot 可读取/可验证前，旧 Operation prefix �
 
 每次评审记录平台、设备、笔、显示刷新率、构建/commit、场景、持续时间、评审人和主观结论，并关联 input→preview trace、frame pacing、prediction correction、handoff 帧序列和内存数据。`可接受/有条件接受/阻断` 必须有结构化理由；不能只提交视频或“感觉流畅”的结论。
 
+### 2.11 大场景渲染架构证据
+
+POC-03 的 direct Skia、deterministic uniform-grid/linear query 和 L1 TileCache 是正确性与
+跨端效果 baseline，不是生产级 10K/100K 渲染结论。生产路线必须分别验证：
+
+- `Scene` facade 与私有 `RenderScene`/SkSG DAG 的依赖隔离；SkSG 类型不得进入 Document、
+  Bridge 或 Shell。
+- SpatialIndex 候选查询与 Geometry/SkSG 精确 HitTest 的两阶段等价；RF-02 的动态 R-tree
+  必须与 brute-force oracle 在负坐标、退化 bounds、增删改和 z-order 上逐字节一致。
+- `DamageTracker` 的 world-space DamageSet 可扩大、丢弃或重算而不改变 Scene digest；
+  Damage 不能变成 Document 或跨 View 的共享 screen state。
+- RF-03 的 signed TileKey、TileGrid/TilingSet/LOD、TilePriority、IRasterSource、
+  TileManager、RasterTaskScheduler、MemoryBudget/Eviction 在多 zoom/pan、prefetch 取消、
+  cache clear、device loss 和内存压力下的正确性、可观测性与有界资源使用。
+
+真实设备 trace 必须分离 candidate query、RenderScene/FrameBuilder、damage/tile invalidation、
+raster queue、Skia draw/flush、GPU submit、present interval 和 missed presentation；内存必须
+按 Runtime/Scene/Tile/Skia GPU/decoded resource/transient/surface 分类。若 Windows D3D12
+物理门禁连续失败，应保留失败证据并将其作为 RF-01～RF-03 的输入，不降低 p95/p99 门禁或
+把失败简单归因于设备性能。POC-03 在这些证据完成前保持 `Validating`。
+
 ## 3. 验证资产
 
 ```text
@@ -150,6 +175,11 @@ tests/
 - format/lint、警告、公开头文件自包含、ABI export 检查。
 - module dependency test：Document 不能依赖 Skia/platform/network/ResourceManager/Persistence；Renderer 无 Document 写入口且不包含 native window/view/surface 类型。
 - Platform surface adapter、Application API、PointerAdapter 和 TextInputAdapter 边界检查；禁止 Shell API 全部汇入 InputRouter。
+- Runtime C ABI manifest 检查：symbol、fixed-width field、`struct_size + abi_version` prefix、
+  enum numeric values、handle domains、caller buffers、borrowed callback 和 no-platform/Skia/
+  STL/public-header dependencies。
+- C11/C++20 public-header self-contained compile；C++20 style/format、命名、include path、
+  ownership 和 exception-to-status lint。
 - `core/input`、Geometry、Layout/HitTest、Resources/Persistence 与 Collaboration 逻辑边界检查；Serialization 不能成为旁路权威状态。
 - 按 stage/tier/changed paths 选择 target matrix；core/public ABI 变更必须编译 Tier A 与 Tier B，Shell-only 变更只阻断受影响 Tier A。
 - third-party lock、license 和构建 flag 检查。
@@ -172,6 +202,8 @@ tests/
   cache key、spatial query、HitTest/Selection/Snap boundary、FrameBuilder/FrameGraph logical dependencies。
 - frame invalidation、PlatformFrameScheduler request merge、target generation、visible ack 和
   multi-view callback lifecycle。
+- C ABI stale/wrong-domain handle、short/extended struct、unknown enum/capability、buffer sizing、
+  NaN/Infinity、callback lifetime/reentrancy、single-owner thread 和 exported exception conversion。
 - PreviewStrokeUpdate revision、confirmed/predicted replacement、buffer ownership 和 Default/FastInk sink 等价性。
 - operation envelope、去重和 Presence expiry。
 
@@ -234,6 +266,8 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 - ExternalSurface placement → focus/lifecycle → fallback placeholder。
 - Local Operation → network faults → remote replicas → convergence。
 - Shell/Bridge → surface/IME/clipboard/file → shared Runtime behavior。
+- Control Path 与 Native Hot Path：RN/Qt/WASM wrapper 的低频命令，以及 native PointerSampleBatch/
+  VSync/IME/Preview/render 不逐 sample 经过 JS/QML/JSON。
 
 ## 5. POC 门禁矩阵
 
@@ -247,6 +281,9 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 | POC-06 | FastInk/Canonical 最终 digest 一致；Default/FastInk sink 消费同一 Preview revision | Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age；handoff ≤2 帧 | backend/device/surface/旧 generation failure 不丢 Stroke |
 
 POC 报告必须同时附原始结果、环境和复现命令；只给结论截图不算通过。
+POC-03 的 Windows Integrated D3D12 结果已连续两次未达到既有 p95/p99 门禁，因此当前状态
+仍为 `Validating`。这不推翻已通过的正确性 oracle，也不允许用 RF-01～RF-03 的规划替代
+尚未出现的生产性能证据。
 
 ## 6. 产品阶段门禁
 

@@ -28,6 +28,13 @@ Run the Debug and sanitizer presets, followed by the fixed benchmark. Archive
 its JSON. The benchmark's timing source is explicitly
 `headless-steady-clock-not-vsync`; it cannot satisfy the platform frame gates.
 
+POC-03's direct Skia/Linear-or-uniform-grid path is an experimental baseline.
+It does not prove that a production 10K/100K canvas can scale linearly with
+the current implementation. Follow-on rendering work is tracked as RF-01
+Scene/RenderScene/Damage boundaries, RF-02 dynamic spatial query, and RF-03
+TileGrid/LOD/raster scheduling. The target interfaces and ownership are in
+[ADR-0021](../../../docs/adr/0021-render-scene-spatial-index-tiling-boundaries.md).
+
 ### Web/WebGL2
 
 Fetch `web-wasm-webgl2`, build `poc03-web-release`, run the browser probe under
@@ -97,6 +104,15 @@ node pocs/large_scene/platform/web/hardware_benchmark.mjs `
   --output out/poc03-windows-physical/web-hardware-result.json `
   --trace out/poc03-windows-physical/web-frame-trace.ndjson
 ```
+
+When a physical gate fails, preserve the failed result and do not lower the
+threshold. The integrated Windows D3D12 evidence on the registered machine
+failed twice (p95/p99 `26.998/38.737 ms` and `25.693/37.457 ms`), while a
+bounded Web rerun passed after an initial failure. Before changing the
+renderer, add trace segments for candidate query, precise hit, Scene/RenderTree
+build, Damage/Tile invalidation, raster queue age, Skia draw/flush, GPU submit,
+present interval, and each memory category. This distinguishes an index/damage
+cost from Tile/raster scheduling or D3D12 present/driver cost.
 
 For Android, archive one representative physical-device report covering the
 1K/10K/50K/100K pan, zoom, select, and drag paths. `write` is only accepted

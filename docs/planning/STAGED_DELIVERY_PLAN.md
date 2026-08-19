@@ -1,6 +1,6 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 已解除启动阻塞，POC-04 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
+> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
 
 路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。编号表达工作包，不表达无条件串行关系；设计、实现和验收遵循以下 evidence DAG：
 
@@ -12,6 +12,10 @@ flowchart LR
   P2 -->|"Integration Ready contracts"| P6["POC-06 FastInk"]
   P2 -->|"Integration Ready Ink"| P3Gate["POC-03 integrated ink gate"]
   P3 --> P3Gate
+  P3 --> RF1["RF-01 Scene rendering foundation"]
+  RF1 --> RF2["RF-02 Dynamic spatial query"]
+  RF2 --> RF3["RF-03 Tiled raster"]
+  RF3 --> R3["R3 Production rendering"]
   P3 --> P5["POC-05 Hybrid Surface risk proof"]
   P1 --> R1["R1 foundation work"]
   P2 -->|"Integration Ready contracts"| R1Accept["R1 acceptance"]
@@ -209,12 +213,19 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 ### 目标
 
-证明 Semantic Document、RuntimeScene 和 Renderer 分层能够支撑 100K 节点，并提前验证 SceneCompiler、SpatialIndex、Dirty Region、FrameGraph 和 TileCache 接口。
+证明 Semantic Document、RuntimeScene 和 Renderer 分层在 100K 节点下保持正确、可重建、
+可观测，并为后续生产渲染路线提供基线。POC-03 是基础 scene/correctness、跨端效果和
+集成 Ink 验证，不是生产级 R-tree、分层 Tile/LOD 或 raster scheduler 的完成证明。Windows
+D3D12 Integrated Playground 的真实设备门禁失败必须保留为架构风险证据，不能通过降低门禁
+或将结果归因于机器性能而关闭。当前数值、环境和 bundle identity 见
+[2026-08-19 Windows/Web Integrated evidence](../quality/evidence/poc03/integrated-windows-web-physical-20260819.md)。
 
 ### 设计
 
 - 定义 100K 可重复场景生成器：混合 Shape、Image、VectorPath、POC-01 read-only/simple Text render record 和 Stroke；不实现 POC-04 RichText layout/editing。
 - 定义 Document records 与 SoA RuntimeScene records 的映射。
+- 定义自己的 `Scene` facade 与 `SceneBinding`，内部 RenderScene 可在后续接入 SkSG Render
+  DAG；SkSG 类型不进入 Document、Bridge 或 Shell。
 - 定义 full compile、incremental ChangeSet、revision 和失效规则。
 - 按 ADR-0019 将 `SemanticChanges` 与可丢弃/可重算的 `InvalidationHints` 分离；过期、冲突
   或缺失 hints 必须扩大失效或回退 full compile。
@@ -224,6 +235,10 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
   ExternalSurface pass contract；backend 可在依赖/视觉等价时 merge、elide、reuse，placement、
   registry、focus 与 lifecycle 语义归 POC-05。
 - 定义 L1 Raster/Tile cache key、预算、淘汰、失效和设备丢失路径。
+- 只冻结 `ISpatialIndex`、`DamageTracker`、`TileKey`/`TileManager`/`IRasterSource` 的实验性
+  边界；POC-03 使用 deterministic Linear/Uniform Grid 和 direct Skia。动态 R-tree、
+  TileGrid/TilingSet/LOD、prefetch、raster task scheduler、memory budget/eviction 归入
+  后续 RF-01～RF-03，不在本阶段伪造生产结论。
 - 定义 RuntimeScene/HitTest geometry query 与 Editor SelectionPolicy/SnapEngine 的边界；SceneCompiler 不知道当前 Tool。
 - 使用 POC common deterministic seed/clock 生成 100K fixture；按 ADR-0017 验证每 View
   frame invalidation、VSync callback、target generation 与多视口调度隔离。
@@ -247,6 +262,9 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 - Scene generator 相同 seed 在 x64/arm64/WASM 产生相同 canonical fixture/digest；wall clock
   和容器迭代顺序不影响结果。
 - 在集成性能 Playground 分别加载 1K/10K/50K/100K objects，执行 pan、zoom、write、select 和 drag；Windows/Web 保持硬基准，Android 至少提交一台代表性真机的 frame/input/memory 与人工体验报告。
+- 记录 Windows D3D12、WebGL2 和 Android 真机在每档的候选数、dirty area、render/submit、
+  presentation、memory category 和 warm-up；性能失败必须关联到下一阶段的索引、damage、
+  tiling 或调度假设，而不是删除语料。
 
 ### 实现
 
@@ -276,6 +294,8 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 - [ ] 100K 场景 full/incremental 等价性全部通过。
 - [ ] Windows/Web 达到各自 p95/p99 帧时间门禁。
+- [ ] 若 Windows/Web 物理门禁未通过，必须保留失败证据并将 POC-03 保持 `Validating`；不得
+  以 host/headless 或单次有界复测替代重复物理设备结果。
 - [ ] 内存保持在 768/512 MiB 上限内且 60 秒无持续增长。
 - [ ] 单节点更新没有全量遍历或全屏无条件失效。
 - [ ] 空/错误/过期 InvalidationHints 不改变 Scene 正确性；logical pass 优化不改变视觉结果。
@@ -284,6 +304,21 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 - [ ] Integrated Performance Playground 完成三平台评审；Android 真机不存在未分类的输入中断、交互冻结或内存无界增长。
 - [ ] Windows、Chrome Stable Web、Pixel 7 在 1K/10K/50K/100K 完成 pan/zoom/write/select/drag 证据；普通节点 drag 不伪造 MoveStroke。
 - [ ] POC-03 未提前实现 RichText 编辑或 ExternalSurface placement；仅 simple Text 和 reserved pass 进入 Scene POC。
+
+### POC-03 之后的生产渲染基础（不改变 POC 编号）
+
+POC-03 完成基础验证后，按 [ADR-0021](../adr/0021-render-scene-spatial-index-tiling-boundaries.md)
+进入三个可独立审查的渲染基础工作包。它们是 R3 前的必要技术准备，不把 POC-03 的 direct
+Skia baseline 误称为生产方案：
+
+| 工作包 | 设计项 | 验证语料 | 实现项 | 交付物 | 退出条件 |
+| --- | --- | --- | --- | --- | --- |
+| RF-01 Scene rendering foundation | `Scene` facade、SceneBinding、RenderScene/SkSG 私有边界、DamageTracker API、两阶段 HitTest | SkSG 类型隔离、full/incremental 等价、damage fault injection、负坐标/退化 bounds | SkSGRenderScene adapter、world-space DamageSet、candidate→precise hit pipeline | 模块依赖图、RenderScene contract、damage trace | Document/Bridge/Shell 不依赖 SkSG；damage 可重建且不进入 digest |
+| RF-02 Dynamic spatial query | `ISpatialIndex` 动态 insert/remove/update/query、viewport culling、Selection/Eraser 查询 | brute-force oracle、20 万次随机增删改、负坐标、局部更新扫描量和命中顺序 | DynamicRTreeSpatialIndex、索引诊断和迁移 fallback | R-tree/Hybrid 评估报告、查询基准和失败缩减语料 | 结果逐字节等价；局部操作不全量扫描；内存和退化策略有界 |
+| RF-03 Tiled raster and scheduling | TileGrid、TilingSet/LOD、TilePriority、IRasterSource、TileManager、RasterTaskScheduler、MemoryBudget/Eviction | 1K～100K 多 zoom/pan、prefetch/取消、cache clear、device loss、内存压力、负世界坐标 | 分层 Tile renderer、raster task queue、prefetch 和可观测 eviction | Tile/LOD 设计 ADR、frame/memory/raster trace、R3 迁移报告 | visible tile 及时可用；不出现无界增长；清缓存/设备丢失后 digest 与视觉恢复；固定 Windows/Web 门禁重新通过 |
+
+RF-01～RF-03 只允许在证据完整后接入 R3 Production Rendering。POC-03 的 `Validating`
+状态、Windows 失败和 Android/Web 观察值继续按本阶段报告保留。
 
 ## POC-04 — RichText / IME
 
@@ -443,8 +478,18 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 ### 设计
 
 - 冻结 core module 依赖图、公开 facade、CMake targets 和 third-party policy，包括 render、View/Frame、Resources 与 Persistence 的独立边界。
-- 冻结 WASM API、C ABI、JNI 的版本、capability、所有权、线程和错误模型。
+- 以 [Runtime Public C API Contract](../api/RUNTIME_C_API_CONTRACT.md) 和
+  [规范性 v1 header](../api/canvas_runtime_api_v1.h) 冻结 WASM/C ABI/JNI 的 symbol、
+  generation handle domain、`struct_size + abi_version`、count/stride、capability、borrowed
+  callback、single-owner thread、caller buffer、错误和生命周期模型；POC `canvas_poc_*`
+  不得直接升级为产品 ABI。
 - 冻结 Application API、PointerAdapter、TextInputAdapter 三条入口，以及 RendererBackend/RenderTarget/PlatformSurfaceAdapter 的 acquire/present/recovery 和 PlatformFrameScheduler/invalidation 契约。
+- 冻结 Control Path 与 Native Hot Path：PointerSampleBatch、IME、VSync、Preview 和 render
+  不逐 sample 穿过 RN JS/QML/React state；Persistence、Sync、Resource provider 使用独立
+  Snapshot/Operation/Resource/Event ports，不进入万能 PlatformHost。
+- 接受并执行 [Canvas C++ / C ABI 风格](../CPP_STYLE.md)：C++20、4 spaces、100 columns、
+  K&R、lower_snake_case 文件、`.hpp/.cpp`、`namespace canvas`、lowerCamelCase C++ API、
+  private `_member` 和 public header 依赖隔离。
 - 产品化 POC common 的 deterministic clock/random/task injection；定义强类型 ID domain、
   Result/diagnostic 和 revision 类型，禁止不同 capability/ID 命名空间混用。
 - 冻结 `DocumentCapability`、`RendererCapability`、`PlatformCapability`、`ProductCapability`
@@ -457,6 +502,9 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 ### 验证
 
 - Product Tier A 从干净环境构建；公开头文件和 Bridge contract tests 100% 通过。core/public ABI 变更同时编译 Portability Tier B。
+- 规范性 C header 在 C11/C++20/ObjC++ 下 self-contained compile，WASM/JNI wrapper 使用同一
+  symbol/struct/enum manifest；short/long struct、unknown enum、stale/wrong-domain handle、
+  buffer-too-small、callback lifetime/reentrancy 和 exception translation 语料通过。
 - 核心依赖检查确保 Document 不依赖 Skia/platform/network/ResourceManager/Persistence，Renderer 无 Document 写接口或 native surface 类型。
 - POC-01～04 的阻断语料在产品骨架中继续通过；POC-06 已完成时一并迁入，未完成时不得建立 FastInk 产品特例。POC-05 作为非 V1 risk proof 不阻塞 R1。
 - Numeric/Geometry、clock/random、input backpressure、frame scheduling、ChangeSet/hints 和
@@ -468,6 +516,11 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 ### 实现
 
 - 建立 CMake/preset、依赖锁、format/lint、CI 和产品模块目录。
+- 将 `docs/api/canvas_runtime_api_v1.h` 按模块拆入 `include/canvas/*.h`，实现 C++20
+  RuntimeFacade adapter、C++ wrapper、JNI/ObjC++/WASM binding 和 ABI manifest test；签名
+  与语义不得静默偏离规范性 header。
+- 安装根目录 `.clang-format` 对应的 format/check-format 脚本，扫描产品 `include/src/tests/tools`
+  并排除 generated、third-party 和 build。
 - 实现 foundation、public facade、opaque handles、deterministic services、diagnostics、
   capability negotiation 和 PlatformFrameScheduler contract harness。
 - 建立格式无关的 DocumentSnapshot/RecoveryFrontier facade 与 mock recovery harness；不在
@@ -478,12 +531,19 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 ### 交付物
 
 - 可构建产品骨架、Bridge SDK/示例和 CI。
+- 可发布的 C header set、C++ convenience wrapper、JNI/ObjC++/WASM wrapper 示例、ABI symbol/
+  struct/enum manifest 和生命周期/ownership 文档。
 - 模块依赖图、版本策略、第三方清单和 POC 迁移报告。
 - 基线测试、sanitizer 和构建时长报告。
 
 ### 退出条件
 
 - [ ] Product Tier A clean build 和 contract tests 全部通过；core/public ABI 变更的 Tier B build/conformance 通过。
+- [ ] C ABI C11/C++20 self-containment、handle domain、struct versioning、caller buffer、callback
+  lifetime/reentrancy、exception translation 和跨平台 ABI manifest 全部通过。
+- [ ] Pointer/VSync/IME hot path 没有逐 sample JS/QML/JSON bridge；Runtime public header 不包含
+  Skia、STL、platform、network、database 或 thread headers。
+- [ ] clang-format check 和 Canvas naming/dependency lint 在产品目录强制执行。
 - [ ] POC-01～04 的阻断语料在产品骨架中无回归；已接受的 POC-06 语料必须迁入，POC-05 不作为 V1/R1 门禁。
 - [ ] 核心依赖图符合架构不变量。
 - [ ] 没有 POC-only 平台特例进入公开 Runtime API。
@@ -576,6 +636,9 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 - 冻结 Ganesh backend matrix、V1 color/DPI、device loss、资源预算和 golden tolerance。
 - 冻结 Tier A release/支持矩阵、Tier B portability conformance 和 Headless Utility Target 责任；不把 Apple harness 误作 V1 产品 Shell。
 - 冻结生产 FrameGraph logical/physical pass 优化、Compositor、L1 cache 和多视口策略。
+- 在进入产品实现前关闭 RF-01～RF-03：冻结 Scene/RenderScene/SkSG 私有边界、动态
+  SpatialIndex、DamageTracker、signed TileGrid/TilingSet/LOD、IRasterSource、TileManager、
+  priority/prefetch/raster scheduling 和有界 eviction。
 - 冻结 `ResourceBudgetCoordinator` 作为单一 Global Resource Budget owner 的 telemetry/soft-hard limit/eviction/memory-pressure
   规则，统一归因 decoded image/font、Canvas cache、Skia GPU cache、FrameGraph transient
   和 platform surface；不假设 Runtime 完全控制 Skia 内部 cache。
@@ -586,6 +649,8 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 ### 验证
 
 - POC-03 100K 场景预算在 release 产品 target 中通过，不低于 POC 门禁。
+- RF-02 动态索引与 brute-force oracle 在负坐标、增删改、HitTest/Selection/Eraser 上等价；
+  RF-03 Tile/LOD 通过 cache clear、device loss、prefetch cancel 和内存压力语料。
 - 全视觉矩阵、CPU reference 与产品 GPU backend 在规定容差内通过。
 - Tier A 三平台完成核心用户流、生命周期、resize、前后台、device loss、低内存和 surface 重建；Tier B 完成 core conformance、Metal render/readback 和生命周期回归。
 - 注入平台内存压力时，各类资源按统一预算有界回收，Skia/Canvas 双重缓存不会造成未归因
@@ -597,6 +662,9 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 ### 实现
 
 - 产品化 RuntimeScene、ViewQuery/FrameState、FrameBuilder、FrameGraph、Compositor、RendererBackend、L1 cache 和 resource upload。
+- 产品化 Canvas-owned Scene facade、SkSGRenderScene adapter、DynamicRTreeSpatialIndex、
+  DamageTracker、TileManager/IRasterSource、LOD/raster scheduler 和 memory-aware eviction；
+  Chromium cc 不作为链接依赖。
 - 完成 Tier A shell/bridge、native surfaces、输入、IME、clipboard、file 和 accessibility。
 - 产品化 FastInk app backend；不实现 ExternalSurface/Hybrid Surface 产品功能。
 - 实现帧诊断、cache/dirty overlay、device recovery 和性能追踪导出。
@@ -612,6 +680,8 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 - [ ] Tier A V1 用户流与生命周期测试全部通过，Tier B core conformance 无回归。
 - [ ] 100K、视觉、输入、文本和 FastInk 门禁无回归。
+- [ ] RF-01～RF-03 退出条件全部通过，Windows/Web Integrated Performance Playground 在
+  固定设备重新达到既有 p95/p99 门禁。
 - [ ] Tier A Human Ink/Integrated Performance Gate 已使用产品 target 签署，未关闭问题均有关联 trace、负责人和处置结论。
 - [ ] 2 小时稳定性测试无 crash，内存增长 < 5%。
 - [ ] Surface/device/cache 丢失均能恢复且不改变 Document。

@@ -3,10 +3,12 @@
 Status: **Host matrix and Pixel 7 Android integrated lane passed; POC-03 remains `Validating`**.
 
 This report records the first integrated validation of the POC-02 Ink contract
-inside the POC-03 Scene/FrameGraph/TileCache path. It does not close the
-physical integrated gates: Windows D3D12, Chrome Stable WebGL2, and Pixel 7
-must still run the same four-scale playground on their real targets. The
-immutable pre-integration physical report remains
+inside the POC-03 Scene/FrameGraph/TileCache path. Pixel 7 subsequently closed
+its four-scale physical lane. Windows D3D12 and Chrome Stable WebGL2 evidence
+was later collected separately: Windows failed its hard frame gate twice and
+the Web lane had an initial failure followed by a bounded passing rerun. See
+[the dedicated Windows/Web report](integrated-windows-web-physical-20260819.md).
+The immutable pre-integration physical report remains
 [physical-validation-20260818.md](physical-validation-20260818.md).
 
 ## Reproducibility identity
@@ -93,8 +95,11 @@ Passed locally:
 
 Still pending and intentionally not claimed here:
 
-- Windows physical D3D12 integrated playground at 1K/10K/50K/100K.
-- Chrome Stable WebGL2 integrated playground at 1K/10K/50K/100K.
+- Windows physical D3D12 integrated playground at 1K/10K/50K/100K. The first
+  evidence bundle has now been collected and failed the Windows p95/p99 gate
+  twice; see [the dedicated Windows/Web report](integrated-windows-web-physical-20260819.md).
+- Chrome Stable WebGL2 integrated playground at 1K/10K/50K/100K. Its bounded
+  rerun passed, but the initial run failed and the lane remains under review.
 - The POC-02 formal pressure-pen latency and Human Ink Gate.
 
 The Windows shell now accepts native `WM_POINTER` select/drag messages and

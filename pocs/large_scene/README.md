@@ -1,11 +1,14 @@
 # POC-03 — 100K Scene
 
-Status: **Validating**. This directory is a disposable experiment, not a stable
+Status: **Validating** (the Integrated Windows D3D12 hard gate is reproducibly failing). This directory is a disposable experiment, not a stable
 product API or file format.
 
 POC-03 proves that one semantic `Document` can compile into a shared SoA
 `RuntimeScene`, accept bounded incremental updates, service isolated Views,
-and feed a logical `FrameGraph` plus L1 `TileCache` at 100K nodes. Shape,
+and feed a logical `FrameGraph` plus L1 `TileCache` interface at 100K nodes.
+It is a correctness/cross-platform baseline, not proof of a production dynamic
+R-tree, layered Tile/LOD renderer, raster scheduler, or universal 100K frame
+budget. Shape,
 Image, VectorPath, simple read-only Text, and Stroke are deliberately compact
 render records; RichText layout/editing remains POC-04, and ExternalSurface is
 only a reserved empty pass for POC-05.
@@ -22,7 +25,9 @@ only a reserved empty pass for POC-05.
   missing, enlarged, stale, or corrupt hints cannot change Scene correctness.
 - `RuntimeScene` stores record fields in structure-of-arrays form and indexes
   stable IDs to slots. Its deterministic uniform grid is incrementally updated;
-  a normal property update touches one record instead of scanning 100K.
+  a normal property update touches one record instead of scanning 100K. This
+  grid is an experimental correctness implementation, not the production
+  `DynamicRTreeSpatialIndex` selected by ADR-0021.
 - `ViewState` owns viewport, zoom, DPR, target generation, visible set, scale
   bucket, and screen-space damage. The shared `RuntimeScene` owns none of that
   state, so a minimap does not copy or mutate the Document.
@@ -35,7 +40,8 @@ only a reserved empty pass for POC-05.
 - The L1 cache prototype has a strict View/content/device/backend/scale/color/
   tile key, byte budget, LRU eviction, world invalidation, clear, and device
   generation reset. It is a behavior/interface proof, not yet a production GPU
-  texture cache.
+  texture cache, TileGrid/TilingSet, LOD policy, prefetcher, or raster task
+  scheduler.
 - `DeterministicFrameScheduler` proves one pending callback per View, revision
   coalescing, target-generation rejection, latest-revision presentation, and
   View teardown isolation. Platform VSync integrations remain platform code.
@@ -68,6 +74,20 @@ The benchmark exits nonzero unless full/incremental results agree, a property
 update touches at most one record, and the measured representative viewport has
 at most 5,000 spatial candidates. Its steady-clock headless timing is a local
 algorithm diagnostic, not physical display evidence.
+
+## Production rendering boundary after POC-03
+
+The accepted target architecture keeps a Canvas-owned `Scene` facade over
+`RenderScene`, `ISpatialIndex`, and `DamageTracker`. Skia SkSG may implement the
+private Render DAG, but it is never the Document model or public Runtime API.
+Spatial query is two-stage: a Canvas-owned dynamic index returns candidates,
+then Geometry/SkSG performs precise hit testing. TileGrid, signed `TileKey`,
+TilingSet/LOD, TileManager, TilePriority, `IRasterSource`, raster scheduling,
+memory budget, and eviction are follow-on RF-01 through RF-03 work; Chromium cc
+is a source-level design reference only. See
+[ADR-0021](../../docs/adr/0021-render-scene-spatial-index-tiling-boundaries.md)
+and the
+[rendering architecture review](../../docs/research/POC03_RENDERING_ARCHITECTURE_REVIEW.md).
 
 To verify the prebuilt Skia consumer on macOS without any Skia source build:
 
@@ -140,18 +160,31 @@ atomic operations, full/incremental equivalence, hint fault injection, the
 order, two-View isolation, logical-pass optimization, cache recovery, and
 scheduler generation/coalescing behavior.
 
-Physical Windows D3D12 and Chrome Stable Web traces, Pixel 7, iPhone, iPad,
+Pre-integration physical Windows D3D12 and Chrome Stable Web traces, Pixel 7,
+iPhone, iPad,
 manual centroid/release gestures, and cross-platform equivalence are recorded
 in the [2026-08-18 physical validation report](../../docs/quality/evidence/poc03/physical-validation-20260818.md).
-The Windows/Web hard performance gates passed. Mobile performance evidence
+That immutable baseline report passed its then-current Windows/Web path. Mobile performance evidence
 retains the observed Pixel 7 cold-start spike and an iPad warm-run scheduling
 anomaly; it is portability and experience evidence rather than a replacement
 for the same-machine Windows/Web gate.
+
+The newer Integrated Ink Windows/Web physical evidence is a different workload
+and supersedes the baseline for POC-03 disposition. On Windows Native D3D12,
+two 60-second runs failed the p95 ≤ 16.7 ms and p99 ≤ 33.3 ms gates:
+26.998/38.737 ms and 25.693/37.457 ms. The bounded Chrome rerun passed, while
+its first run did not. Correctness, digest, visual equivalence, candidate count,
+and memory remained within their gates. The source evidence is commit
+[`01d2bcb4b80fac2271d1b6ee6a3482054ae46cf0`](https://github.com/Mostorm-Labs/canvas/commit/01d2bcb4b80fac2271d1b6ee6a3482054ae46cf0)
+on `codex/poc03-windows-integrated-physical`; its bundle SHA-256 is
+`4c96441bbf74d9924dcc47a42405e943c273b75cf6e32c2a1b33f49ccf3f4ee0`.
 
 POC-03 remains `Validating` until fresh Windows, Chrome Stable Web, and Pixel 7
 Integrated Performance Playground evidence passes at 1K/10K/50K/100K. POC-02
 remains `Integration Ready / Validating`; its formal pressure-pen latency and
 Human Ink Gate are independent. POC-03 does not create an Android or Apple
-product shell.
+product shell. The Windows failure is an input to RF-01 through RF-03; it does
+not justify lowering the gate or claiming that the POC's direct-render path is
+the final production architecture.
 
 See [the runbook](docs/POC03_RUNBOOK.md) for evidence commands and schemas.
