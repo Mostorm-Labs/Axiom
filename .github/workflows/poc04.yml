@@ -84,7 +84,7 @@ jobs:
         shell: bash
         run: |
           source .deps/emsdk/emsdk_env.sh
-          cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
+          cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
           cmake --build out/poc04-web --parallel
           ! rg -l "pthread|SharedArrayBuffer" out/poc04-web/canvas_poc04_web.*
       - name: Record canonical Web Runtime behavior in Chromium

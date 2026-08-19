@@ -25,6 +25,18 @@ def main() -> int:
         raise RuntimeError("POC-04 jobs must not evaluate the SDK lock before checkout")
     if "needs.sdk-lock.outputs.available == 'true'" not in text:
         raise RuntimeError("POC-04 platform jobs must use the post-checkout SDK lock gate")
+    relative_toolchain = (
+        "-DCMAKE_TOOLCHAIN_FILE=.deps/emsdk/upstream/emscripten/"
+        "cmake/Modules/Platform/Emscripten.cmake"
+    )
+    if relative_toolchain in text:
+        raise RuntimeError("Web consumer must not resolve the toolchain relative to its build tree")
+    absolute_toolchain = (
+        '-DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.deps/emsdk/upstream/emscripten/'
+        'cmake/Modules/Platform/Emscripten.cmake"'
+    )
+    if absolute_toolchain not in text:
+        raise RuntimeError("Web consumer must use the checkout-absolute Emscripten toolchain path")
     if "if: ${{ false }}" not in text:
         raise RuntimeError(
             "cross-platform acceptance must stay disabled until platform recorders exist"
