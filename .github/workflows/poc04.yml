@@ -158,7 +158,7 @@ jobs:
       - name: Install pinned Android NDK and core dependencies
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.5" "ndk;27.2.12479018"
-          python3 tools/bootstrap_deps.py --core
+          python3 tools/bootstrap_deps.py --core --font-only
       - name: Install Android emulator image
         if: matrix.emulator == true
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
@@ -167,6 +167,10 @@ jobs:
       - name: Build Native CanvasView JNI data plane
         run: |
           gradle -p pocs/rich_text/platform/android :app:assembleDebug -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
+          mkdir -p out/poc04-android
+          unzip -Z1 pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk > out/poc04-android/apk-files.txt
+          grep -Fx 'assets/fonts/Roboto-Regular.ttf' out/poc04-android/apk-files.txt
+          grep -Fx 'assets/fonts/NotoSansCJK-VF-subset.otf.ttc' out/poc04-android/apk-files.txt
       - name: Enable Android emulator hardware acceleration
         if: matrix.emulator == true
         run: sudo chmod 0666 /dev/kvm

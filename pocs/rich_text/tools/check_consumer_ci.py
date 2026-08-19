@@ -55,6 +55,17 @@ def main() -> int:
         )
     if "bash pocs/rich_text/platform/android/record_canonical_behavior.sh" not in text:
         raise RuntimeError("Android emulator job must invoke the atomic recorder script")
+    android_bootstrap_start = text.index("- name: Install pinned Android NDK and core dependencies")
+    android_bootstrap_end = text.index("- name: Install Android emulator image", android_bootstrap_start)
+    android_bootstrap = text[android_bootstrap_start:android_bootstrap_end]
+    if "bootstrap_deps.py --core --font-only" not in android_bootstrap:
+        raise RuntimeError("Android consumer must materialize the independent font fixtures")
+    for asset in (
+        "assets/fonts/Roboto-Regular.ttf",
+        "assets/fonts/NotoSansCJK-VF-subset.otf.ttc",
+    ):
+        if f"grep -Fx '{asset}'" not in text:
+            raise RuntimeError(f"Android consumer must verify packaged fixture {asset}")
     if "always() && matrix.emulator == true" not in text:
         raise RuntimeError("Android diagnostics artifact must upload after recorder failure")
     for target in ("web-wasm-webgl2", "windows-x64-d3d12",
