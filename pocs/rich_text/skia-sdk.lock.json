@@ -1,0 +1,55 @@
+{
+  "format": "canvas-skia-sdk-lock-v1",
+  "profile": "poc04-richtext-v1",
+  "profile_hash": "99b829f8c1ce6b414256fbf24430417d0f3a26b03e4f52b5e9ef82dd7defafb0",
+  "repository": "Mostorm-Labs/canvas",
+  "schema_version": 1,
+  "set_id": "592fc75a4b247fe9cd4fb88b0c36b1b6d71cd70b0ed5412702f8990cbe687b29",
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "source_commit": "6dc3121ade19b5daeb638e4e78a22cf4dbd25129",
+  "tag": "skia-sdk-poc04-richtext-v1-592fc75a4b247fe9",
+  "targets": {
+    "android-arm64-v8a-gles3": {
+      "asset": "skia-sdk-android-arm64-v8a-gles3.zip",
+      "sdk_id": "816c4d2e838381fc6d3cd300b524eb428c9bddb71948fbb73b16245d73acd30d",
+      "sha256": "8399ee75681979d860554d426ef9bbccaad2d7ea40237df91e5baf9a8f08f57a",
+      "size": 17505759,
+      "toolchain": {
+        "android_ndk": "27.2.12479018",
+        "api_level": 26
+      }
+    },
+    "android-x86_64-gles3": {
+      "asset": "skia-sdk-android-x86_64-gles3.zip",
+      "sdk_id": "353139da7caeb2cb968ec1ffbf423e4d1219cb67c6e5216616c6247d494be597",
+      "sha256": "c63ac1aaa910d8d86d9c93beed336b26623b551eeaaca6d186beb376b7ea4dd1",
+      "size": 17474462,
+      "toolchain": {
+        "android_ndk": "27.2.12479018",
+        "api_level": 26
+      }
+    },
+    "web-wasm-webgl2": {
+      "asset": "skia-sdk-web-wasm-webgl2.zip",
+      "sdk_id": "3307bfcc5b71da46742d6c4e409800a4704c9e8c96777eb81051dcb275020d02",
+      "sha256": "5611a29592ff47f4c50007131b7bacf3d2d0ca3f31c0383d98ff4762ecd2a0e4",
+      "size": 11213262,
+      "toolchain": {
+        "emscripten": "6.0.6",
+        "llvm": "22.1.8",
+        "pthread": false
+      }
+    },
+    "windows-x64-d3d12": {
+      "asset": "skia-sdk-windows-x64-d3d12.zip",
+      "sdk_id": "89d012ba4be4dedaf321ac7b76786857e045998f62f4f7fa67b8879894046987",
+      "sha256": "12926f203b90b70b52f58f87b553ba2c202ea28e3fdd43ae2eab25591f0d05d5",
+      "size": 30359349,
+      "toolchain": {
+        "llvm": "22.1.8",
+        "msvc_toolset": "14.51.36231",
+        "windows_sdk": "10.0.26100.0"
+      }
+    }
+  }
+}

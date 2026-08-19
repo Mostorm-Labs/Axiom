@@ -84,9 +84,11 @@ jobs:
         shell: bash
         run: |
           source .deps/emsdk/emsdk_env.sh
-          cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
+          cmake -S pocs/rich_text -B out/poc04-web -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/.deps/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" -DCANVAS_POC04_BUILD_TESTS=OFF -DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON -DCANVAS_POC04_BUILD_WEB=ON
           cmake --build out/poc04-web --parallel
-          ! rg -l "pthread|SharedArrayBuffer" out/poc04-web/canvas_poc04_web.*
+          test -s out/poc04-web/platform/web/canvas_poc04_web.js
+          test -s out/poc04-web/platform/web/canvas_poc04_web.wasm
+          ! grep -E -l "pthread|SharedArrayBuffer" out/poc04-web/platform/web/canvas_poc04_web.js
       - name: Record canonical Web Runtime behavior in Chromium
         working-directory: pocs/rich_text/platform/web
         run: |
@@ -94,7 +96,7 @@ jobs:
           npx playwright install --with-deps chromium
           npm run build
           npm test
-          POC04_WASM_DIR="$GITHUB_WORKSPACE/out/poc04-web" POC04_BEHAVIOR_OUTPUT="$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json" npm run record:wasm
+          POC04_WASM_DIR="$GITHUB_WORKSPACE/out/poc04-web/platform/web" POC04_BEHAVIOR_OUTPUT="$GITHUB_WORKSPACE/out/poc04-web/web-behavior.json" npm run record:wasm
       - name: Validate browser IME event adapter
         working-directory: pocs/rich_text/platform/web
         run: |
@@ -156,7 +158,7 @@ jobs:
       - name: Install pinned Android NDK and core dependencies
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.5" "ndk;27.2.12479018"
-          python3 tools/bootstrap_deps.py --core
+          python3 tools/bootstrap_deps.py --core --font-only
       - name: Install Android emulator image
         if: matrix.emulator == true
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
@@ -164,7 +166,11 @@ jobs:
         run: python3 tools/skia/fetch.py --profile "$PROFILE" --lock "$LOCK" --install-root "$INSTALL" --target "${{ matrix.target }}" --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Build Native CanvasView JNI data plane
         run: |
-          gradle -p pocs/rich_text/platform/android :app:assembleDebug -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
+          gradle -p pocs/rich_text/platform/android :app:assembleRelease -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
+          mkdir -p out/poc04-android
+          unzip -Z1 pocs/rich_text/platform/android/app/build/outputs/apk/release/app-release.apk > out/poc04-android/apk-files.txt
+          grep -Fx 'assets/fonts/Roboto-Regular.ttf' out/poc04-android/apk-files.txt
+          grep -Fx 'assets/fonts/NotoSansCJK-VF-subset.otf.ttc' out/poc04-android/apk-files.txt
       - name: Enable Android emulator hardware acceleration
         if: matrix.emulator == true
         run: sudo chmod 0666 /dev/kvm
@@ -177,18 +183,12 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: |
-            adb install -r pocs/rich_text/platform/android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am force-stop com.mostorm.canvas.poc04
-            adb shell am start -n com.mostorm.canvas.poc04/.RichTextActivity --ez recordCanonicalBehavior true
-            timeout 180 bash -c 'until adb shell run-as com.mostorm.canvas.poc04 test -s files/android-behavior.json; do sleep 1; done'
-            mkdir -p out/poc04-android
-            adb exec-out run-as com.mostorm.canvas.poc04 cat files/android-behavior.json > out/poc04-android/android-behavior.json
+          script: bash pocs/rich_text/platform/android/record_canonical_behavior.sh
       - uses: actions/upload-artifact@v4
-        if: matrix.emulator == true
+        if: ${{ always() && matrix.emulator == true }}
         with:
           name: poc04-android
-          path: out/poc04-android/android-behavior.json
+          path: out/poc04-android/
 
   cross-platform-acceptance:
     if: ${{ false }} # Enabled after real platform behavior recorders land.

@@ -44,6 +44,13 @@ android {
 
     sourceSets["main"].java.srcDir("../src/main/java")
     buildFeatures { buildConfig = true }
+    buildTypes {
+        getByName("release") {
+            // The canonical performance gate must measure optimized native code.
+            // Debug signing only makes this POC-only APK installable in CI.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     externalNativeBuild {
         cmake {
             path = file("../../../CMakeLists.txt")
@@ -57,20 +64,25 @@ android {
 }
 
 val canvasPoc04FontRoot = rootProject.file("../../../../.deps/assets")
-tasks.register<Copy>("syncPoc04Fonts") {
-    from(canvasPoc04FontRoot) {
-        include("Roboto-Regular.ttf", "NotoSansCJK-VF-subset.otf.ttc")
-    }
-    into(layout.projectDirectory.dir("src/main/assets/fonts"))
-    doFirst {
-        listOf("Roboto-Regular.ttf", "NotoSansCJK-VF-subset.otf.ttc").forEach { name ->
+val canvasPoc04FontNames = listOf("Roboto-Regular.ttf", "NotoSansCJK-VF-subset.otf.ttc")
+tasks.register("verifyPoc04Fonts") {
+    doLast {
+        canvasPoc04FontNames.forEach { name ->
             check(canvasPoc04FontRoot.resolve(name).isFile) {
                 "Missing POC-04 font fixture $name; run tools/bootstrap_deps.py --font-only"
             }
         }
     }
 }
-tasks.named("preBuild").configure { dependsOn("syncPoc04Fonts") }
+tasks.register<Copy>("syncPoc04Fonts") {
+    from(canvasPoc04FontRoot) {
+        include(*canvasPoc04FontNames.toTypedArray())
+    }
+    into(layout.projectDirectory.dir("src/main/assets/fonts"))
+}
+tasks.named("preBuild").configure {
+    dependsOn("verifyPoc04Fonts", "syncPoc04Fonts")
+}
 
 kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
