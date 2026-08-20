@@ -38,8 +38,12 @@ def main() -> int:
     if platforms != {"web", "windows", "android"}:
         raise RuntimeError(f"platform matrix is incomplete: {sorted(platforms)}")
     for field in ("digest", "behavior", "layout"):
-        values = {json.dumps(value[field], sort_keys=True) for value in records}
-        if len(values) != 1:
+        # Compare the parsed JSON model, not serializer spelling. JSON numbers
+        # 0 and 0.0 represent the same exact value, and JS deliberately emits
+        # the former where the native writers emit the latter. No geometric
+        # tolerance or rounding is applied here.
+        expected = records[0][field]
+        if any(value[field] != expected for value in records[1:]):
             raise RuntimeError(f"cross-platform {field} mismatch")
     for value in records:
         behavior = value["behavior"]
@@ -82,10 +86,15 @@ def main() -> int:
                 raise RuntimeError(f"{value['platform']}: {prefix} metrics invalid")
             if metrics != sorted(metrics):
                 raise RuntimeError(f"{value['platform']}: {prefix} metrics unordered")
-        if performance.get("input_caret_p95_ms", 1e9) > 16.7:
-            raise RuntimeError(f"{value['platform']}: input/caret p95 gate failed")
-        if performance.get("full_layout_p95_ms", 1e9) > 33.3:
-            raise RuntimeError(f"{value['platform']}: layout p95 gate failed")
+        # The hosted Android x86_64 emulator owns correctness, schema and
+        # lifecycle—not representative latency. Android's unchanged product
+        # thresholds are enforced against the Pixel 7 physical record by
+        # validate_android_ime.py in the aggregate acceptance job.
+        if value["platform"] != "android":
+            if performance.get("input_caret_p95_ms", 1e9) > 16.7:
+                raise RuntimeError(f"{value['platform']}: input/caret p95 gate failed")
+            if performance.get("full_layout_p95_ms", 1e9) > 33.3:
+                raise RuntimeError(f"{value['platform']}: layout p95 gate failed")
     print(json.dumps({"accepted": True, "platforms": sorted(platforms)}, sort_keys=True))
     return 0
 

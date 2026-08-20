@@ -1,6 +1,6 @@
 # Canvas v2 项目总体框架
 
-> 状态：Architecture Baseline v1.4；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating，POC-05 / Accepted（跨 Web、Windows RNW、Android RN、iOS/iPadOS RN/Fabric 的受控 Overlay 风险验证）；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
+> 状态：Architecture Baseline v1.4；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Accepted，POC-05 / Accepted（跨 Web、Windows RNW、Android RN、iOS/iPadOS RN/Fabric 的受控 Overlay 风险验证）；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
 
 Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯的白板应用、Skia Renderer 或跨平台 UI 框架，而是整个产品体系共享的语义文档、编辑、笔迹、文本、场景、渲染、持久化与协作运行时。
 

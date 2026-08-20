@@ -49,10 +49,29 @@ def main() -> int:
         raise RuntimeError("Web consumer must reject pthread and SharedArrayBuffer output")
     if 'rg -l "pthread|SharedArrayBuffer"' in text:
         raise RuntimeError("Web consumer must not depend on ripgrep being installed on the runner")
-    if "if: ${{ false }}" not in text:
-        raise RuntimeError(
-            "cross-platform acceptance must stay disabled until platform recorders exist"
-        )
+    if "if: ${{ false }}" in text:
+        raise RuntimeError("cross-platform acceptance must not be disabled after evidence review")
+    for required_acceptance in (
+        "pocs/rich_text/tools/behavior_conformance.py",
+        "tools/poc04/validate_physical_ime.py",
+        "tools/poc04/validate_apple_ime.py",
+        "tools/poc04/validate_android_ime.py",
+        "tools/poc04/validate_macos_ime.py",
+        "POC-04 status: Accepted",
+    ):
+        if required_acceptance not in text:
+            raise RuntimeError(
+                f"cross-platform acceptance is missing {required_acceptance}"
+            )
+    if 'merge-multiple: false' not in text:
+        raise RuntimeError("POC-04 artifact layout must preserve artifact-name directories")
+    for artifact_path in (
+        "out/poc04-results/poc04-web/web-behavior.json",
+        "out/poc04-results/poc04-windows/windows-behavior.json",
+        "out/poc04-results/poc04-android/android-behavior.json",
+    ):
+        if artifact_path not in text:
+            raise RuntimeError(f"cross-platform acceptance is missing artifact path {artifact_path}")
     if "bash pocs/rich_text/platform/android/record_canonical_behavior.sh" not in text:
         raise RuntimeError("Android emulator job must invoke the atomic recorder script")
     if ":app:assembleRelease" not in text or ":app:assembleDebug" in text:

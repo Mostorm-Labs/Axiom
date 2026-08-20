@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "platform": "android",
+  "evidence_model": "complementary-physical-records",
+  "native_path": "NativeCanvasView/InputConnection/Gboard",
+  "source_reports": [
+    {
+      "path": "docs/quality/evidence/poc04/android-physical-20260819.md",
+      "sha256": "6510ebe6a84b560b70ce6705cc34f0d8bf836a0bc6952528b2b3e9b04c622ad2"
+    },
+    {
+      "path": "docs/quality/evidence/poc04/android-physical-20260820-v2.md",
+      "sha256": "2517b30f9c9b419c91835073dde2ec20390a8816c972cd96e377a89ad8c040f4"
+    }
+  ],
+  "physical_input": {
+    "source_commit": "d7ae1472dd39e237098d28d9794568424413b25a",
+    "skia_profile": "poc04-richtext-v1",
+    "device": "Google Pixel 7 (panther)",
+    "abi": "arm64-v8a",
+    "android_api": 37,
+    "ime": "Gboard 17.7.4.932364120-release-arm64-v8a",
+    "controlled_flow": "physical taps: ni hao -> candidate 你好",
+    "system_input_shown": true,
+    "served_view": "com.mostorm.canvas.poc04.NativeCanvasView",
+    "served_connection": "NativeCanvasView$onCreateInputConnection$1",
+    "observed_start_input": true,
+    "observed_start_input_view": true,
+    "observed_chinese_processor": true,
+    "observed_candidate": "你好",
+    "observed_commit_text_utf16_length": 2,
+    "observed_set_composing_text": false,
+    "user_text_logged": false
+  },
+  "canonical_runtime": {
+    "source_commit": "a57eb8d53c1232651514c3db58b98fc9967e7106",
+    "skia_profile": "poc04-richtext-v2",
+    "skia_target": "android-arm64-v8a-gles3",
+    "sdk_id": "fee8d9c93e4e4c7122d64374ed53e7ffd1b65deca9b80717ee752451386d4be0",
+    "device": "Google Pixel 7 (panther)",
+    "digest": "acdcb3d56c867549bfca77d4d37c148a",
+    "input_caret_p95_ms": 0.005655,
+    "full_layout_p95_ms": 1.935832,
+    "lifecycle": {"cycles": 100, "failures": 0},
+    "layout_diagnostics": []
+  }
+}
