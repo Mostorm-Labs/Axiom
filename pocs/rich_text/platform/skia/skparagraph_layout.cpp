@@ -38,6 +38,15 @@ uint64_t Utf8OffsetToUtf16(std::string_view utf8, uint64_t byte_offset) {
   if (byte_offset > utf8.size()) {
     throw std::out_of_range("SkParagraph UTF-8 offset is outside text");
   }
+  // SkParagraph line metrics are UTF-8 byte offsets, but a line boundary can
+  // be reported in the middle of a multibyte scalar (notably at a hard break
+  // immediately after CJK text).  The semantic document boundary is UTF-16;
+  // clamp such an index to the beginning of that scalar instead of asking the
+  // strict decoder to parse a truncated byte sequence.
+  while (byte_offset > 0 && byte_offset < utf8.size() &&
+         (static_cast<unsigned char>(utf8[byte_offset]) & 0xc0U) == 0x80U) {
+    --byte_offset;
+  }
   return Utf8ToUtf16(utf8.substr(0, byte_offset)).size();
 }
 
