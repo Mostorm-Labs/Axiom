@@ -19,8 +19,11 @@ element. This run used the available Node 22.14.0 rather than the locked Node
 24.18.0, so the formal Web artifact remains Pending until `poc05.yml` runs with
 the locked toolchain.
 
-Windows WebView2, Android WebView/VideoView and Apple native overlay adapters
-remain Pending. No physical-device gate is claimed by this document.
+Windows WebView2 and Android WebView/VideoView remain Pending. Apple now has
+supplemental native-adapter evidence in
+[apple-native-physical-validation-20260820.md](apple-native-physical-validation-20260820.md);
+the eventual React Native/Fabric Apple shell remains Pending. No product-shell
+acceptance is claimed by this document.
 
 ## Acceptance checklist
 
@@ -30,5 +33,5 @@ remain Pending. No physical-device gate is claimed by this document.
 - [ ] Web 100 lifecycle memory/active-count artifact.
 - [ ] Windows WebView2/video adapter and physical report.
 - [ ] Android WebView/VideoView adapter, 16 KiB checks and physical report.
-- [ ] Apple native overlay adapter and physical report.
+- [x] Apple native overlay adapter physical report (native experimental runner).
 - [ ] Product accepts the controlled-overlay z-order restriction.

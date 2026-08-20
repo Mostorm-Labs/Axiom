@@ -23,8 +23,10 @@ POC-05 library does not link or include POC-03 C++ scene types. This keeps the
 future React Native/Fabric adapters on the public View/Surface boundary.
 
 The Web harness uses a real iframe and a real HTML video element in the fixed
-overlay band. React Native/Fabric platform shells, Windows WebView2, Android
-WebView/VideoView and Apple WKWebView/AVPlayer adapters remain pending.
+overlay band. An experimental native Apple runner now validates the shared
+runtime with `WKWebView` and a deterministic video layer on iOS/iPadOS; it is
+not the eventual React Native/Fabric shell. Windows WebView2 and the Android
+WebView/VideoView product adapters remain pending.
 The intended native Shell boundary is specified in
 [RN_SHELL_INTEGRATION.md](docs/RN_SHELL_INTEGRATION.md).
 

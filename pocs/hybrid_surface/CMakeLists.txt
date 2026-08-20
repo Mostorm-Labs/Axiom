@@ -56,4 +56,7 @@ endif()
 
 if(ANDROID)
   add_subdirectory(platform/react_native/android/native)
+elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS" AND
+       CANVAS_POC03_ENABLE_SKIA)
+  add_subdirectory(platform/apple)
 endif()

@@ -37,7 +37,8 @@ nodes are intentionally not supported between Canvas nodes.
 | Web iframe/video | Automated validating | Playwright result and trace |
 | Windows RNW/WebView2/video | Pending | Fabric component, locked WebView2, real Windows run |
 | Android RN/WebView/VideoView | Pending | Fabric component, 16 KiB checks, Pixel physical run |
-| Apple RN/WKWebView/AVPlayer | Pending | Fabric component and iOS/iPadOS run |
+| Apple native UIKit/WKWebView/video | Validated experimentally | Native universal runner and iOS/iPadOS run; see [Apple evidence](../../../docs/evidence/poc05/apple-native-physical-validation-20260820.md) |
+| Apple RN/Fabric/WKWebView/AVPlayer | Pending | Fabric component and product-shell iOS/iPadOS run |
 
 No target is marked Accepted until placement, two-frame update, lifecycle,
 focus/input and failure recovery evidence exists for the actual adapter.

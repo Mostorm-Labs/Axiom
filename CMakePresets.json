@@ -263,6 +263,23 @@
       "cacheVariables": {
         "CANVAS_POC05_ENABLE_SANITIZERS": "ON"
       }
+    },
+    {
+      "name": "poc05-ios-device-release",
+      "displayName": "POC-05 iOS/iPadOS Hybrid Surface (Release)",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/out/poc05-ios-device-release",
+      "toolchainFile": "${sourceDir}/cmake/ios.toolchain.cmake",
+      "cacheVariables": {
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "OFF",
+        "CANVAS_BUILD_POC03": "ON",
+        "CANVAS_POC03_BUILD_TESTS": "OFF",
+        "CANVAS_POC03_ENABLE_SKIA": "ON",
+        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "OFF",
+        "CANVAS_BUILD_POC05": "ON",
+        "CANVAS_POC05_BUILD_TESTS": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -285,7 +302,8 @@
     { "name": "poc03-windows-release", "configurePreset": "poc03-windows-release" },
     { "name": "poc03-ios-device-release", "configurePreset": "poc03-ios-device-release" },
     { "name": "poc05-host-debug", "configurePreset": "poc05-host-debug" },
-    { "name": "poc05-host-asan", "configurePreset": "poc05-host-asan" }
+    { "name": "poc05-host-asan", "configurePreset": "poc05-host-asan" },
+    { "name": "poc05-ios-device-release", "configurePreset": "poc05-ios-device-release" }
   ],
   "testPresets": [
     {
