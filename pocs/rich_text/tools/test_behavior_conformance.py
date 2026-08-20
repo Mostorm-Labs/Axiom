@@ -64,6 +64,19 @@ class BehaviorConformanceTest(unittest.TestCase):
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_accepts_equivalent_json_number_spelling(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        records[0]["layout"]["height"] = 20
+        records[0]["layout"]["selection"][0][0] = 0
+        result = self.run_records(records)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_real_layout_difference_without_tolerance(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        records[2]["layout"]["height"] = 20.000001
+        result = self.run_records(records)
+        self.assertNotEqual(result.returncode, 0)
+
     def test_rejects_false_behavior_or_incomplete_geometry(self) -> None:
         records = [self.record("web"), self.record("windows"), self.record("android")]
         records[1]["behavior"]["undo"] = False

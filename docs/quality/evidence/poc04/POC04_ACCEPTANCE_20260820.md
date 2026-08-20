@@ -6,7 +6,9 @@ cross-platform-acceptance` CI job remaining green on the acceptance commit.
 ## Canonical Runtime track
 
 Web/Chromium, Windows D3D12 and Android run the same behavior corpus and must
-produce byte-equivalent digest, behavior and canonical SkParagraph layout.
+produce identical digest/behavior and exact parsed canonical SkParagraph
+layout values. JSON number spellings such as `0` and `0.0` are equivalent;
+the comparator applies no geometric tolerance or rounding.
 The aggregate job also enforces 100 lifecycle cycles, the complete performance
 schema, and the 16.7/33.3 ms product thresholds. The hosted Android emulator's
 absolute timing is observational; the Pixel 7 report owns the representative

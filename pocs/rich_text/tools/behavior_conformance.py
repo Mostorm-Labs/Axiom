@@ -38,8 +38,12 @@ def main() -> int:
     if platforms != {"web", "windows", "android"}:
         raise RuntimeError(f"platform matrix is incomplete: {sorted(platforms)}")
     for field in ("digest", "behavior", "layout"):
-        values = {json.dumps(value[field], sort_keys=True) for value in records}
-        if len(values) != 1:
+        # Compare the parsed JSON model, not serializer spelling. JSON numbers
+        # 0 and 0.0 represent the same exact value, and JS deliberately emits
+        # the former where the native writers emit the latter. No geometric
+        # tolerance or rounding is applied here.
+        expected = records[0][field]
+        if any(value[field] != expected for value in records[1:]):
             raise RuntimeError(f"cross-platform {field} mismatch")
     for value in records:
         behavior = value["behavior"]
