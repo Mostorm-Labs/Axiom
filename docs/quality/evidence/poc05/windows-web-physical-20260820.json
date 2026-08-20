@@ -6,7 +6,7 @@
   "source": {
     "branch": "codex/poc-05-hybrid-surface",
     "base_commit": "4b53540b1bddd44a9bdb765e3116af6d31fcb6c4",
-    "validation_commit": "f0c7d46",
+    "validation_commit": "f0c7d46624960ff1f946f96c138cbeccb51352bf",
     "runtime_source_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
     "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
     "note": "The physical Web instrumentation is included in the evidence commit; it is not a Windows RNW/WebView2 adapter."

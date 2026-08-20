@@ -5,7 +5,8 @@ Status: **Scoped evidence passed; POC-05 remains `Validating`.**
 This is a same-machine Windows/Web evidence bundle for the
 `codex/poc-05-hybrid-surface` baseline at `4b53540` (which contains the
 previously pushed `5372a0d46ce99d4b543ab5c053e56b15d708b8c3` Android runner).
-The evidence is recorded on validation commit `f0c7d46`, after the branch's
+The evidence is recorded on validation commit
+`f0c7d46624960ff1f946f96c138cbeccb51352bf`, after the branch's
 Apple overlay validation commit was integrated.
 It records the Windows stable Runtime C ABI host contract and a headed Chrome
 Stable iframe/video harness. It does **not** claim that Windows RNW/Fabric,
