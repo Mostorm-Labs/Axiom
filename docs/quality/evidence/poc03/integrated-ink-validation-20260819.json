@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "report_id": "poc03-integrated-ink-validation-20260819",
+  "evidence_status": "host_matrix_and_pixel7_android_passed",
+  "poc_status_after_evidence": "Validating",
+    "remaining_gates": [
+        "Windows physical D3D12 hard frame gate failed twice; RF-01/RF-02/RF-03 investigation and a passing rerun remain required",
+        "Chrome Stable WebGL2 initial run failed; bounded rerun passed, stability review remains required",
+    "POC-02 formal pressure-pen latency and Human Ink Gate"
+  ],
+  "source": {
+    "commit": "de6ce74705cd445654c86d84e06ec68830080f9d",
+    "poc02_contract_commit": "35a02f8",
+    "branch": "codex/poc-03-100k-scene"
+  },
+  "generator": {
+    "algorithm_version": 1,
+    "seed_hex": "0x43414e5641533033",
+    "input_samples_per_stroke": 16,
+    "input_batches_per_stroke": 4,
+    "historical_stroke_ratio": 0.2
+  },
+  "sdk": {
+    "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "host_sdk_consumed": false,
+    "android_sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f"
+  },
+  "results": [
+    {
+      "base_nodes": 1000,
+      "historical_strokes": 200,
+      "ink_document_digest": "78cfbfef60ea606b77b8bb9753a22733",
+      "document_digest": "992b9776596d824d8ce2ea4e63ff278c",
+      "scene_digest": "992b9776596d824d8ce2ea4e63ff278c",
+      "maximum_candidates": 130,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 0.533,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-1000.json",
+      "raw_artifact_sha256": "59a870340290fdbbf93fa5448771bf9471877804341f0545ebe5c07c21f674a7"
+    },
+    {
+      "base_nodes": 10000,
+      "historical_strokes": 2000,
+      "ink_document_digest": "3c67a77040df4b290e139b319f8ec69f",
+      "document_digest": "07b91f337ce46a2496badcf43498df61",
+      "scene_digest": "07b91f337ce46a2496badcf43498df61",
+      "maximum_candidates": 770,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 4.933,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-10000.json",
+      "raw_artifact_sha256": "7f7d10567378f1a5cdb54a0260c04eb98a7cc44bc4346cfc5f38009697805466"
+    },
+    {
+      "base_nodes": 50000,
+      "historical_strokes": 10000,
+      "ink_document_digest": "1816f3b03a083098ef4e96ef8340d52f",
+      "document_digest": "3d6365692eb24487fb70819805d8d964",
+      "scene_digest": "3d6365692eb24487fb70819805d8d964",
+      "maximum_candidates": 3524,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 24.453,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-50000.json",
+      "raw_artifact_sha256": "ac573d38a1ad75d009f0e819c1012b5112be77d71d90ceca82ac30fdfef0317f"
+    },
+    {
+      "base_nodes": 100000,
+      "historical_strokes": 20000,
+      "ink_document_digest": "0bc9cc0db2e708bac474b23f8a52db71",
+      "document_digest": "002e438d90f6ae775e60eb41bda93735",
+      "scene_digest": "002e438d90f6ae775e60eb41bda93735",
+      "maximum_candidates": 4805,
+      "maximum_records_touched": 1,
+      "full_fallbacks": 0,
+      "cache_invalidations": 2,
+      "preview_canonical_handoff_frames": 1,
+      "estimated_runtime_mib": 48.895,
+      "full_incremental_equivalent": true,
+      "raw_artifact": "out/poc03-integrated-host/result-100000.json",
+      "raw_artifact_sha256": "b6d53441f03390af232b7ef5e0a02f6835dc002d2cfcaa27113cd6d574397515"
+    }
+  ],
+  "automated_gates": {
+    "poc03_host_debug_tests": "26/26",
+    "poc03_host_asan_tests": "26/26",
+    "poc02_host_tests": "25/25",
+    "candidate_limit_passed": true,
+    "single_record_incremental_update_passed": true,
+    "zero_full_fallbacks": true,
+    "full_incremental_equivalent": true,
+    "preview_canonical_handoff_le_two_frames": true
+  },
+  "pixel7_android_integrated": {
+    "status": "passed",
+    "device": {
+      "model": "Pixel 7",
+      "android_release": "17",
+      "soc": "GS201",
+      "abi": "arm64-v8a",
+      "surface_width_px": 2400,
+      "surface_height_px": 1080,
+      "dpr": 2.625,
+      "refresh_rate_hz": 90.0
+    },
+    "source_commit": "de6ce74705cd445654c86d84e06ec68830080f9d",
+    "sdk_id": "630e4536e8eaf7ee71a81e29880a934563fbae5d87a9aaef5c2c5a19b544c80f",
+    "apk_sha256": "fe4f6fc8ef6bcb0f03cb83a933c45104efb363d352553ada5ddceee5c0e49fd3",
+    "elf_load_alignment": "0x4000",
+    "scales": [
+      {"nodes": 1000, "historical_strokes": 200, "frame_p50_ms": 11.042, "frame_p95_ms": 13.892, "frame_p99_ms": 14.647, "frame_max_ms": 123.883, "missed_presentations": 271, "maximum_candidates": 96, "process_peak_mib": 224.445, "process_steady_growth_percent": 4.916, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "51324de808a1060810c9d224a9fe0039a4fb9d79fed0c0ec8ffe99447345c664"},
+      {"nodes": 10000, "historical_strokes": 2000, "frame_p50_ms": 10.965, "frame_p95_ms": 13.582, "frame_p99_ms": 15.637, "frame_max_ms": 117.962, "missed_presentations": 243, "maximum_candidates": 578, "process_peak_mib": 232.016, "process_steady_growth_percent": 4.751, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "470429c06c3e8c8745af88fa6682b8b88513000aa1ca814750b2630680657fbd"},
+      {"nodes": 50000, "historical_strokes": 10000, "frame_p50_ms": 10.033, "frame_p95_ms": 12.976, "frame_p99_ms": 21.978, "frame_max_ms": 71.256, "missed_presentations": 127, "maximum_candidates": 2018, "process_peak_mib": 268.988, "process_steady_growth_percent": 3.948, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "d535e577d1e4cb4d909371565b999ad2136bc0632d1d439a4444aa102a18cb4b"},
+      {"nodes": 100000, "historical_strokes": 20000, "frame_p50_ms": 9.531, "frame_p95_ms": 13.725, "frame_p99_ms": 24.951, "frame_max_ms": 44.473, "missed_presentations": 101, "maximum_candidates": 2498, "process_peak_mib": 314.398, "process_steady_growth_percent": 3.988, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "e26ff5fef287c63d02e40cb4dfc8a609afb5b95a659e55b3bd3f0079eea07e03"}
+    ],
+    "long_run_100k": {"frames": 5400, "warmup_frames": 1800, "trace_wall_ms": 62263.318, "frame_p50_ms": 9.544, "frame_p95_ms": 13.928, "frame_p99_ms": 25.552, "frame_max_ms": 70.430, "missed_presentations": 832, "process_start_mib": 289.500, "process_end_mib": 301.133, "process_peak_mib": 314.070, "process_steady_growth_percent": 4.018, "maximum_candidates": 2498, "full_incremental_equivalent": true, "visual_equivalent": true, "result_sha256": "481595989d1a4d306a19f01a5d377afc1b2167631488592cd80aaad51447e25d"},
+    "manual_actions": {"status": "passed", "apk_sha256": "fe4f6fc8ef6bcb0f03cb83a933c45104efb363d352553ada5ddceee5c0e49fd3", "actions": ["pan", "vector_write", "dab_write", "select", "select_drag"], "log_events": {"ink_preview": 84, "ink_canonical_visible": 2, "selected": 1, "select_dragging": 40, "select_end": 1}, "process_alive_after_actions": true, "crash_or_anr_observed": false, "screenshot_sha256": "de09cf72c18cf98397424d4645f81aa8b0000cfe0cea2751a59d9fe8e0a70ad0", "logcat_sha256": "24992cc2faefb21f8260497527081d2a60836f4ad993f5d1292612ff1e2892e4"}
+  },
+    "physical_integrated_gates": {
+        "windows_d3d12": "failed_reproducibly",
+        "chrome_webgl2": "initial_failed_bounded_rerun_passed",
+    "pixel7_android": "passed",
+    "apple": "existing physical report only; not an acceptance gate for this integration"
+  },
+  "reproduction_command": "cmake --preset poc03-host-debug && cmake --build --preset poc03-host-debug --parallel 4 && ctest --preset poc03-host-debug --output-on-failure; cmake --preset poc03-host-asan && cmake --build --preset poc03-host-asan --parallel 4 && ctest --preset poc03-host-asan --output-on-failure; cmake --preset poc03-host-release && cmake --build --preset poc03-host-release --parallel 4 && for nodes in 1000 10000 50000 100000; do out/poc03-host-release/pocs/large_scene/canvas_poc03_integrated_benchmark --nodes=$nodes --output=out/poc03-integrated-host/result-$nodes.json; done"
+}

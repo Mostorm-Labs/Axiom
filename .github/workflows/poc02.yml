@@ -10,7 +10,7 @@ on:
       - "pocs/ink_engine/**"
       - ".github/workflows/poc02.yml"
   push:
-    branches: [main, "codex/poc-02-ink-engine"]
+    branches: [main, "codex/poc-02-ink-engine", "codex/poc-03-100k-scene"]
   workflow_dispatch:
 
 concurrency:

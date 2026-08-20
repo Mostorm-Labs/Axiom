@@ -1,0 +1,29 @@
+{
+  "schema": "canvas.poc05.consolidated.v1",
+  "status": "accepted_architecture_risk_proof",
+  "date": "2026-08-20",
+  "platforms": {
+    "web_wasm_webgl2_plus_dom_overlay": "passed",
+    "windows_rnw_fabric": "passed",
+    "android_react_native": "passed",
+    "apple_react_native_fabric": "passed"
+  },
+  "surfaces": ["webview", "video"],
+  "z_order": ["product_ui", "controlled_external_overlay", "canonical_canvas"],
+  "runtime_c_abi_binary_conformance": false,
+  "v1_external_surface_schema": false,
+  "wasm_canvas_evidence": "passed_via_accepted_poc01_baseline",
+  "poc05_harness_builds_wasm": false,
+  "known_limits": [
+    "POC-03 private RuntimeScene bridge remains in Windows, Android and Apple runners",
+    "arbitrary DOM/native insertion between Canvas nodes is unsupported",
+    "texture import and zero-copy composition are deferred"
+  ],
+  "evidence": {
+    "web_wasm": "docs/quality/evidence/poc01/windows-web-revalidation-20260818.json",
+    "web_overlay": "pocs/hybrid_surface/platform/web/tests/hybrid_surface.spec.mjs",
+    "windows_rnw": "docs/quality/evidence/poc05/windows-rnw-scene-physical-20260820.json",
+    "apple_rn_fabric": "docs/evidence/poc05/apple-rn-fabric-validation-20260820.md",
+    "android": "docs/evidence/poc05/android-rn-physical-validation-20260820.md"
+  }
+}

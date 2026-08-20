@@ -1,0 +1,172 @@
+{
+  "schema": "canvas.poc05.windows-web-physical.v2",
+  "report_id": "poc05-windows-web-physical-20260820",
+  "evidence_status": "scoped_pass",
+  "poc_status_after_evidence": "superseded_by_consolidated_poc05_acceptance",
+  "source": {
+    "branch": "codex/poc-05-hybrid-surface",
+    "base_commit": "4b53540b1bddd44a9bdb765e3116af6d31fcb6c4",
+    "validation_commit": "f0c7d46624960ff1f946f96c138cbeccb51352bf",
+    "runtime_source_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+    "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "note": "The physical Web instrumentation is included in the evidence commit; it is not a Windows RNW/WebView2 adapter."
+  },
+  "environment": {
+    "collected_utc": "2026-08-20T04:41:42.4580867Z",
+    "os": "Windows 10 Pro 10.0.19045 (64-bit)",
+    "system_model": "Micro-Star International Co., Ltd. MS-7C83",
+    "cpu": "Intel Core i5-10400, 6 cores / 12 logical processors",
+    "memory_bytes": 34219245568,
+    "gpu_adapters": [
+      {
+        "name": "Intel UHD Graphics 630",
+        "driver": "31.0.101.2111",
+        "driver_date": "2022-07-19",
+        "physical": true,
+        "role": "Chrome ANGLE D3D11 renderer"
+      },
+      {
+        "name": "OrayIddDriver Device",
+        "driver": "17.50.19.949",
+        "physical": false,
+        "role": "virtual display adapter; not used as the recorded WebGL renderer"
+      }
+    ],
+    "chrome_stable": "151.0.7922.138",
+    "node": "24.18.0",
+    "playwright": "1.62.1",
+    "webgl_renderer": "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00009BC8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "webgl_vendor": "Google Inc. (Intel)"
+  },
+  "windows_host_core": {
+    "scope": "stable Runtime C ABI host contract; not RNW/WebView2",
+    "adapter_status": "host core passed; Windows RNW/WebView2/video adapter is not implemented",
+    "builds": [
+      {
+        "configuration": "Debug",
+        "compiler": "MSVC 19.51.36246.0",
+        "cmake": "4.3.3",
+        "generator": "Ninja",
+        "skia_enabled": false,
+        "binary": "out/poc05-host-debug/pocs/hybrid_surface/canvas_poc05_tests.exe",
+        "binary_bytes": 4382208,
+        "binary_sha256": "3455706020af72c3a5cfc7945872f5e73d9a1f86f12fda454c68854e95d49b9a"
+      },
+      {
+        "configuration": "Release",
+        "compiler": "MSVC 19.51.36246.0",
+        "cmake": "4.3.3",
+        "generator": "Ninja",
+        "skia_enabled": false,
+        "binary": "out/poc05-host-release/pocs/hybrid_surface/canvas_poc05_tests.exe",
+        "binary_bytes": 924160,
+        "binary_sha256": "71c92cf014230bc55c7d59d5c7a7263cccca7448e68b777d5ef09fa8805bea12"
+      }
+    ],
+    "tests": {
+      "debug_ctest": "8/8",
+      "release_ctest": "8/8",
+      "failed": 0,
+      "checks": [
+        "stable C ABI projection",
+        "DPR and clip projection",
+        "camera math delegation",
+        "stale frame rejection",
+        "focus/lifecycle/background bounds",
+        "generation reset resource destruction",
+        "malformed ABI snapshot rejection",
+        "POC-03 reserved ExternalSurface pass contract"
+      ]
+    }
+  },
+  "chrome_web_overlay": {
+    "scope": "Chrome Stable headed DOM iframe/video overlay harness on the same physical Windows machine",
+    "adapter_status": "Chrome harness passed; WebView2/RNW adapter remains pending",
+    "tests": "3/3",
+    "browser": {
+      "version": "151.0.7922.138",
+      "device_pixel_ratio": 1,
+      "webgl2": true,
+      "hardware_gpu_required": true,
+      "renderer_is_software": false,
+      "video_ready_state": 4,
+      "video_size": "64x64",
+      "video_current_time_seconds": 0.699299,
+      "video_visible_clip_css_pixels": "100x100"
+    },
+    "placement": {
+      "tolerance_css_pixels": 1,
+      "iframe_bounds_css_pixels": { "x": 108, "y": 58, "width": 200, "height": 200 },
+      "iframe_z_index": 22,
+      "product_ui_z_index": 30,
+      "iframe_visible": true,
+      "video_visible": true,
+      "local_video_stream_playing": true
+    },
+    "update_latency": {
+      "samples": 120,
+      "allowed_frames": 2,
+      "observed_max_frames": 1,
+      "p50_ms": 16.5,
+      "p95_ms": 18.90000009536743,
+      "p99_ms": 20.40000009536743,
+      "max_ms": 22.699999809265137
+    },
+    "lifecycle": {
+      "cycles": 100,
+      "baseline_surfaces": 2,
+      "residual_during_test": 2,
+      "generation_reset_residual": 0,
+      "active_video_streams_after_cycles": 1,
+      "generation_reset_active_video_streams": 0,
+      "failure_placeholder": true,
+      "failure_recovery_to_playing": true,
+      "focus_external": true,
+      "focus_canvas": true
+    }
+  },
+  "automated_checks": {
+    "public_c_abi_contract": "passed",
+    "markdown_links": "57 files passed",
+    "git_diff_check": "passed",
+    "source_contract": "POC-05 does not include POC-03 private C++ Scene headers",
+    "web_result": "3/3 passed"
+  },
+  "artifacts": {
+    "source_files": [
+      { "path": "pocs/hybrid_surface/platform/web/playwright.config.mjs", "sha256": "98b4f1db602b0deed8ef05b932f22f8f8c35a1e4f21eb3f1484411c1a8f0acc3" },
+      { "path": "pocs/hybrid_surface/platform/web/tests/hybrid_surface.spec.mjs", "sha256": "706afbc572fd00d5307d432bd08dcd58eff08d3d9c97ea5bb5b9ff21ba633c0c" }
+    ],
+    "locked_inputs": [
+      { "path": "skia-sdk.lock.json", "sha256": "f0dd144db4d9fac12924d63393f0e65e0e708e534aa600b26b3446218abe35d3" },
+      { "path": "pocs/shared_engine/fixtures/manifest.json", "sha256": "2b06c6e92624445f79f549830b1a8b472c13505a5c21e60877ca5c98092041cc" },
+      { "path": "pocs/shared_engine/fixtures/scene.ndjson", "sha256": "cff602ba0c8cbf4298fabbcaeb92d35677fca5a6884272259f3ef334c4079573" },
+      { "path": "pocs/shared_engine/fixtures/checker.png", "sha256": "10ee6bb34dfe7ba4d866c1bc7cb828a045ba48e97c971e2ca8df05f66df99f59" },
+      { "path": "pocs/shared_engine/goldens/reference.rgba", "sha256": "1b1e4a77a213515469b094ccb77b43be5c75fa7f1d2382f38583ed8aaab51041" },
+      { "path": "pocs/hybrid_surface/platform/web/package-lock.json", "sha256": "dc7517b99cf4023ca29034bc0cb9b8e170080a67af5610fe2a0b384c4ea7c9c8" }
+    ],
+    "results": [
+      { "path": "out/poc05-web-physical-20260820/chrome-stable-verified.json", "bytes": 1341, "sha256": "09b7fbfdfb8989a313d9ba6c484d758eaa8263254b467b81c1069c8ada23d252" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/web-result.json", "bytes": 6859, "sha256": "77dd211478e604c96ac9d3320d57809da14516a95605e0b30e666a3544b5f5c8" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-iframe-and--8e572-y-band-with-exact-placement/trace.zip", "bytes": 217076, "sha256": "5f578891f4a614264cfdd1d5fb9958b838913f02f6efde01334f205d30a172be" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-pan-and-zoo-2b113-within-two-animation-frames/trace.zip", "bytes": 419518, "sha256": "6e96073cfacdda2655bd045fff9b5a5ad468d59be45ca35c54a394926b1339b9" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-clip-failur-08819--and-lifecycle-are-explicit/trace.zip", "bytes": 139677, "sha256": "c0858cbc4976d181567bf0e64658a877aa7bda4334afb3b6d30240ffbacec83e" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-iframe-and--8e572-y-band-with-exact-placement/overlay-placement.png", "bytes": 82322, "sha256": "7acab81889cf49818ff1d60a1adeb2124c1400085bb9356f21831380ef249a45" },
+      { "path": "out/poc05-host-release/pocs/hybrid_surface/canvas_poc05_tests.exe", "bytes": 924160, "sha256": "71c92cf014230bc55c7d59d5c7a7263cccca7448e68b777d5ef09fa8805bea12" }
+    ]
+  },
+  "reproduction": {
+    "contract": "python pocs/hybrid_surface/tools/check_contract.py; python tools/check_docs.py; git diff --check",
+    "windows_debug": "VsDevCmd.bat -arch=x64 && cmake --preset poc05-host-debug && cmake --build --preset poc05-host-debug --parallel && ctest --preset poc05-host-debug --output-on-failure",
+    "windows_release": "VsDevCmd.bat -arch=x64 && cmake -S . -B out/poc05-host-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCANVAS_BUILD_POC01=OFF -DCANVAS_BUILD_POC02=OFF -DCANVAS_BUILD_POC03=ON -DCANVAS_POC03_BUILD_TESTS=OFF -DCANVAS_POC03_ENABLE_SKIA=OFF -DCANVAS_BUILD_POC05=ON -DCANVAS_POC05_BUILD_TESTS=ON && cmake --build out/poc05-host-release --parallel && ctest --test-dir out/poc05-host-release --output-on-failure",
+    "chrome": "$env:POC05_BROWSER_CHANNEL='chrome'; $env:POC05_HEADED='1'; $env:POC05_TRACE='1'; $env:POC05_REQUIRE_HARDWARE_GPU='1'; $env:POC05_PHYSICAL_EVIDENCE_OUTPUT='out/poc05-web-physical-20260820/chrome-stable-verified.json'; <Node 24.18.0> node_modules/@playwright/test/cli.js test --config=playwright.config.mjs",
+    "web_test_window_utc": "2026-08-20T04:41:42.4580867Z/2026-08-20T04:41:51.7672018Z"
+  },
+  "pending_gates": [
+    "Windows RNW/Fabric + Composition/D3D Canvas + locked WebView2/video physical adapter",
+    "Android RN/Fabric + WebView/VideoView Pixel physical adapter",
+    "Apple RN/Fabric + WKWebView/AVPlayer physical adapter",
+    "Formal Web Node 24.18.0 CI artifact"
+  ],
+  "disposition": "Historical scoped Windows stable-C-ABI host and Chrome Stable DOM overlay evidence pass their checks. This report predates the Windows RNW evidence; its stage status is superseded by docs/evidence/poc05/consolidated-validation-20260820.md, which accepts the controlled-overlay architecture risk proof while retaining this report as audit history."
+}

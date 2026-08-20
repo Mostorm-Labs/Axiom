@@ -10,6 +10,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace canvas::poc02 {
@@ -256,13 +257,18 @@ class StrokeDocument {
   [[nodiscard]] uint64_t revision() const { return revision_; }
   [[nodiscard]] uint64_t operation_sequence() const { return operation_sequence_; }
   [[nodiscard]] size_t stroke_count() const { return strokes_.size(); }
+  [[nodiscard]] size_t indexed_stroke_count() const { return stroke_index_.size(); }
   [[nodiscard]] std::span<const Stroke> strokes() const { return strokes_; }
+  [[nodiscard]] size_t EstimatedBytes() const;
   [[nodiscard]] std::string Digest() const;
 
  private:
   uint64_t revision_ = 0;
   uint64_t operation_sequence_ = 0;
   std::vector<Stroke> strokes_;
+  // Derived lookup state only. It is intentionally excluded from serialization
+  // and digest semantics so POC-02's reviewed canonical model is unchanged.
+  std::unordered_map<StrokeId, size_t> stroke_index_;
 };
 
 std::string SerializeAddStrokeNdjson(const AddStrokeOperation& operation);

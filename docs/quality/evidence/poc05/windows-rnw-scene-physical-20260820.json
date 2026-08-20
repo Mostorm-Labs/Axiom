@@ -1,0 +1,49 @@
+{
+  "schema": "canvas.poc05.windows-rnw-scene.v1",
+  "evidence_status": "physical_shell_pass",
+  "poc_status_after_evidence": "superseded_by_consolidated_poc05_acceptance",
+  "source": {
+    "branch": "codex/poc-05-hybrid-surface",
+    "runtime_source_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
+    "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+    "runtime_c_abi_binary_conformance": false,
+    "scene_bridge": "temporary private POC-03 C++ RuntimeScene validation bridge"
+  },
+  "environment": {
+    "os": "Windows 10 Pro 10.0.19045",
+    "gpu": "Intel(R) UHD Graphics 630",
+    "vendor_id": 32902,
+    "device_id": 39880,
+    "driver_version_numeric": 8725724284651583,
+    "window_dpi": 96,
+    "window_pixels": "1164x727",
+    "react_native": "0.84.1",
+    "react_native_windows": "0.84.0",
+    "webview2_sdk": "1.0.2592.51"
+  },
+  "scene": {
+    "node_count": 100000,
+    "seed": "0x43414e5641533035",
+    "columns": 1000,
+    "cell_size": 32.0
+  },
+  "canvas": {
+    "renderer": "skia-ganesh-d3d12",
+    "rgba_readback": "passed",
+    "native_render_count": 10
+  },
+  "overlays": {
+    "webview2": true,
+    "video": true,
+    "create_count": 2,
+    "placement_count": 18,
+    "stale_frame_count": 0,
+    "backend_failure_count": 0,
+    "active_surface_count": 2
+  },
+  "reproduction": {
+    "build_and_launch": "powershell -ExecutionPolicy Bypass -File pocs/hybrid_surface/tools/run_windows_rnw_shell.ps1",
+    "report_path": "pocs/hybrid_surface/platform/react_native/windows/x64/Release/poc05-windows-rnw-scene.json"
+  },
+  "report_sha256": "c0ca41433475ff0b5e5a776bb220f526eeba2d10a97866bd2dbefd1710ef5079"
+}

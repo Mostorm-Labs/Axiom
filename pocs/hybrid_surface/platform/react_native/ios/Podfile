@@ -1,0 +1,42 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+# POC-05's locked Skia Apple SDK and physical-device validation baseline use
+# iOS/iPadOS 17. Keep CocoaPods resolution aligned with that contract instead
+# of inheriting the lower React Native template default.
+platform :ios, '17.0'
+prepare_react_native_project!
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'AxiomPoc05' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  # POC code is deliberately app-local: this pod packages a real Fabric
+  # ComponentView plus the native C++/Skia/overlay host, while JS supplies only
+  # low-frequency props.
+  pod 'AxiomPoc05Fabric', :path => '.'
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+  end
+end

@@ -250,8 +250,14 @@ def bootstrap_web(lock: dict) -> None:
     run("git", "fetch", "--tags", "origin", cwd=emsdk)
     run("git", "checkout", "--detach", tag, cwd=emsdk)
     launcher = emsdk / ("emsdk.bat" if platform.system() == "Windows" else "emsdk")
-    run(str(launcher), "install", tag, cwd=emsdk)
-    run(str(launcher), "activate", tag, cwd=emsdk)
+    environment = os.environ.copy()
+    environment["EMSDK_PYTHON"] = sys.executable
+    print("+", str(launcher), "install", tag, flush=True)
+    subprocess.run((str(launcher), "install", tag), cwd=emsdk,
+                   env=environment, check=True)
+    print("+", str(launcher), "activate", tag, flush=True)
+    subprocess.run((str(launcher), "activate", tag), cwd=emsdk,
+                   env=environment, check=True)
 
 
 def bootstrap_node(lock: dict) -> None:

@@ -1,0 +1,38 @@
+{
+  "schema": "canvas.poc03.integrated-physical.v1",
+  "status": "validating",
+  "source_commit": "01d2bcb4b80fac2271d1b6ee6a3482054ae46cf0",
+  "branch": "codex/poc03-windows-integrated-physical",
+  "bundle_sha256": "4c96441bbf74d9924dcc47a42405e943c273b75cf6e32c2a1b33f49ccf3f4ee0",
+  "environment": {
+    "os": "Windows 10 Pro 19045",
+    "cpu": "Intel Core i5-10400",
+    "gpu": "Intel UHD Graphics 630",
+    "driver": "31.0.101.2111",
+    "chrome": "151.0.7922.138",
+    "display": "1920x1080",
+    "refresh_hz": 59.933
+  },
+  "windows_d3d12": {
+    "duration_seconds": 60,
+    "gate": {"p95_ms": 16.7, "p99_ms": 33.3},
+    "runs": [
+      {"name": "initial", "p50_ms": 3.45, "p95_ms": 26.998, "p99_ms": 38.737, "max_ms": 52.234, "missed": 555, "passed": false},
+      {"name": "repeat", "p50_ms": 3.386, "p95_ms": 25.693, "p99_ms": 37.457, "max_ms": 52.942, "missed": 550, "passed": false}
+    ],
+    "reproducible_failure": true,
+    "peak_working_set_mb": 219
+  },
+  "webgl2": {
+    "initial": {"p95_ms": 26.1, "p99_ms": 53.7, "passed": false},
+    "bounded_rerun": {"p50_ms": 16.7, "p95_ms": 18.1, "p99_ms": 25.7, "max_ms": 37.0, "missed": 41, "passed": true},
+    "wasm_linear_memory_mb": 128
+  },
+  "correctness": {
+    "digest": true,
+    "full_incremental_equivalent": true,
+    "visual_equivalent": true,
+    "candidate_limit": true
+  },
+  "disposition": "POC-03 remains Validating; investigate RF-01/RF-02/RF-03 before retry"
+}

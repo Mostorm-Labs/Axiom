@@ -1,0 +1,291 @@
+name: POC-03 100K Scene
+
+on:
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "deps.lock.json"
+      - "skia-sdk.lock.json"
+      - "pocs/large_scene/**"
+      - "pocs/ink_engine/**"
+      - "tools/bootstrap_deps.py"
+      - "tools/skia/fetch.py"
+      - "tools/skia/sdk.py"
+      - ".github/workflows/poc03.yml"
+  push:
+    branches: [main, "codex/poc-03-100k-scene"]
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "deps.lock.json"
+      - "skia-sdk.lock.json"
+      - "pocs/large_scene/**"
+      - "pocs/ink_engine/**"
+      - "tools/bootstrap_deps.py"
+      - "tools/skia/fetch.py"
+      - "tools/skia/sdk.py"
+      - ".github/workflows/poc03.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: poc03-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-core:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Bootstrap worktree-local core dependencies
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Documentation and isolated-CI contract
+        run: |
+          python3 tools/check_docs.py
+          python3 pocs/large_scene/tools/check_ci.py
+          git diff --check
+      - name: Configure and build isolated POC-03 core
+        run: |
+          cmake --preset poc03-host-debug
+          cmake --build --preset poc03-host-debug --parallel
+      - name: Unit, fault-injection, and 100K acceptance
+        run: ctest --preset poc03-host-debug --output-on-failure
+      - name: Full diagnostic result
+        run: |
+          cmake --preset poc03-host-release
+          cmake --build --preset poc03-host-release --parallel
+          out/poc03-host-release/pocs/large_scene/canvas_poc03_benchmark \
+            --nodes=100000 --frames=600 --updates=1000 \
+            --output=out/poc03-host-result.json
+          mkdir -p out/poc03-integrated-host
+          for nodes in 1000 10000 50000 100000; do
+            out/poc03-host-release/pocs/large_scene/canvas_poc03_integrated_benchmark \
+              --nodes=$nodes \
+              --output=out/poc03-integrated-host/result-$nodes.json
+          done
+      - name: Sanitizer contract tests
+        run: |
+          cmake --preset poc03-host-asan
+          cmake --build --preset poc03-host-asan --parallel
+          ctest --preset poc03-host-asan --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc03-host-result
+          path: out/poc03-integrated-host/result-100000.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc03-integrated-host-matrix
+          path: out/poc03-integrated-host
+
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: pocs/large_scene/platform/web/package-lock.json
+      - name: Bootstrap Emscripten and core dependencies
+        run: python3 tools/bootstrap_deps.py --core --web
+      - name: Fetch verified Web Skia SDK
+        run: >-
+          python3 tools/skia/fetch.py --target web-wasm-webgl2
+          --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Build WASM/WebGL2 probe without Skia source
+        shell: bash
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          cmake --preset poc03-web-release
+          cmake --build --preset poc03-web-release --parallel
+      - name: Assert single-threaded artifact
+        run: >-
+          python3 pocs/large_scene/tools/check_web_artifact.py
+          out/poc03-web-release/pocs/large_scene/platform/skia/canvas_poc03_web_probe.js
+          out/poc03-web-release/pocs/large_scene/platform/skia/canvas_poc03_web_probe.wasm
+      - name: Browser correctness and memory gate
+        working-directory: pocs/large_scene/platform/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm test
+      - name: Run deterministic WASM Integrated Ink matrix
+        shell: bash
+        run: |
+          source .deps/emsdk/emsdk_env.sh
+          mkdir -p out/poc03-integrated-web
+          for nodes in 1000 10000 50000 100000; do
+          node out/poc03-web-release/pocs/large_scene/canvas_poc03_integrated_benchmark.js \
+              --nodes=$nodes --output=out/poc03-integrated-web/result-$nodes.json
+          done
+      - name: Normalize Web acceptance result
+        run: |
+          mkdir -p out/poc03-web-result
+          cp pocs/large_scene/platform/web/test-results/web-result.json out/poc03-web-result/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc03-web-result
+          path: |
+            out/poc03-web-result
+            pocs/large_scene/platform/web/test-results
+            out/poc03-integrated-web
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: ilammy/msvc-dev-cmd@v1
+        with: { arch: x64 }
+      - name: Bootstrap core dependencies and pinned Windows LLVM
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --core --windows-llvm
+          $installer = Resolve-Path .deps/downloads/LLVM-22.1.8-win64.exe
+          $installDir = Join-Path $PWD ".deps/llvm"
+          Start-Process $installer -ArgumentList "/S", "/D=$installDir" -Wait
+          (Join-Path $installDir "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Fetch verified Windows Skia SDK
+        shell: pwsh
+        run: >-
+          python tools/skia/fetch.py --target windows-x64-d3d12
+          --summary-file "$env:GITHUB_STEP_SUMMARY"
+      - name: Build isolated POC-03 and WARP probe
+        shell: pwsh
+        run: |
+          cmake --preset poc03-windows-release -DCMAKE_C_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe" -DCMAKE_CXX_COMPILER="$PWD/.deps/llvm/bin/clang-cl.exe"
+          cmake --build --preset poc03-windows-release --parallel
+      - name: Unit, 100K, and D3D12 WARP correctness
+        shell: pwsh
+        run: |
+          ctest --preset poc03-windows-release --output-on-failure
+          New-Item -ItemType Directory -Force out/poc03-windows-result | Out-Null
+          out/poc03-windows-release/pocs/large_scene/canvas_poc03_benchmark.exe --nodes=100000 --frames=600 --updates=1000 --output=out/poc03-windows-result/result.json
+          out/poc03-windows-release/pocs/large_scene/platform/skia/canvas_poc03_windows_probe.exe | Tee-Object -FilePath out/poc03-windows-result/warp-result.json
+          foreach ($nodes in 1000, 10000, 50000, 100000) {
+            out/poc03-windows-release/pocs/large_scene/canvas_poc03_integrated_benchmark.exe --nodes=$nodes --output="out/poc03-windows-result/integrated-$nodes.json"
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc03-windows-result
+          path: out/poc03-windows-result
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.11.1" }
+      - name: Install locked Android SDK components
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.30.5" "ndk;27.2.12479018" "emulator" "platform-tools" "system-images;android-35;default;x86_64"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Bootstrap core dependencies
+        run: python3 tools/bootstrap_deps.py --core
+      - name: Fetch verified Android Skia SDKs
+        run: |
+          python3 tools/skia/fetch.py --target android-arm64-v8a-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --target android-x86_64-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Clean-build physical arm64 bundle
+        working-directory: pocs/large_scene/platform/android
+        run: |
+          gradle :app:assembleDebug -PcanvasPoc03Abi=arm64-v8a --no-daemon
+          mkdir -p ../../../../out/poc03-android-apks
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            ../../../../out/poc03-android-apks/poc03-arm64-v8a-debug.apk
+      - name: Build emulator correctness bundle
+        working-directory: pocs/large_scene/platform/android
+        run: |
+          gradle :app:assembleDebug -PcanvasPoc03Abi=x86_64 --no-daemon
+          cp app/build/outputs/apk/debug/app-debug.apk \
+            ../../../../out/poc03-android-apks/poc03-x86_64-debug.apk
+      - name: Verify 16 KB native page compatibility
+        run: |
+          set -euo pipefail
+          readelf="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          for apk in out/poc03-android-apks/*.apk; do
+            "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$apk"
+            extract_dir="$(mktemp -d)"
+            unzip -q "$apk" 'lib/*/*.so' -d "$extract_dir"
+            while IFS= read -r library; do
+              "$readelf" -lW "$library" | awk '
+                $1 == "LOAD" && $NF != "0x4000" {
+                  print "16 KB ELF alignment failed: " FILENAME " " $0
+                  exit 1
+                }'
+            done < <(find "$extract_dir/lib" -type f -name '*.so' -print)
+          done
+      - name: Enable Android emulator acceleration
+        run: sudo chmod 0666 /dev/kvm
+      - name: Emulator GLES/readback acceptance
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          disable-linux-hw-accel: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            adb install -r out/poc03-android-apks/poc03-x86_64-debug.apk
+            adb shell wm size 1280x720
+            adb logcat -c
+            adb shell am start -n dev.mostorm.canvas.poc03/.CanvasPoc03Activity
+            timeout 300 bash -c 'until adb logcat -d -s CanvasPOC03:I | grep -q CANVAS_POC03_RESULT; do sleep 1; done'
+            mkdir -p out/poc03-android-result
+            adb shell run-as dev.mostorm.canvas.poc03 cat files/poc03-android-result.json > out/poc03-android-result/result.json
+            adb logcat -d -s CanvasPOC03:I > out/poc03-android-result/logcat.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poc03-android-result
+          path: |
+            out/poc03-android-result
+            out/poc03-android-apks
+
+  cross-platform-acceptance:
+    runs-on: ubuntu-24.04
+    needs: [host-core, web, windows, android]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: poc03-host-result
+          path: out/acceptance/host
+      - uses: actions/download-artifact@v4
+        with:
+          name: poc03-web-result
+          path: out/acceptance/web
+      - uses: actions/download-artifact@v4
+        with:
+          name: poc03-windows-result
+          path: out/acceptance/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: poc03-android-result
+          path: out/acceptance/android
+      - name: Compare arm64, WASM, and x64 deterministic scene results
+        run: >-
+          python3 pocs/large_scene/tools/cross_platform_acceptance.py
+          out/acceptance/host/result-100000.json
+          out/acceptance/web/out/poc03-integrated-web/result-100000.json
+          out/acceptance/windows/integrated-100000.json
+          out/acceptance/android/out/poc03-android-result/result.json
+          --nodes 100000 \
+          --output out/acceptance/cross-platform-result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: poc03-cross-platform-acceptance
+          path: out/acceptance/cross-platform-result.json

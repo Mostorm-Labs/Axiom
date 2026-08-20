@@ -2,7 +2,7 @@
   "format": "canvas-skia-sdk-lock-v1",
   "profile": "poc01-minimal-v1",
   "profile_hash": "7b341c9e1987c7b797087eafcae2dfb0f7eb3fb0635fc18537b8dd3e26213f00",
-  "repository": "Mostorm-Labs/canvas",
+  "repository": "Mostorm-Labs/Axiom",
   "schema_version": 1,
   "set_id": "debcbb7b9376806c94ffb9af5950ebd8a6de0547833f9b57df96a20531ca7817",
   "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",

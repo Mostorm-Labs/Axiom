@@ -57,7 +57,8 @@ add_library(canvas_poc02_skia STATIC skia/ink_skia_renderer.cpp)
 target_include_directories(canvas_poc02_skia PUBLIC skia)
 target_link_libraries(canvas_poc02_skia PUBLIC canvas_poc02_ink CanvasSkia::Skia)
 
-if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+if(CANVAS_POC02_BUILD_PLATFORM_SHELLS AND NOT EMSCRIPTEN AND NOT ANDROID AND
+   NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
   add_executable(canvas_poc02_golden skia/golden_tool.cpp)
   target_link_libraries(canvas_poc02_golden PRIVATE canvas_poc02_skia)
   target_compile_definitions(canvas_poc02_golden PRIVATE
@@ -66,7 +67,10 @@ if(NOT EMSCRIPTEN AND NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
   )
 endif()
 
-if(EMSCRIPTEN)
+if(NOT CANVAS_POC02_BUILD_PLATFORM_SHELLS)
+  # POC-03 consumes only canvas_poc02_skia and owns the combined platform
+  # surface. Avoid building a second standalone shell in that configuration.
+elseif(EMSCRIPTEN)
   add_subdirectory(web)
 elseif(WIN32)
   add_subdirectory(windows)
