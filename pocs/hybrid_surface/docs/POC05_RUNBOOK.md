@@ -38,7 +38,11 @@ nodes are intentionally not supported between Canvas nodes.
 | Windows RNW/WebView2/video | Pending | Fabric component, locked WebView2, real Windows run |
 | Android RN/WebView/VideoView | Pending | Fabric component, 16 KiB checks, Pixel physical run |
 | Apple native UIKit/WKWebView/video | Validated experimentally | Native universal runner and iOS/iPadOS run; see [Apple evidence](../../../docs/evidence/poc05/apple-native-physical-validation-20260820.md) |
-| Apple RN/Fabric/WKWebView/AVPlayer | Pending | Fabric component and product-shell iOS/iPadOS run |
+| Apple RN/Fabric/WKWebView/AVPlayer | In progress | RN 0.84.1 Fabric simulator build and iPad launch are validated; complete the iPad/iPhone human gate |
 
 No target is marked Accepted until placement, two-frame update, lifecycle,
 focus/input and failure recovery evidence exists for the actual adapter.
+
+For the Apple RN/Fabric implementation, use the dedicated
+[RN/Fabric evidence report](../../../docs/evidence/poc05/apple-rn-fabric-validation-20260820.md).
+Do not substitute the UIKit runner report for this gate.

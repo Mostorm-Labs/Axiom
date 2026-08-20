@@ -19,6 +19,7 @@
     "@react-native/babel-preset": "0.84.1",
     "@react-native/codegen": "0.84.1",
     "@react-native/metro-config": "0.84.1",
+    "@react-native/typescript-config": "0.84.1",
     "@types/react": "19.2.2",
     "typescript": "5.9.3"
   },
@@ -31,6 +32,13 @@
     "jsSrcsDir": "src/specs",
     "android": {
       "javaPackageName": "dev.mostorm.axiom.poc05"
+    },
+    "ios": {
+      "components": {
+        "AxiomHybridSurface": {
+          "className": "AxiomHybridSurfaceComponentView"
+        }
+      }
     }
   }
 }

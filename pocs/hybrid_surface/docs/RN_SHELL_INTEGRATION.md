@@ -63,9 +63,12 @@ are applied directly by the native registry/backend.
 | Windows | RNW C++ Fabric component + Composition/D3D Canvas + WebView2/video | JS-stall independence, DPI/window lifecycle, physical Windows run |
 | Web | React Shell + WASM Canvas + iframe/video DOM overlay | rAF placement, focus/failure/lifecycle; React does not receive per-frame placement props |
 
-The Android, Apple and Windows adapters remain Pending until their actual RN
-versions and native dependencies are pinned. A colored native rectangle cannot
-stand in for WebView/video evidence.
+The Apple adapter is now implemented against React Native 0.84.1/Fabric with
+real `WKWebView` and video-layer objects. Its simulator build and iPad
+physical launch are validated; the human iPad/iPhone gate remains in progress.
+Android and Windows adapters remain Pending until their actual RN versions and
+native dependencies are pinned. A colored native rectangle cannot stand in for
+WebView/video evidence.
 ## JS-stall acceptance corpus
 
 Every native adapter must deliberately block the JS thread for 100 ms while a

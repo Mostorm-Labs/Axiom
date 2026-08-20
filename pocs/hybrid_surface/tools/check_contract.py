@@ -43,9 +43,12 @@ def main() -> int:
     for required in (
         "host-contract:",
         "web-overlay:",
+        "apple-rn-fabric:",
         "poc05-host-debug",
         "poc05-host-asan",
         "node-version: 24.18.0",
+        "ios-simulator-arm64-metal",
+        "AxiomHybridSurfaceComponentView",
         "pocs/hybrid_surface/**",
     ):
         if required not in workflow:

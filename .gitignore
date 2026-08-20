@@ -15,5 +15,10 @@ __pycache__/
 *.pyc
 *.tsbuildinfo
 .DS_Store
+pocs/hybrid_surface/platform/react_native/ios/Pods/
+pocs/hybrid_surface/platform/react_native/ios/.xcode.env.local
+pocs/hybrid_surface/platform/react_native/ios/*.xcworkspace/
+pocs/hybrid_surface/platform/react_native/android/app/debug.keystore
+pocs/hybrid_surface/platform/react_native/android/gradle-wrapper.jar
 pocs/shared_engine/platform/web/public/
 pocs/ink_engine/playground/web/public/
