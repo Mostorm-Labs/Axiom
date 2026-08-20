@@ -51,7 +51,7 @@ typedef CanvasPoc04IosTextView CanvasPoc04AppleTextView;
                    containsEnd:(BOOL)containsEnd;
 @end
 
-@interface CanvasPoc04IosTextView : UIView <UITextInput> {
+@interface CanvasPoc04IosTextView : UIView <UITextInput, UIKeyInput, UIEditMenuInteractionDelegate> {
   canvas_poc04_handle_t _session;
   UITextInputStringTokenizer* _tokenizer;
   __weak id<UITextInputDelegate> _inputDelegate;
@@ -59,6 +59,9 @@ typedef CanvasPoc04IosTextView CanvasPoc04AppleTextView;
   UITextStorageDirection _selectionAffinity;
   NSDictionary<NSString*, id>* _behaviorReport;
   void (^_inputEventHandler)(NSString* event);
+  BOOL _draggingSelection;
+  NSUInteger _dragAnchor;
+  UIEditMenuInteraction* _editMenuInteraction;
 }
 - (instancetype)initWithFrame:(CGRect)frame
                        session:(canvas_poc04_handle_t)session;

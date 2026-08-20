@@ -98,12 +98,24 @@ so the performance path cannot replace or weaken the geometry oracle.
   selection rectangles, no diagnostics, and a byte-for-byte equivalent dump
   across platforms.
 - 100 focus/unfocus/view-destroy cycles: no crash or residual composition.
-- Three-platform digest and fixed-font geometry: byte-for-byte equivalent dump.
+- Web/Windows/Android digest and fixed-font geometry: byte-for-byte equivalent dump.
 
 These gates are accepted only from real Web, Windows, and Android artifacts.
 Build-only checks and the host probe cannot satisfy the final exit conditions.
 The automated canonical recorder directly exercises the shared Runtime and
-SkParagraph on each target. Native IME delivery is tracked independently:
-browser composition events, Win32 IMM messages, and Android InputConnection
-callbacks must be observed on their actual platform before POC-04 can be
-marked Accepted. A synthetic C++ composition call is not native IME evidence.
+SkParagraph on each target. Native IME delivery is a second evidence track of
+the same POC: browser composition events, Win32 IMM messages, Android
+InputConnection callbacks, AppKit callbacks, and UIKit callbacks must be
+observed on their actual platforms. A synthetic C++ composition call is not
+native IME evidence. Both tracks are required before the single POC-04 status
+can become `Accepted`.
+
+## Native IME semantic-result gate
+
+Callback vocabulary is platform-specific. `setMarkedText` is strong evidence
+of an active UIKit composition, but its absence is not itself a failure when a
+keyboard keeps pre-edit state in its own UI. The final platform record must
+nevertheless include one controlled user flow (`ni hao` → `你好`, or an
+equivalent documented Chinese candidate flow), the resulting committed text,
+and the Runtime digest. Random keyboard suggestions or synthetic C++ calls do
+not satisfy this gate.
