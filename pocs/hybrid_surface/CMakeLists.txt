@@ -53,3 +53,7 @@ if(CANVAS_POC05_BUILD_TESTS AND BUILD_TESTING)
   include(GoogleTest)
   gtest_discover_tests(canvas_poc05_tests)
 endif()
+
+if(ANDROID)
+  add_subdirectory(platform/react_native/android/native)
+endif()
