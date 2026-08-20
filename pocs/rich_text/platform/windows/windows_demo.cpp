@@ -258,7 +258,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
   WNDCLASSW window_class{};
   window_class.lpfnWndProc = WindowProc;
   window_class.hInstance = instance;
-  window_class.hCursor = LoadCursorW(nullptr, IDC_IBEAM);
+  window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32513));
   window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
   window_class.lpszClassName = L"CanvasPoc04RichText";
   RegisterClassW(&window_class);
