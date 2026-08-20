@@ -5,13 +5,14 @@
   "poc_status_after_evidence": "Validating",
   "source": {
     "branch": "codex/poc-05-hybrid-surface",
-    "base_commit": "5372a0d46ce99d4b543ab5c053e56b15d708b8c3",
+    "base_commit": "4b53540b1bddd44a9bdb765e3116af6d31fcb6c4",
+    "validation_commit": "f0c7d46",
     "runtime_source_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",
     "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
     "note": "The physical Web instrumentation is included in the evidence commit; it is not a Windows RNW/WebView2 adapter."
   },
   "environment": {
-    "collected_utc": "2026-08-20T04:32:13.8173111Z",
+    "collected_utc": "2026-08-20T04:41:42.4580867Z",
     "os": "Windows 10 Pro 10.0.19045 (64-bit)",
     "system_model": "Micro-Star International Co., Ltd. MS-7C83",
     "cpu": "Intel Core i5-10400, 6 cores / 12 logical processors",
@@ -90,7 +91,7 @@
       "renderer_is_software": false,
       "video_ready_state": 4,
       "video_size": "64x64",
-      "video_current_time_seconds": 0.21397,
+      "video_current_time_seconds": 0.699299,
       "video_visible_clip_css_pixels": "100x100"
     },
     "placement": {
@@ -106,10 +107,10 @@
       "samples": 120,
       "allowed_frames": 2,
       "observed_max_frames": 1,
-      "p50_ms": 16.600000381469727,
-      "p95_ms": 19.700000286102295,
-      "p99_ms": 23.0,
-      "max_ms": 27.800000190734863
+      "p50_ms": 16.5,
+      "p95_ms": 18.90000009536743,
+      "p99_ms": 20.40000009536743,
+      "max_ms": 22.699999809265137
     },
     "lifecycle": {
       "cycles": 100,
@@ -145,12 +146,12 @@
       { "path": "pocs/hybrid_surface/platform/web/package-lock.json", "sha256": "dc7517b99cf4023ca29034bc0cb9b8e170080a67af5610fe2a0b384c4ea7c9c8" }
     ],
     "results": [
-      { "path": "out/poc05-web-physical-20260820/chrome-stable-verified.json", "bytes": 1340, "sha256": "a43f7ca84190ffddba4c45d9444095a55613a9ed502256d8dc67771c0e1290f6" },
-      { "path": "pocs/hybrid_surface/platform/web/test-results/web-result.json", "bytes": 6859, "sha256": "0f4703f387c08411c7b8684575b72d872ce7a30c4ef92348ab75f87c92440eb8" },
-      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-iframe-and--8e572-y-band-with-exact-placement/trace.zip", "bytes": 163694, "sha256": "50a66f4118cfd5a4537077f6572ebf973e5e341870f051c2929977741f645b17" },
-      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-pan-and-zoo-2b113-within-two-animation-frames/trace.zip", "bytes": 410427, "sha256": "4dd58e82acc39c90c005d02dd38fa6d55bbf4ed935e60fbe9fff9acba4da7263" },
-      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-clip-failur-08819--and-lifecycle-are-explicit/trace.zip", "bytes": 149540, "sha256": "ea6e1075553b7b0ca195f1d1ade957a8a9a583c2ddd3c2d1fa7e1e37727b75b5" },
-      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-iframe-and--8e572-y-band-with-exact-placement/overlay-placement.png", "bytes": 82306, "sha256": "21818f4c15f010eb446f13d2f9b31325f2183b2aee3c5c1eef36988119d93ce3" },
+      { "path": "out/poc05-web-physical-20260820/chrome-stable-verified.json", "bytes": 1341, "sha256": "09b7fbfdfb8989a313d9ba6c484d758eaa8263254b467b81c1069c8ada23d252" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/web-result.json", "bytes": 6859, "sha256": "77dd211478e604c96ac9d3320d57809da14516a95605e0b30e666a3544b5f5c8" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-iframe-and--8e572-y-band-with-exact-placement/trace.zip", "bytes": 217076, "sha256": "5f578891f4a614264cfdd1d5fb9958b838913f02f6efde01334f205d30a172be" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-pan-and-zoo-2b113-within-two-animation-frames/trace.zip", "bytes": 419518, "sha256": "6e96073cfacdda2655bd045fff9b5a5ad468d59be45ca35c54a394926b1339b9" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-clip-failur-08819--and-lifecycle-are-explicit/trace.zip", "bytes": 139677, "sha256": "c0858cbc4976d181567bf0e64658a877aa7bda4334afb3b6d30240ffbacec83e" },
+      { "path": "pocs/hybrid_surface/platform/web/test-results/hybrid_surface-iframe-and--8e572-y-band-with-exact-placement/overlay-placement.png", "bytes": 82322, "sha256": "7acab81889cf49818ff1d60a1adeb2124c1400085bb9356f21831380ef249a45" },
       { "path": "out/poc05-host-release/pocs/hybrid_surface/canvas_poc05_tests.exe", "bytes": 924160, "sha256": "71c92cf014230bc55c7d59d5c7a7263cccca7448e68b777d5ef09fa8805bea12" }
     ]
   },
@@ -159,7 +160,7 @@
     "windows_debug": "VsDevCmd.bat -arch=x64 && cmake --preset poc05-host-debug && cmake --build --preset poc05-host-debug --parallel && ctest --preset poc05-host-debug --output-on-failure",
     "windows_release": "VsDevCmd.bat -arch=x64 && cmake -S . -B out/poc05-host-release -G Ninja -DCMAKE_BUILD_TYPE=Release -DCANVAS_BUILD_POC01=OFF -DCANVAS_BUILD_POC02=OFF -DCANVAS_BUILD_POC03=ON -DCANVAS_POC03_BUILD_TESTS=OFF -DCANVAS_POC03_ENABLE_SKIA=OFF -DCANVAS_BUILD_POC05=ON -DCANVAS_POC05_BUILD_TESTS=ON && cmake --build out/poc05-host-release --parallel && ctest --test-dir out/poc05-host-release --output-on-failure",
     "chrome": "$env:POC05_BROWSER_CHANNEL='chrome'; $env:POC05_HEADED='1'; $env:POC05_TRACE='1'; $env:POC05_REQUIRE_HARDWARE_GPU='1'; $env:POC05_PHYSICAL_EVIDENCE_OUTPUT='out/poc05-web-physical-20260820/chrome-stable-verified.json'; <Node 24.18.0> node_modules/@playwright/test/cli.js test --config=playwright.config.mjs",
-    "web_test_window_utc": "2026-08-20T04:29:28.5728937Z/2026-08-20T04:29:36.6894135Z"
+    "web_test_window_utc": "2026-08-20T04:41:42.4580867Z/2026-08-20T04:41:51.7672018Z"
   },
   "pending_gates": [
     "Windows RNW/Fabric + Composition/D3D Canvas + locked WebView2/video physical adapter",
