@@ -175,3 +175,31 @@ Neither track can independently mark POC-04 complete. The aggregate review
 must have both tracks, the controlled `ni hao → 你好` semantic-result evidence,
 and the v2 SDK identity before changing the single status from `Validating` to
 `Accepted`.
+
+## Windows and Chrome Stable physical revalidation
+
+Run the physical validation from a clean checkout of
+`codex/poc04-windows-web-revalidation` on the Windows machine. The preparation
+script consumes only the locked `poc04-richtext-v2` SDKs, builds and tests the
+Windows canonical target, builds the Web/WASM recorder, and prints the exact
+commands for both interactive gates:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/poc04/prepare_windows_web_validation.ps1
+```
+
+For Windows, select Microsoft Pinyin in the Win32 recorder, enter `ni hao`,
+commit `你好`, and close the window. For Web, serve the printed recorder
+directory and open `physical_recorder.html` in installed Chrome Stable; repeat
+the same controlled input and download its JSON report. Validate both reports
+before archiving them:
+
+```powershell
+python tools/poc04/validate_physical_ime.py `
+  out/poc04-windows-web-revalidation/windows/windows-ime.json `
+  $HOME/Downloads/poc04-chrome-ime.json
+```
+
+The reports deliberately keep the final controlled text because the semantic
+result is the gate under test. Other IME updates are represented by callback
+metadata; no unrelated user text should be entered in either recorder.

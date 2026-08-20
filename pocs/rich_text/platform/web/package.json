@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "build:physical": "tsc --ignoreConfig physical_recorder.ts text_input_adapter.ts --target ES2022 --module ESNext --moduleResolution Bundler --lib DOM,ES2022 --strict --skipLibCheck --outDir physical-dist",
     "test": "playwright test tests/text_input_adapter.spec.ts",
     "record:wasm": "playwright test tests/wasm_behavior.spec.ts"
   },

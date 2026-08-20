@@ -4,6 +4,8 @@ export interface CanvasPoc04Module {
   stringToUTF8(value: string, pointer: number, maxBytes: number): void;
   lengthBytesUTF8(value: string): number;
   UTF8ToString(pointer: number): string;
+  _canvas_poc04_web_create(): number;
+  _canvas_poc04_web_destroy(session: number): void;
   _canvas_poc04_web_focus(session: number): number;
   _canvas_poc04_web_blur(session: number): number;
   _canvas_poc04_web_begin_composition(session: number): number;
@@ -17,6 +19,14 @@ export interface CanvasPoc04Module {
   _canvas_poc04_web_delete_surrounding(session: number, before: number, after: number): number;
   _canvas_poc04_web_undo(session: number): number;
   _canvas_poc04_web_redo(session: number): number;
+  _canvas_poc04_web_digest(session: number): number;
+  _canvas_poc04_web_presented_text(session: number): number;
+  _canvas_poc04_web_selection_location(session: number): number;
+  _canvas_poc04_web_selection_length(session: number): number;
+  _canvas_poc04_web_caret_x(session: number, layoutWidth: number): number;
+  _canvas_poc04_web_caret_y(session: number, layoutWidth: number): number;
+  _canvas_poc04_web_caret_width(session: number, layoutWidth: number): number;
+  _canvas_poc04_web_caret_height(session: number, layoutWidth: number): number;
 }
 
 // The textarea is only an IME transport. TextDocument remains authoritative in WASM.

@@ -94,6 +94,77 @@ EMSCRIPTEN_KEEPALIVE const char* canvas_poc04_web_digest(
   return digest.data();
 }
 
+EMSCRIPTEN_KEEPALIVE const char* canvas_poc04_web_presented_text(
+    canvas_poc04_handle_t session) {
+  static thread_local std::string text;
+  uint64_t length = 0;
+  size_t required = 0;
+  if (canvas_poc04_session_presented_utf16_length(session, &length) !=
+          CANVAS_POC04_STATUS_OK ||
+      canvas_poc04_session_presented_text_range_utf8(
+          session, 0, length, nullptr, 0, &required) !=
+          CANVAS_POC04_STATUS_BUFFER_TOO_SMALL ||
+      required == 0) {
+    text.clear();
+    return text.c_str();
+  }
+  text.assign(required, '\0');
+  if (canvas_poc04_session_presented_text_range_utf8(
+          session, 0, length, text.data(), text.size(), &required) !=
+      CANVAS_POC04_STATUS_OK) {
+    text.clear();
+    return text.c_str();
+  }
+  text.resize(required - 1);
+  return text.c_str();
+}
+
+canvas_poc04_utf16_range_t WebSelection(canvas_poc04_handle_t session) {
+  canvas_poc04_utf16_range_t selection{};
+  static_cast<void>(
+      canvas_poc04_session_selection_flat_utf16(session, &selection));
+  return selection;
+}
+
+canvas_poc04_rect_t WebCaret(canvas_poc04_handle_t session,
+                             float layout_width) {
+  const canvas_poc04_utf16_range_t selection = WebSelection(session);
+  canvas_poc04_rect_t caret{};
+  static_cast<void>(canvas_poc04_session_caret_rect_for_offset_utf16(
+      session, selection.location + selection.length, layout_width, &caret));
+  return caret;
+}
+
+EMSCRIPTEN_KEEPALIVE double canvas_poc04_web_selection_location(
+    canvas_poc04_handle_t session) {
+  return static_cast<double>(WebSelection(session).location);
+}
+
+EMSCRIPTEN_KEEPALIVE double canvas_poc04_web_selection_length(
+    canvas_poc04_handle_t session) {
+  return static_cast<double>(WebSelection(session).length);
+}
+
+EMSCRIPTEN_KEEPALIVE float canvas_poc04_web_caret_x(
+    canvas_poc04_handle_t session, float layout_width) {
+  return WebCaret(session, layout_width).x;
+}
+
+EMSCRIPTEN_KEEPALIVE float canvas_poc04_web_caret_y(
+    canvas_poc04_handle_t session, float layout_width) {
+  return WebCaret(session, layout_width).y;
+}
+
+EMSCRIPTEN_KEEPALIVE float canvas_poc04_web_caret_width(
+    canvas_poc04_handle_t session, float layout_width) {
+  return WebCaret(session, layout_width).width;
+}
+
+EMSCRIPTEN_KEEPALIVE float canvas_poc04_web_caret_height(
+    canvas_poc04_handle_t session, float layout_width) {
+  return WebCaret(session, layout_width).height;
+}
+
 #if defined(CANVAS_POC04_FONT_PATH)
 EMSCRIPTEN_KEEPALIVE const char* canvas_poc04_web_canonical_behavior_report() {
   static thread_local std::string report;

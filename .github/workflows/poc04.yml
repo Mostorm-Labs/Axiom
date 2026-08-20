@@ -141,10 +141,15 @@ jobs:
           cmake --build out/poc04-windows --parallel
           ctest --test-dir out/poc04-windows --output-on-failure
           out/poc04-windows/canvas_poc04_canonical_behavior_report.exe --platform=windows --output=out/poc04-windows/windows-behavior.json
+          if (-not (Test-Path out/poc04-windows/platform/windows/canvas_poc04_windows_demo.exe)) {
+            throw "Windows physical IME recorder was not built"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: poc04-windows
-          path: out/poc04-windows/windows-behavior.json
+          path: |
+            out/poc04-windows/windows-behavior.json
+            out/poc04-windows/platform/windows/canvas_poc04_windows_demo.exe
 
   android:
     needs: sdk-lock
