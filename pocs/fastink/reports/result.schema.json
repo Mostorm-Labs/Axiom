@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema", "platform", "backend", "document_digest", "stroke_digest"],
+  "properties": {
+    "schema": {"const": 1},
+    "platform": {"type": "string"},
+    "backend": {"type": "string"},
+    "document_digest": {"type": "string", "pattern": "^[0-9a-f]+$"},
+    "stroke_digest": {"type": "string", "pattern": "^[0-9a-f]+$"},
+    "preview_p95_ms": {"type": "number", "minimum": 0},
+    "preview_p99_ms": {"type": "number", "minimum": 0},
+    "handoff_frames": {"type": "integer", "minimum": 0},
+    "missed_presentations": {"type": "integer", "minimum": 0},
+    "queue_age_us": {"type": "integer", "minimum": 0},
+    "evidence": {"type": "string"}
+  },
+  "additionalProperties": true
+}

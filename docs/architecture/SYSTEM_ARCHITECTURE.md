@@ -492,39 +492,60 @@ class StrokeSession {
   deterministic seed，并将 PRNG/seed 规则纳入 BrushDescriptor algorithm version；随机性
   不得依赖 wall clock 或平台线程调度。
 
-## 7. FastInk 双路径
+## 7. FastInk 双路径与 Arc 模块
 
 ```mermaid
 flowchart LR
   Samples["PointerSampleBatch"] --> Session["StrokeSession"]
   Session --> Preview["PreviewStrokeUpdate"]
   Session --> Canonical["Canonical Stroke"]
-  Preview --> Bridge["FastInkBridge"]
-  Bridge --> Platform["Platform FastInkBackend"]
+  Preview --> Protocol["Arc::Protocol"]
+  Protocol --> Bridge["Arc::Core"]
+  Bridge --> Platform["Arc Platform Preview Backend"]
   Canonical --> Ops["Operation"]
   Ops --> Doc["Document"]
   Doc --> Scene["RuntimeScene"]
   Scene --> Skia["Canonical Skia Renderer"]
 ```
 
-接口语义：
+Arc 是与 Axiom 同仓、但可独立构建、测试和抽取的 input-to-display 模块。Axiom Ink 与
+Arc Core/平台 backend 只共同依赖版本化 `Arc::Protocol`，由 Platform Host 组装。Arc 不
+依赖 Document、Operations、EditorSession、RuntimeScene、FrameGraph、Canonical Stroke、
+Persistence 或 Collaboration，也不取得 Canonical RenderTarget ownership。
+
+控制面语义：
 
 ```cpp
-class FastInkBackend {
+class ArcPreviewBackend {
  public:
-  virtual void begin(const FastInkDescriptor&) = 0;
-  virtual void push(const PreviewStrokeUpdate&) = 0;
-  virtual void end(StrokeId) = 0;
-  virtual void cancel(StrokeId) = 0;
+  virtual void begin(const ArcPreviewBegin&) = 0;
+  virtual void push(const ArcPreviewStrokeUpdate&) = 0;
+  virtual void seal_input(const ArcPreviewSeal&) = 0;
+  virtual void canonical_committed(const ArcCanonicalCommit&) = 0;
+  virtual void canonical_visible(const ArcCanonicalVisible&) = 0;
+  virtual void cancel(const ArcPreviewCancel&) = 0;
 };
 ```
 
 - `PreviewStrokeUpdate` 是 `StrokeSession` 在统一 resample/smooth/pressure/prediction/rollback 后产生的版本化 Preview Model，至少携带 Stroke ID、update revision、brush descriptor、transform/坐标空间、confirmed representation、predicted tail 和 replace/truncate 语义。
 - 具体 vector segment/dab batch 布局、buffer ownership 和 ABI 由 POC-02 用延迟与回放证据冻结；平台 backend 不接收 raw pointer sample 来重新实现另一套平滑、预测或笔刷解释。
-- `begin/push/end/cancel` 必须按 Stroke ID 幂等保护。
-- `end` 只结束 Preview；Canonical 是否提交由 StrokeSession/Operations 决定。
-- Canonical 首帧可见后，Preview 才能移除；失败时保留或安全淡出，不出现空白帧。
+- `begin/push/seal_input/canonical_committed/canonical_visible/cancel` 必须按 Stroke ID、
+  revision、HandoffToken 和 target generation 幂等保护。
+- `seal_input` 只停止新 Preview update 并继续显示 confirmed Preview；Canonical 是否提交由
+  StrokeSession/Operations 决定。多个 sealed Stroke 可以分别等待自己的 handoff。
+- Canonical 对应 revision 通过实际 presentation evidence 可见后，Preview 才能移除；GPU
+  submit、render/swap 返回或一次 rAF 不能自动等同 visible。失败时保留、安全退役或切换
+  Default/Null backend，不出现空白帧或双重加深。
+- Arc presentation failure 不得返回成 InkEngine/Document failure，不得取消 confirmed input
+  或改变最终 Stroke/Document digest。
+- Arc Preview target 与 Axiom Canonical target 不得共享 presentable backbuffer ownership；
+  可以通过 Platform Host 的不透明 capability 选择性共享 GPU device/queue/context。
 - 通用 Runtime 不引用 DirectComposition、SurfaceControl、DRM、HWC、DMA-BUF 或 plane 类型。
+
+Arc 的平台实现矩阵覆盖 Web、Windows、Android、macOS、iOS/iPadOS、ChromiumOS 和
+Headless；平台 Tier 只决定性能/真机门禁强度。自有 Android/Linux direct-plane backend 是
+条件式实现，不阻塞普通应用路线。完整决定见
+[ADR-0024](../adr/0024-arc-fastink-module-boundary.md)。
 
 ### 7.1 输入设备与编辑策略边界
 
@@ -797,6 +818,9 @@ POC-01 至 POC-06 默认在 canonical deterministic executor 上单线程有序�
 - RendererBackend 不拥有平台 window/view/surface 生命周期；PlatformSurfaceAdapter 不拥有 Document 语义。
 - FastInk 失败不阻断 Canonical Stroke。
 - FastInkBackend 消费共享 Preview Model，不重新定义 Stroke 平滑、预测或笔刷语义。
+- Arc 与 Canonical Renderer 不共享 presentable backbuffer ownership；Platform Host 是唯一 composition root。
+- Arc presentation error 与 Canonical/Document failure domain 隔离；匹配 handoff token 与 generation 前不得 retire Preview。
+- 所有 Axiom target 均有 Arc 实现；平台支持分级只改变验收强度，不省略 backend。
 - BrushDescriptor 是版本化、可回放的语义，不是未标版本的运行时参数。
 - Undo/Redo 通过新 compensating Operations 进入唯一 Document 写入口。
 - Android 高频 pen path 不经过 RN JS。
