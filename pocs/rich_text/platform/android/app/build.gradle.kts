@@ -28,6 +28,11 @@ android {
             "CANVAS_POC04_CANONICAL_BEHAVIOR",
             providers.gradleProperty("canvasPoc04CanonicalBehavior").orElse("false").get(),
         )
+        buildConfigField(
+            "boolean",
+            "CANVAS_POC04_ENFORCE_PERFORMANCE_GATE",
+            providers.gradleProperty("canvasPoc04EnforcePerformanceGate").orElse("true").get(),
+        )
         externalNativeBuild {
             cmake {
                 arguments += listOf(

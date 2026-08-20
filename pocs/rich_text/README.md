@@ -133,22 +133,21 @@ from Web/Chromium, Windows, and Android/emulator consumers. It does not claim
 to synthesize native pinyin IME keystrokes: real browser IME, Win32 IMM, and
 Android InputConnection event evidence remains a separate manual/device gate.
 
-The physical Android gate was executed on a Pixel 7 and is recorded in
-[`docs/quality/evidence/poc04/android-physical-20260819.md`](../../docs/quality/evidence/poc04/android-physical-20260819.md).
-It closes the Android physical performance and Gboard `InputConnection`
-evidence only; browser and Windows native IME evidence remain pending, so the
-single unified POC-04 stays `Validating`.
+The v2 physical Android gate was executed on a Pixel 7 and is recorded in
+[`docs/quality/evidence/poc04/android-physical-20260820-v2.md`](../../docs/quality/evidence/poc04/android-physical-20260820-v2.md).
+The hosted x86_64 emulator remains a correctness recorder; representative
+performance is gated on the physical device without lowering the 16.7/33.3 ms
+thresholds.
 
 The Apple physical bring-up gate was executed on an iPhone 15 Pro and an iPad
 Air 4 and is recorded in
 [`docs/quality/evidence/poc04/apple-physical-20260820.md`](../../docs/quality/evidence/poc04/apple-physical-20260820.md).
 Both devices displayed the editor, showed the system keyboard, and delivered
-real UIKit callbacks into the shared C++ session with an identical deterministic
-digest. The latest signed bundle also captured real `setMarkedText` and
-`unmarkText` callbacks on both devices. The observed candidate strings were
-not a controlled `ni hao → 你好` script, so the native callback gate is closed
-but the controlled Chinese semantic-result gate remains open; the single
-unified POC-04 stays `Validating`.
+real UIKit callbacks into the shared C++ session. The latest signed v2 bundle
+captured the controlled `setMarkedText` sequence `n → ni → ni hao → 你好`,
+`unmarkText`, final text `你好`, and identical digest on both devices. The
+Apple controlled semantic-result gate is now closed; the single unified
+POC-04 stays `Validating` pending aggregate CI/review.
 
 The final unified evidence must cover English, simplified Chinese,
 pinyin composition, newline, mixed runs, selection, caret, clipboard,

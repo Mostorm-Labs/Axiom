@@ -57,6 +57,12 @@ def main() -> int:
         raise RuntimeError("Android emulator job must invoke the atomic recorder script")
     if ":app:assembleRelease" not in text or ":app:assembleDebug" in text:
         raise RuntimeError("Android performance gate must use optimized Release native code")
+    if '-PcanvasPoc04EnforcePerformanceGate="$performance_gate"' not in text:
+        raise RuntimeError("Android CI must declare whether absolute performance is representative")
+    if "performance_gate=false" not in text:
+        raise RuntimeError("shared Android emulator must not own the physical performance gate")
+    if "Summarize non-representative emulator timing" not in text:
+        raise RuntimeError("Android emulator must preserve timing as observational evidence")
     android_bootstrap_start = text.index("- name: Install pinned Android NDK and core dependencies")
     android_bootstrap_end = text.index("- name: Install Android emulator image", android_bootstrap_start)
     android_bootstrap = text[android_bootstrap_start:android_bootstrap_end]
@@ -84,6 +90,8 @@ def main() -> int:
     recorder = ANDROID_RECORDER.read_text(encoding="utf-8")
     if "outputs/apk/release/app-release.apk" not in recorder:
         raise RuntimeError("Android recorder must install the measured Release APK")
+    if "am start -S -W --activity-clear-task" not in recorder:
+        raise RuntimeError("Android recorder must cold-start the canonical entry point")
     for required in (
         "adb logcat -d -t 1000",
         "dumpsys activity top",

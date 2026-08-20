@@ -43,6 +43,23 @@ NSArray<NSNumber*>* RangeValue(UITextRange* range) {
   return @[@(value.location), @(value.length)];
 }
 
+NSArray<NSNumber*>* RectValue(CGRect rect) {
+  return @[@(rect.origin.x), @(rect.origin.y), @(rect.size.width),
+           @(rect.size.height)];
+}
+
+BOOL IsControlledPinyinText(NSString* text) {
+  NSMutableString* asciiLetters = [NSMutableString string];
+  for (NSUInteger index = 0; index < text.length; ++index) {
+    unichar unit = [text characterAtIndex:index];
+    if (unit >= 'A' && unit <= 'Z') unit += 'a' - 'A';
+    if (unit >= 'a' && unit <= 'z') {
+      [asciiLetters appendFormat:@"%C", unit];
+    }
+  }
+  return [asciiLetters isEqualToString:@"nihao"];
+}
+
 }
 
 @implementation CanvasPoc04ImeRecorderController
@@ -65,21 +82,36 @@ NSArray<NSNumber*>* RangeValue(UITextRange* range) {
 
   BOOL observedMarkedText = NO;
   BOOL observedCommit = NO;
+  BOOL observedControlledPinyin = NO;
   for (NSDictionary<NSString*, id>* item in self.systemInputEvents) {
     observedMarkedText |= [item[@"event"] isEqual:@"setMarkedText"];
     observedCommit |= [item[@"event"] isEqual:@"unmarkText"] ||
                       [item[@"event"] isEqual:@"insertText"];
+    observedControlledPinyin |= IsControlledPinyinText(item[@"presented_text"]);
   }
+  UITextRange* selection = self.textView.selectedTextRange;
+  CGRect caret = selection ? [self.textView caretRectForPosition:selection.end]
+                           : CGRectZero;
+  const BOOL controlledFlowPassed =
+      [text isEqualToString:@"你好"] && observedMarkedText &&
+      observedControlledPinyin && observedCommit &&
+      self.textView.markedTextRange == nil;
   WriteJson(@{
+    @"schema_version": @1,
     @"platform": UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad
         ? @"ipados" : @"ios",
     @"protocol": @"UITextInput+UIKeyInput",
-    @"evidence": @"system-keyboard-callback-capture",
+    @"evidence": @"controlled-system-keyboard-semantic-result",
+    @"controlled_flow": @"ni hao -> 你好",
+    @"controlled_flow_passed": @(controlledFlowPassed),
     @"event_count": @(self.systemInputEvents.count),
     @"observed_marked_text": @(observedMarkedText),
+    @"observed_controlled_pinyin": @(observedControlledPinyin),
     @"observed_commit": @(observedCommit),
+    @"final_text": text,
     @"presented_text": text,
-    @"selection": RangeValue(self.textView.selectedTextRange),
+    @"selection": RangeValue(selection),
+    @"caret": RectValue(caret),
     @"marked_range": RangeValue(self.textView.markedTextRange),
     @"digest": Digest(self.textView.session),
     @"events": self.systemInputEvents,
@@ -158,7 +190,7 @@ NSArray<NSNumber*>* RangeValue(UITextRange* range) {
       24.0, 48.0, controller.view.bounds.size.width - 48.0, 60.0)];
   controller.instructionLabel.numberOfLines = 2;
   controller.instructionLabel.text =
-      @"POC-04 system-keyboard capture\nSwitch to Chinese Pinyin and enter: 中文拼音";
+      @"POC-04 controlled system-keyboard capture\nSwitch to Chinese Pinyin, type ni hao, then commit 你好";
   controller.instructionLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
   controller.instructionLabel.textColor = UIColor.secondaryLabelColor;
   controller.instructionLabel.userInteractionEnabled = NO;

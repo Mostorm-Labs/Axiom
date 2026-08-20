@@ -49,6 +49,8 @@ jobs:
         run: |
           python3 pocs/rich_text/tools/check_consumer_ci.py
           python3 pocs/rich_text/tools/test_behavior_conformance.py -v
+          python3 tools/poc04/validate_physical_ime.py docs/quality/evidence/poc04/windows-ime-20260820-r2.json docs/quality/evidence/poc04/chrome-ime-20260820-r2.json
+          python3 tools/poc04/validate_apple_ime.py docs/quality/evidence/poc04/apple-iphone15pro-ime-20260820.json docs/quality/evidence/poc04/apple-ipad-air4-ime-20260820.json
           python3 -m unittest discover -s tools/skia/tests -v
           git diff --check
       - name: Build and test core
@@ -179,7 +181,11 @@ jobs:
         run: python3 tools/skia/fetch.py --profile "$PROFILE" --lock "$LOCK" --install-root "$INSTALL" --target "${{ matrix.target }}" --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Build Native CanvasView JNI data plane
         run: |
-          gradle -p pocs/rich_text/platform/android :app:assembleRelease -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true --no-daemon
+          performance_gate=true
+          if [[ "${{ matrix.emulator }}" == "true" ]]; then
+            performance_gate=false
+          fi
+          gradle -p pocs/rich_text/platform/android :app:assembleRelease -PcanvasPoc04Abi="${{ matrix.abi }}" -PcanvasPoc04CanonicalBehavior=true -PcanvasPoc04EnforcePerformanceGate="$performance_gate" --no-daemon
           mkdir -p out/poc04-android
           unzip -Z1 pocs/rich_text/platform/android/app/build/outputs/apk/release/app-release.apk > out/poc04-android/apk-files.txt
           grep -Fx 'assets/fonts/Roboto-Regular.ttf' out/poc04-android/apk-files.txt
@@ -197,6 +203,19 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: bash pocs/rich_text/platform/android/record_canonical_behavior.sh
+      - name: Summarize non-representative emulator timing
+        if: matrix.emulator == true
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("out/poc04-android/android-behavior.json").read_text())
+          performance = report["performance"]
+          print("### Android x86_64 emulator timing (observational)\n")
+          print("GitHub's shared x86_64 emulator is a correctness recorder, not the representative-device performance gate.")
+          print(f"- Input/caret p95: `{performance['input_caret_p95_ms']} ms`")
+          print(f"- Full layout p95: `{performance['full_layout_p95_ms']} ms`")
+          PY
       - uses: actions/upload-artifact@v4
         if: ${{ always() && matrix.emulator == true }}
         with:
