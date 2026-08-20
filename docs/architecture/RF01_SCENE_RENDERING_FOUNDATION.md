@@ -806,6 +806,22 @@ registry 单元测试写成已完成真机多 View 调度。
 - 覆盖负坐标、退化 bounds、fill/stroke/text/image、locked/hidden 和 tolerance。
 - Selection/drag harness 只通过 Scene::hitTest，不访问 SpatialIndex internals。
 
+当前 RF01-4 correctness baseline：
+
+- `HitTestRequest` 以 world point、非负 tolerance、kind mask、locked policy 和有界
+  `maximumResults` 组成；Scene 先以 `point ± (tolerance + epsilon)` 做 coarse query，再过滤
+  hidden、non-hit-testable、locked 和 kind，最后按 `SceneOrderKey + ObjectId` 从 front-to-back
+  调用 `IRenderScene::preciseHitTest()`。
+- candidate 返回顺序不具有语义。Scene 自己去重并排序，命中数量限制只在 precise hit 之后应用；
+  index 顺序变化不会改变结果。Direct 当前以保守 bounds distance 作为 POC precise geometry，
+  后续 SkSG/geometry provider 才替换为真实 fill/stroke/text/image 精确算法。
+- 非 finite point/tolerance、负 tolerance、zero maximum、未知 kind flag 和 coarse bounds 溢出
+  整体拒绝；不会部分返回命中结果。locked/hidden/non-hit-testable 语料、tolerance、负坐标和
+  1,000 次候选顺序扰动已加入 RF01 测试。
+
+RF01-4 仍为 `Validating`：本轮建立 two-stage contract 和 Direct baseline；退化 path、真实
+ stroke/text/image geometry、Selection/Eraser/Snap policy integration 仍是后续验证项。
+
 退出：与 brute-force precise oracle 逐字节一致；index 返回顺序扰动不改变结果。
 
 ### RF01-5：SkSG shadow adapter

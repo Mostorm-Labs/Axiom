@@ -27,6 +27,9 @@ class FakeSpatialIndex final : public ISpatialIndex {
     void setRejectPrepare(bool reject) {
         _rejectPrepare = reject;
     }
+    void setReverseQuery(bool reverse) {
+        _reverseQuery = reverse;
+    }
     [[nodiscard]] std::uint64_t stateDigest() const;
     [[nodiscard]] std::span<const SpatialRecord> records() const {
         return _records;
@@ -34,6 +37,7 @@ class FakeSpatialIndex final : public ISpatialIndex {
 
   private:
     bool _rejectPrepare = false;
+    bool _reverseQuery = false;
     mutable std::uint64_t _prepareCount = 0;
     std::uint64_t _commitCount = 0;
     SceneRevision _revision;

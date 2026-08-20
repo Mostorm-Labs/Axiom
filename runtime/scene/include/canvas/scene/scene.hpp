@@ -74,6 +74,7 @@ class Scene final {
     foundation::Result<SceneApplyReceipt> apply(CompiledSceneDelta delta);
 
     foundation::Result<SceneQueryResult> query(const SceneQuery& query) const;
+    foundation::Result<HitTestResult> hitTest(const HitTestRequest& request) const;
     foundation::Result<SceneDrawList> buildDrawList(const SceneQueryResult& visible) const;
     foundation::Result<SceneFrameInput> buildFrame(const SceneQuery& query,
                                                     SceneRevision afterExclusive) const;

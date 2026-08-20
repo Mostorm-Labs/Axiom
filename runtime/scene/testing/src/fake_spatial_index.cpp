@@ -122,9 +122,18 @@ void FakeSpatialIndex::commit(std::unique_ptr<IPreparedSpatialUpdate> preparedUp
 foundation::Result<SpatialQueryResult> FakeSpatialIndex::query(const WorldRect& worldRect) const {
     SpatialQueryResult result;
     result.examinedRecords = _records.size();
-    for (const SpatialRecord& record : _records) {
+    auto append = [&result, &worldRect](const SpatialRecord& record) {
         if (record.worldBounds.intersects(worldRect)) {
             result.candidates.push_back(record.objectId);
+        }
+    };
+    if (_reverseQuery) {
+        for (auto record = _records.rbegin(); record != _records.rend(); ++record) {
+            append(*record);
+        }
+    } else {
+        for (const SpatialRecord& record : _records) {
+            append(record);
         }
     }
     return foundation::Result<SpatialQueryResult>::success(std::move(result));

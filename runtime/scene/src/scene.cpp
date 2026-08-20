@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <limits>
 #include <new>
+#include <unordered_set>
 #include <utility>
 
 namespace canvas {
@@ -56,6 +59,33 @@ DamageSet damageForDelta(const CompiledSceneDelta& delta) {
 bool isVisible(const SceneRecord& record) {
     return (static_cast<std::uint32_t>(record.flags) &
             static_cast<std::uint32_t>(SceneRecordFlags::kVisible)) != 0;
+}
+
+bool hasFlag(SceneRecordFlags value, SceneRecordFlags flag) {
+    return (static_cast<std::uint32_t>(value) & static_cast<std::uint32_t>(flag)) != 0U;
+}
+
+std::uint32_t kindBit(SceneObjectKind kind) {
+    switch (kind) {
+    case SceneObjectKind::kShape:
+        return static_cast<std::uint32_t>(HitTestKindMask::kShape);
+    case SceneObjectKind::kImage:
+        return static_cast<std::uint32_t>(HitTestKindMask::kImage);
+    case SceneObjectKind::kVectorPath:
+        return static_cast<std::uint32_t>(HitTestKindMask::kVectorPath);
+    case SceneObjectKind::kRichText:
+        return static_cast<std::uint32_t>(HitTestKindMask::kRichText);
+    case SceneObjectKind::kVectorStroke:
+        return static_cast<std::uint32_t>(HitTestKindMask::kVectorStroke);
+    case SceneObjectKind::kDabStroke:
+        return static_cast<std::uint32_t>(HitTestKindMask::kDabStroke);
+    }
+    return 0U;
+}
+
+bool hasKnownHitKinds(HitTestKindMask kinds) {
+    return (static_cast<std::uint32_t>(kinds) &
+            ~static_cast<std::uint32_t>(HitTestKindMask::kAll)) == 0U;
 }
 
 } // namespace
@@ -266,6 +296,86 @@ foundation::Result<SceneQueryResult> Scene::query(const SceneQuery& request) con
     } catch (const std::bad_alloc&) {
         return foundation::Result<SceneQueryResult>::failure(
             makeError(foundation::ErrorCode::kOutOfMemory, "Scene query could not allocate"));
+    }
+}
+
+foundation::Result<HitTestResult> Scene::hitTest(const HitTestRequest& request) const {
+    if (!std::isfinite(request.worldPoint.x) || !std::isfinite(request.worldPoint.y) ||
+        !std::isfinite(request.tolerance) || request.tolerance < 0.0F ||
+        request.maximumResults == 0U || !hasKnownHitKinds(request.filter.kinds)) {
+        return foundation::Result<HitTestResult>::failure(
+            makeError(foundation::ErrorCode::kInvalidArgument, "HitTest request is invalid"));
+    }
+    const float epsilon = std::numeric_limits<float>::epsilon() *
+                          std::max({1.0F,
+                                    std::fabs(request.worldPoint.x),
+                                    std::fabs(request.worldPoint.y),
+                                    request.tolerance});
+    const float radius = request.tolerance + epsilon;
+    const WorldRect coarseRect{
+        request.worldPoint.x - radius,
+        request.worldPoint.y - radius,
+        request.worldPoint.x + radius,
+        request.worldPoint.y + radius,
+    };
+    if (!coarseRect.isFiniteAndOrdered()) {
+        return foundation::Result<HitTestResult>::failure(
+            makeError(foundation::ErrorCode::kInvalidArgument, "HitTest query bounds overflow"));
+    }
+    auto spatialResult = _spatialIndex->query(coarseRect);
+    if (!spatialResult) {
+        return foundation::Result<HitTestResult>::failure(spatialResult.error());
+    }
+    try {
+        HitTestResult result{.revision = _revision};
+        result.diagnostics.candidatesExamined = spatialResult.value().examinedRecords;
+        std::vector<ObjectId> candidates;
+        candidates.reserve(spatialResult.value().candidates.size());
+        std::unordered_set<ObjectId, foundation::ObjectIdHash> seen;
+        seen.reserve(spatialResult.value().candidates.size());
+        for (ObjectId objectId : spatialResult.value().candidates) {
+            if (!seen.insert(objectId).second) {
+                continue;
+            }
+            const SceneRecord* record = _records.find(objectId);
+            if (record == nullptr || !hasFlag(record->flags, SceneRecordFlags::kVisible) ||
+                !hasFlag(record->flags, SceneRecordFlags::kHitTestable) ||
+                !record->worldBounds.intersects(coarseRect) ||
+                (!request.filter.includeLocked &&
+                 hasFlag(record->flags, SceneRecordFlags::kLocked)) ||
+                (kindBit(record->kind) & static_cast<std::uint32_t>(request.filter.kinds)) == 0U) {
+                continue;
+            }
+            candidates.push_back(objectId);
+        }
+        result.diagnostics.candidatesReturned = spatialResult.value().candidates.size();
+        result.diagnostics.candidatesAfterFilter = candidates.size();
+        std::sort(candidates.begin(), candidates.end(), [this](ObjectId left, ObjectId right) {
+            const SceneRecord* leftRecord = _records.find(left);
+            const SceneRecord* rightRecord = _records.find(right);
+            return rightRecord->orderKey < leftRecord->orderKey ||
+                   (rightRecord->orderKey == leftRecord->orderKey && right < left);
+        });
+        for (ObjectId objectId : candidates) {
+            ++result.diagnostics.preciseTests;
+            auto precise = _renderScene->preciseHitTest(
+                PreciseHitRequest{objectId, request.worldPoint, request.tolerance});
+            if (!precise) {
+                return foundation::Result<HitTestResult>::failure(precise.error());
+            }
+            if (!precise.value().hit) {
+                continue;
+            }
+            result.frontToBack.push_back(objectId);
+            ++result.diagnostics.preciseHits;
+            if (result.frontToBack.size() >= request.maximumResults) {
+                break;
+            }
+        }
+        return foundation::Result<HitTestResult>::success(std::move(result));
+    } catch (const std::bad_alloc&) {
+        return foundation::Result<HitTestResult>::failure(
+            makeError(foundation::ErrorCode::kOutOfMemory, "HitTest could not allocate"));
     }
 }
 

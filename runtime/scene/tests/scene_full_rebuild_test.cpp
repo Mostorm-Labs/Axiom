@@ -2,6 +2,7 @@
 #include "canvas/scene/scene.hpp"
 #include "canvas/scene/scene_record_store.hpp"
 #include "canvas/scene/uniform_grid_spatial_index.hpp"
+#include "canvas/scene/testing/fake_spatial_index.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -21,6 +22,8 @@ using canvas::CompiledSceneSnapshot;
 using canvas::ContentRevision;
 using canvas::DirectRenderScene;
 using canvas::HitGeometryRef;
+using canvas::HitTestKindMask;
+using canvas::HitTestRequest;
 using canvas::ObjectId;
 using canvas::PreciseHitRequest;
 using canvas::RenderPayloadRef;
@@ -326,6 +329,134 @@ void testDeltaSpatialPrepareFailurePreservesScene(TestContext& context) {
     EXPECT(context, spatialRaw->diagnostics().commitCount == spatialCommits);
 }
 
+void testTwoStageHitTestIsOrderIndependentAndFiltered(TestContext& context) {
+    auto render = std::make_unique<DirectRenderScene>();
+    auto spatial = std::make_unique<canvas::testing::FakeSpatialIndex>();
+    canvas::testing::FakeSpatialIndex* spatialRaw = spatial.get();
+    Scene scene(std::move(render), std::move(spatial));
+
+    SceneRecord back = makeRecord(1U, 10U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F});
+    SceneRecord front = makeRecord(2U, 20U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F});
+    SceneRecord locked = makeRecord(3U, 30U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F});
+    locked.flags = static_cast<canvas::SceneRecordFlags>(
+        static_cast<std::uint32_t>(locked.flags) |
+        static_cast<std::uint32_t>(canvas::SceneRecordFlags::kLocked) |
+        static_cast<std::uint32_t>(canvas::SceneRecordFlags::kHitTestable));
+    SceneRecord hidden = makeRecord(4U, 40U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F});
+    hidden.flags = canvas::SceneRecordFlags::kHitTestable;
+    SceneRecord notHitTestable = makeRecord(5U, 50U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F});
+    notHitTestable.flags = canvas::SceneRecordFlags::kVisible;
+    back.flags = static_cast<canvas::SceneRecordFlags>(
+        static_cast<std::uint32_t>(back.flags) |
+        static_cast<std::uint32_t>(canvas::SceneRecordFlags::kHitTestable));
+    front.flags = back.flags;
+    EXPECT(context,
+           scene
+               .replace(CompiledSceneSnapshot{
+                   .sourceRevision = SceneRevision(1U),
+                   .records = {back, front, locked, hidden, notHitTestable},
+               })
+               .hasValue());
+
+    const HitTestRequest request{
+        .worldPoint = canvas::WorldPoint{5.0F, 5.0F},
+        .tolerance = 0.0F,
+        .filter = canvas::HitTestFilter{},
+        .maximumResults = 3U,
+    };
+    auto forward = scene.hitTest(request);
+    EXPECT(context, forward.hasValue());
+    if (forward) {
+        EXPECT(context, forward.value().frontToBack.size() == 2U);
+        EXPECT(context, forward.value().frontToBack[0] == front.objectId);
+        EXPECT(context, forward.value().frontToBack[1] == back.objectId);
+        EXPECT(context, forward.value().diagnostics.preciseHits == 2U);
+    }
+    spatialRaw->setReverseQuery(true);
+    auto reverse = scene.hitTest(request);
+    EXPECT(context, reverse.hasValue());
+    if (forward && reverse) {
+        EXPECT(context, reverse.value().frontToBack == forward.value().frontToBack);
+    }
+    for (std::uint32_t iteration = 0U; iteration < 1000U; ++iteration) {
+        spatialRaw->setReverseQuery((iteration & 1U) != 0U);
+        const auto shuffled = scene.hitTest(request);
+        EXPECT(context, shuffled.hasValue());
+        if (shuffled && forward) {
+            EXPECT(context, shuffled.value().frontToBack == forward.value().frontToBack);
+        }
+    }
+
+    HitTestRequest includeLocked = request;
+    includeLocked.filter.includeLocked = true;
+    includeLocked.maximumResults = 3U;
+    const auto lockedResult = scene.hitTest(includeLocked);
+    EXPECT(context, lockedResult.hasValue());
+    if (lockedResult) {
+        EXPECT(context, lockedResult.value().frontToBack.size() == 3U);
+        EXPECT(context,
+               std::find(lockedResult.value().frontToBack.begin(),
+                         lockedResult.value().frontToBack.end(),
+                         locked.objectId) != lockedResult.value().frontToBack.end());
+    }
+
+    HitTestRequest strokeOnly = request;
+    strokeOnly.filter.kinds = HitTestKindMask::kVectorStroke;
+    const auto strokeResult = scene.hitTest(strokeOnly);
+    EXPECT(context, strokeResult.hasValue());
+    if (strokeResult) {
+        EXPECT(context, strokeResult.value().frontToBack.empty());
+    }
+}
+
+void testHitTestToleranceAndInvalidRequests(TestContext& context) {
+    Scene scene(std::make_unique<DirectRenderScene>(),
+                std::make_unique<UniformGridSpatialIndex>());
+    SceneRecord record = makeRecord(1U, 1U, WorldRect{0.0F, 0.0F, 10.0F, 10.0F});
+    record.flags = static_cast<canvas::SceneRecordFlags>(
+        static_cast<std::uint32_t>(record.flags) |
+        static_cast<std::uint32_t>(canvas::SceneRecordFlags::kHitTestable));
+    EXPECT(context,
+           scene
+               .replace(CompiledSceneSnapshot{
+                   .sourceRevision = SceneRevision(1U),
+                   .records = {record},
+               })
+               .hasValue());
+    const auto outside = scene.hitTest(HitTestRequest{
+        .worldPoint = canvas::WorldPoint{11.0F, 5.0F},
+        .tolerance = 0.0F,
+        .maximumResults = 1U,
+    });
+    EXPECT(context, outside.hasValue());
+    if (outside) {
+        EXPECT(context, outside.value().frontToBack.empty());
+    }
+    const auto withinTolerance = scene.hitTest(HitTestRequest{
+        .worldPoint = canvas::WorldPoint{11.0F, 5.0F},
+        .tolerance = 1.0F,
+        .maximumResults = 1U,
+    });
+    EXPECT(context, withinTolerance.hasValue());
+    if (withinTolerance) {
+        EXPECT(context,
+               withinTolerance.value().frontToBack == std::vector<ObjectId>{record.objectId});
+    }
+    const auto invalidTolerance = scene.hitTest(HitTestRequest{
+        .worldPoint = canvas::WorldPoint{0.0F, 0.0F},
+        .tolerance = -1.0F,
+        .maximumResults = 1U,
+    });
+    EXPECT(context, !invalidTolerance.hasValue());
+    EXPECT(context, invalidTolerance.error().code == ErrorCode::kInvalidArgument);
+    const auto invalidMaximum = scene.hitTest(HitTestRequest{
+        .worldPoint = canvas::WorldPoint{0.0F, 0.0F},
+        .maximumResults = 0U,
+    });
+    EXPECT(context, !invalidMaximum.hasValue());
+    EXPECT(context, invalidMaximum.error().code == ErrorCode::kInvalidArgument);
+}
+
 void testFrameInputUsesOneSceneRevision(TestContext& context) {
     Scene scene(std::make_unique<DirectRenderScene>(),
                 std::make_unique<UniformGridSpatialIndex>());
@@ -365,6 +496,8 @@ int main() {
     testSpatialPrepareFailurePreservesScene(context);
     testDeltaSpatialPrepareFailurePreservesScene(context);
     testFrameInputUsesOneSceneRevision(context);
+    testTwoStageHitTestIsOrderIndependentAndFiltered(context);
+    testHitTestToleranceAndInvalidRequests(context);
     if (context.failures != 0) {
         std::cerr << context.failures << " RF01-1 full rebuild expectations failed\n";
         return EXIT_FAILURE;

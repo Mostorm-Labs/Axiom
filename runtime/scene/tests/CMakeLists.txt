@@ -11,7 +11,7 @@ endif()
 add_test(NAME canvas_rf01_scene_atomicity COMMAND canvas_rf01_scene_atomicity_test)
 
 add_executable(canvas_rf01_full_rebuild_test scene_full_rebuild_test.cpp)
-target_link_libraries(canvas_rf01_full_rebuild_test PRIVATE canvas_runtime_scene)
+target_link_libraries(canvas_rf01_full_rebuild_test PRIVATE canvas_runtime_scene_fakes)
 
 if(MSVC)
     target_compile_options(canvas_rf01_full_rebuild_test PRIVATE /W4 /permissive- /WX /EHsc)
