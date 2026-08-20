@@ -10,8 +10,11 @@ Android.
 POC-01 is accepted. POC-02 is Integration Ready / Validating, so POC-03 scene
 work, POC-06 FastInk experiments, and R1 foundation work may consume its
 experimental contracts while its final latency and physical-device gates
-remain Pending. This branch implements POC-03 and remains `Validating` until
-its physical Windows/Web/Android and integrated-ink gates have recorded
+remain Pending. POC-05 is accepted as a future-capability architecture risk
+proof: Web, Windows RNW, Android RN and Apple RN/Fabric all validated the
+controlled WebView/video Overlay boundary. Its experimental C++ scene bridges
+are not product ABI. This branch implements POC-03 and remains `Validating`
+until its physical Windows/Web/Android and integrated-ink gates have recorded
 evidence. POC-04 can advance independently before R1 acceptance. The delivery
 order is six focused POCs followed by five productization stages; no production
 code should bypass their documented exit gates.
@@ -68,8 +71,9 @@ code should bypass their documented exit gates.
 The accepted `POC-01 Shared Engine` has unlocked parallel Ink, Scene, and
 RichText work. POC-02 is Integration Ready / Validating: POC-06 may consume its
 Preview Model, and POC-03's integrated ink experience gate may consume its Ink
-outputs without treating POC-02 as Accepted. POC-05 depends on the POC-03
-reserved external-surface pass.
+outputs without treating POC-02 as Accepted. POC-05 is accepted as a
+controlled-overlay risk proof; its cross-platform evidence and explicit
+non-goals are recorded in the [consolidated report](docs/evidence/poc05/consolidated-validation-20260820.md).
 
 R1 foundation acceptance is blocked by POC-01 through POC-04. POC-05 is a
 future-capability risk proof and does not enter V1 product scope. POC-06 may run

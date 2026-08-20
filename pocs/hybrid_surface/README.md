@@ -29,13 +29,15 @@ The Web harness uses a real iframe and a real HTML video element in the fixed
 overlay band. Apple now also has a React Native 0.84.1 Fabric component that
 hosts the same native owner (`CAMetalLayer` + Skia Ganesh + `WKWebView` + a
 video layer); the UIKit runner remains a separate lower-level oracle. The
-Apple RN/Fabric simulator build and iPad physical launch are validated, while
-the manual iPad/iPhone interaction gate is still pending. Windows has both a
+Apple RN/Fabric simulator build and iPad/iPhone physical interaction gates are
+validated. Windows has both a
 standalone native peer in `platform/windows` and a real RNW 0.84 New
 Architecture/Fabric product Shell in `platform/react_native/windows`. Its
 Fabric component owns a visible Skia Ganesh/D3D12 child surface and
-WebView2/video overlays through `WindowsRnwFabricExternalSurfaceHost`. The
-Android WebView/VideoView product adapter remains pending.
+WebView2/video overlays through `WindowsRnwFabricExternalSurfaceHost`.
+Android also has a React Native Fabric/WebView/VideoView physical runner; the
+Pixel 7 gate passed with the 16 KiB-aligned native library. The consolidated
+cross-platform result is [POC-05 evidence](../../docs/evidence/poc05/consolidated-validation-20260820.md).
 The intended native Shell boundary is specified in
 [RN_SHELL_INTEGRATION.md](docs/RN_SHELL_INTEGRATION.md).
 
@@ -98,6 +100,7 @@ does not need a preinstalled `Microsoft.WindowsAppRuntime` framework package.
 The Windows RNW validation Shell uses the private POC-03 scene bridge described
 above and writes `poc05-windows-rnw-scene.json` beside the executable after
 both overlays mount and 10 native frames complete (the
-actual render count is recorded in the report). Do not
-promote that result to stable Runtime C ABI conformance or mark POC-05
-`Accepted` until the C ABI scene bridge and all remaining platform gates exist.
+actual render count is recorded in the report). The physical shell result is
+accepted for the POC-05 architecture risk proof, but it does not promote the
+private scene bridge to stable Runtime C ABI conformance; R1/R3 must replace
+that bridge with the product SDK/ABI path.

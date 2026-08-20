@@ -34,14 +34,15 @@ nodes are intentionally not supported between Canvas nodes.
 
 | Target | Status | Required evidence |
 | --- | --- | --- |
-| Web iframe/video | Automated validating | Playwright result and trace |
-| Windows RNW/WebView2/video | Product Shell validating | RNW 0.84 Fabric Shell, Skia/D3D12 CanvasSurface and WebView2/video are integrated; formal lifecycle/focus/JS-stall evidence remains |
-| Android RN/WebView/VideoView | Pending | Fabric component, 16 KiB checks, Pixel physical run |
+| Web iframe/video | **Accepted (POC risk proof)** | Playwright placement, two-frame update, focus/failure and 100 lifecycle corpus |
+| Windows RNW/WebView2/video | **Accepted (POC risk proof)** | RNW 0.84 Fabric Shell, Skia/D3D12 CanvasSurface, WebView2/video and physical report |
+| Android RN/WebView/VideoView | **Accepted (POC risk proof)** | RN 0.84.1 Fabric shell, GLES3 CanvasView/JNI, 16 KiB check and Pixel physical run |
 | Apple native UIKit/WKWebView/video | Validated experimentally | Native universal runner and iOS/iPadOS run; see [Apple evidence](../../../docs/evidence/poc05/apple-native-physical-validation-20260820.md) |
-| Apple RN/Fabric/WKWebView/AVPlayer | In progress | RN 0.84.1 Fabric simulator build and iPad launch are validated; complete the iPad/iPhone human gate |
+| Apple RN/Fabric/WKWebView/native video | **Accepted (POC risk proof)** | RN 0.84.1 Fabric simulator, iPad and iPhone physical runs |
 
-No target is marked Accepted until placement, two-frame update, lifecycle,
-focus/input and failure recovery evidence exists for the actual adapter.
+POC-05 is accepted as a future-capability risk proof after the platform
+evidence is consolidated. This does not make the experimental registry a
+product ABI or add external surfaces to V1.
 
 For the Apple RN/Fabric implementation, use the dedicated
 [RN/Fabric evidence report](../../../docs/evidence/poc05/apple-rn-fabric-validation-20260820.md).
@@ -70,7 +71,8 @@ stable Runtime C ABI product boundary; record
 `poc05-windows-rnw-scene.json` beside the executable after both overlays mount
 and 10 native frames complete, including the scene
 node count, GPU, DPI, Skia RGBA readback, render count and overlay registry
-diagnostics. POC-05 remains `Validating`.
+diagnostics. POC-05 is accepted for the controlled-overlay architecture risk
+proof; the private bridge remains non-conforming product integration work.
 
 The SDK is pinned to Microsoft.Web.WebView2 `1.0.2592.51`; the package and
 native-header SHA-256 values are recorded in

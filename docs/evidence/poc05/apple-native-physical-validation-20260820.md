@@ -1,5 +1,8 @@
 # POC-05 Apple native overlay physical validation — 2026-08-20
 
+> Supplemental native-adapter evidence. The final POC-05 stage disposition is
+> in the [consolidated report](consolidated-validation-20260820.md).
+
 Status: **Validated for the experimental native Apple adapter**.
 
 This report records the iPad Air 4 (Piccaso) and iPhone 15 Pro (Mosaic)
@@ -61,5 +64,6 @@ scene and overlay run, but no crash or rendering failure occurred.
   placeholder rather than a product `AVPlayerLayer` integration.
 - Minor video placement jitter during active WebView pinch/zoom is retained as
   a known POC limitation and is not treated as a release-quality guarantee.
-- Windows RNW/WebView2 and macOS native-shell gates remain separate pending
-  work.
+- Windows RNW/WebView2 and the Apple RN/Fabric report are consolidated in the
+  cross-platform POC-05 disposition; macOS native-shell product work remains
+  outside this POC.

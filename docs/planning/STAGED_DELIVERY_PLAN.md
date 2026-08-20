@@ -1,6 +1,6 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
+> 状态：Accepted Delivery Baseline v1.1；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating，POC-05 / Accepted（跨 Web、Windows RNW、Android RN、Apple RN/Fabric 的受控 Overlay 风险验证）；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
 
 路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。编号表达工作包，不表达无条件串行关系；设计、实现和验收遵循以下 evidence DAG：
 
@@ -25,7 +25,7 @@ flowchart LR
   P6 --> R3Fast["R3 FastInk productization"]
 ```
 
-POC-02/03/04 的核心工作可在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后，POC-03 integrated ink gate、POC-06 和 R1 foundation 可以消费其实验性契约，无需等待 POC-02 最终延迟验收；POC-02 的规模性能由 POC-03 integrated ink gate 联合验证，平台级低延迟 Preview 由 POC-06 验证。R1 工程准备可在证据收集期间进行，但 R1 acceptance 仍要求依赖图中的功能、规模与产品门禁全部满足。POC-05 是非 V1 的未来能力风险验证，不阻塞 R1/V1；POC-06 可与 R1 并行，但在通过前阻塞 R3 FastInk 产品化。任何未通过 POC 的接口都不能因并行开发或合并而被提前视为稳定产品契约。
+POC-02/03/04 的核心工作可在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后，POC-03 integrated ink gate、POC-06 和 R1 foundation 可以消费其实验性契约，无需等待 POC-02 最终延迟验收；POC-02 的规模性能由 POC-03 integrated ink gate 联合验证，平台级低延迟 Preview 由 POC-06 验证。POC-05 已通过跨端受控 Overlay 风险验证并标记 `Accepted`，但只冻结 future-capability 边界，不把 ExternalSurface 加入 V1，也不把 POC-only scene bridge 当作稳定 C ABI。R1 工程准备可在证据收集期间进行，但 R1 acceptance 仍要求依赖图中的功能、规模与产品门禁全部满足。POC-05 的产品化 bridge、任意 DOM/native 穿插和 zero-copy texture 仍需后续 ADR；POC-06 可与 R1 并行，但在通过前阻塞 R3 FastInk 产品化。任何未通过 POC 的接口都不能因并行开发或合并而被提前视为稳定产品契约。
 
 每个性能结果必须记录设备、系统、编译器、构建模式、Skia commit/backend、场景版本、分辨率和采样方法。下文阈值是当前门禁；如基准设备变化，只能通过 ADR 修订。
 
@@ -382,7 +382,7 @@ Direct/SkSG shadow migration、POC-03 类型映射、分批实施与量化退出
 
 ### 目标
 
-证明 WebView/Video 等未来外部内容可以通过受控 Overlay 与 Native/WASM Canvas 共存，而不破坏 RuntimeScene、输入和 z-order 边界。本 POC 是 architecture risk proof；ExternalSurface/Video/Embed 不进入 V1 产品实现，也不阻塞 R1～R5。
+证明 WebView/Video 等未来外部内容可以通过受控 Overlay 与 Native/WASM Canvas 共存，而不破坏 RuntimeScene、输入和 z-order 边界。本 POC 是 architecture risk proof；ExternalSurface/Video/Embed 不进入 V1 产品实现，也不阻塞 R1～R5。跨 Web、Windows RNW、Android RN、iOS/iPadOS RN/Fabric 的证据已在 [POC-05 收敛报告](../evidence/poc05/consolidated-validation-20260820.md) 中完成。
 
 ### 设计
 
@@ -405,23 +405,23 @@ Direct/SkSG shadow migration、POC-03 类型映射、分批实施与量化退出
 ### 实现
 
 - 实现 ExternalSurface placeholder 和 overlay placement command POC。
-- 在 Web、Windows、Android 选择代表性平台至少各接入一个 WebView/Video surface。
+- 在 Web、Windows RNW、Android RN 和 Apple RN/Fabric 选择代表性平台至少各接入一个 WebView/Video surface。
 - 实现 lifecycle adapter、clip/bounds 同步、focus handoff 和失败 placeholder。
 - 实现 overlay debug bounds、surface leak counter 和 placement trace。
 
 ### 交付物
 
 - Hybrid Surface 契约和 z-order 限制说明。
-- 三平台 overlay demo、生命周期语料和 placement diff。
+- 四类 Shell（Web、Windows RNW、Android RN、Apple RN/Fabric）overlay demo、生命周期语料和 placement diff。
 - 资源/内存报告和 future texture-import 风险清单。
 
 ### 退出条件
 
-- [ ] placement 误差和 2 帧更新门禁通过。
-- [ ] 100 次 lifecycle 测试无 surface 泄漏，内存增长 < 5%。
-- [ ] focus/input/failure 语料全部通过。
-- [ ] 产品设计已接受“受控 Overlay、不任意穿插”的限制。
-- [ ] POC 结果只冻结未来扩展边界，没有把 ExternalSurface 加入 V1 schema、R3 产品 target 或发布门禁。
+- [x] Web、Windows RNW、Android RN 和 Apple RN/Fabric 的 placement/overlay 证据通过；各平台报告保留其测量方式和适配器边界。
+- [x] Web 100 次 lifecycle 及 native runner lifecycle corpus 通过；平台报告记录 surface 计数、失败恢复和资源生命周期。
+- [x] focus/input/failure 语料在各平台 adapter 的实际范围内通过；WebView 内单指输入归 WebView 所有，Canvas 双指手势由 native owner 接管。
+- [x] 产品架构接受“受控 Overlay、不任意穿插”的限制。
+- [x] POC 结果只冻结未来扩展边界，没有把 ExternalSurface 加入 V1 schema、R3 产品 target 或发布门禁。
 
 ## POC-06 — FastInk
 

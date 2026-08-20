@@ -1,5 +1,8 @@
 # POC-05 Hybrid Surface Evidence
 
+> Historical scoped report. Its stage status is superseded by the
+> [2026-08-20 consolidated report](consolidated-validation-20260820.md).
+
 Date: 2026-08-19
 
 Branch: `codex/poc-05-hybrid-surface`
@@ -7,6 +10,10 @@ Branch: `codex/poc-05-hybrid-surface`
 Base: latest `main` with the POC-03 scene branch stacked above it
 
 ## Current result
+
+The scoped results in this historical report are superseded for stage
+disposition by the [2026-08-20 consolidated report](consolidated-validation-20260820.md),
+which records POC-05 as Accepted for the controlled-overlay risk proof.
 
 The branch is rebased to POC-03 `84b3aaf`. The implementation consumes the
 normative View/Camera/Surface C ABI rather than POC-03 C++ Scene types. On this
@@ -19,7 +26,9 @@ element. This run used the available Node 22.14.0 rather than the locked Node
 24.18.0, so the formal Web artifact remains Pending until `poc05.yml` runs with
 the locked toolchain.
 
-Windows WebView2 and Android WebView/VideoView remain Pending. Apple now has
+At the time of this historical run, Windows WebView2 and Android
+WebView/VideoView remained Pending. Later Windows RNW, Android RN and Apple
+RN/Fabric evidence is recorded in the consolidated report. Apple also has
 supplemental native-adapter evidence in
 [apple-native-physical-validation-20260820.md](apple-native-physical-validation-20260820.md);
 the eventual React Native/Fabric Apple shell remains Pending. No product-shell

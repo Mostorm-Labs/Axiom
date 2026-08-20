@@ -1,7 +1,7 @@
 {
   "schema": "canvas.poc05.windows-rnw-scene.v1",
   "evidence_status": "physical_shell_pass",
-  "poc_status_after_evidence": "Validating",
+  "poc_status_after_evidence": "superseded_by_consolidated_poc05_acceptance",
   "source": {
     "branch": "codex/poc-05-hybrid-surface",
     "runtime_source_commit": "5ab8b16bdac8f982a9d221d1f48d3867dda7b43c",

@@ -1,6 +1,12 @@
 # POC-05 Windows RNW/Fabric 100K scene physical validation — 2026-08-20
 
-Status: **Scoped physical Shell evidence passed; POC-05 remains `Validating`.**
+> This physical result is included by the later
+> [POC-05 consolidated report](../../../evidence/poc05/consolidated-validation-20260820.md),
+> which accepts the controlled-overlay risk proof while retaining the private
+> Scene bridge as non-conforming product integration work.
+
+Status: **Scoped physical Shell evidence passed; included in the consolidated
+POC-05 Accepted architecture risk proof.**
 
 The Windows RNW New Architecture/Fabric Shell was built in Release mode and
 run on the physical Windows machine. Its native CanvasSurface uses Skia Ganesh

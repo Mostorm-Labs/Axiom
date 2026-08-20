@@ -2,7 +2,7 @@
   "schema": "canvas.poc05.windows-web-physical.v2",
   "report_id": "poc05-windows-web-physical-20260820",
   "evidence_status": "scoped_pass",
-  "poc_status_after_evidence": "Validating",
+  "poc_status_after_evidence": "superseded_by_consolidated_poc05_acceptance",
   "source": {
     "branch": "codex/poc-05-hybrid-surface",
     "base_commit": "4b53540b1bddd44a9bdb765e3116af6d31fcb6c4",
@@ -168,5 +168,5 @@
     "Apple RN/Fabric + WKWebView/AVPlayer physical adapter",
     "Formal Web Node 24.18.0 CI artifact"
   ],
-  "disposition": "Windows stable-C-ABI host and Chrome Stable DOM overlay evidence pass their scoped checks on the same physical machine. No native Windows adapter exists in this repository, so Windows RNW/WebView2/video remains Pending. POC-05 remains Validating; it is not Accepted."
+  "disposition": "Historical scoped Windows stable-C-ABI host and Chrome Stable DOM overlay evidence pass their checks. This report predates the Windows RNW evidence; its stage status is superseded by docs/evidence/poc05/consolidated-validation-20260820.md, which accepts the controlled-overlay architecture risk proof while retaining this report as audit history."
 }

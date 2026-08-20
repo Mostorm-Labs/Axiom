@@ -64,8 +64,8 @@ are applied directly by the native registry/backend.
 | Web | React Shell + WASM Canvas + iframe/video DOM overlay | rAF placement, focus/failure/lifecycle; React does not receive per-frame placement props |
 
 The Apple adapter is now implemented against React Native 0.84.1/Fabric with
-real `WKWebView` and video-layer objects. Its simulator build and iPad
-physical launch are validated; the human iPad/iPhone gate remains in progress.
+real `WKWebView` and native video-layer objects. Its simulator, iPad and
+iPhone physical gates passed.
 The Windows adapter now pins React Native 0.84.1 and React Native Windows
 0.84.0, registers a code-generated Fabric component, renders through a real
 Skia Ganesh/D3D12 swap chain, and mounts real WebView2 controllers. For the
@@ -73,9 +73,13 @@ Windows physical validation run, that Canvas uses a private POC-03 C++
 `RuntimeScene` bridge configured to the Android-equivalent 100K scene. This is
 deliberately outside the stable C ABI boundary and is recorded as
 `runtime_c_abi_binary_conformance: false`; it must not be presented as the
-final product architecture. Android and Apple product RN adapters remain
-Pending where their remaining physical gates are not complete. A colored
-native rectangle cannot stand in for WebView/video evidence.
+final product architecture. The Android adapter uses RN 0.84.1 Fabric with a
+native CanvasView/JNI path, real `android.webkit.WebView` and
+`TextureView`/`MediaPlayer`; the Pixel 7 physical gate and 16 KiB alignment
+check passed. Windows, Android and Apple physical evidence is accepted for
+this POC's architecture risk proof. The POC-only scene bridges still do not
+satisfy stable Runtime C ABI conformance. A colored native rectangle cannot
+stand in for WebView/video evidence.
 ## JS-stall acceptance corpus
 
 Every native adapter must deliberately block the JS thread for 100 ms while a

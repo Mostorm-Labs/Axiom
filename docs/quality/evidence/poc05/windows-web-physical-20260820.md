@@ -1,6 +1,10 @@
 # POC-05 Windows/Web physical validation — 2026-08-20
 
-Status: **Scoped evidence passed; POC-05 remains `Validating`.**
+> Historical scoped report. Its stage status is superseded by the
+> [POC-05 consolidated report](../../../evidence/poc05/consolidated-validation-20260820.md).
+
+Status: **Historical scoped evidence passed; stage disposition is superseded by
+the consolidated POC-05 Accepted report.**
 
 This is a same-machine Windows/Web evidence bundle for the
 `codex/poc-05-hybrid-surface` baseline at `4b53540` (which contains the
@@ -66,7 +70,8 @@ placing binary telemetry in Git.
 
 ## Disposition and remaining gates
 
-The scoped Windows host and Chrome DOM harness checks pass. Windows RNW/Fabric +
-WebView2/video, Android RN/Fabric, and Apple RN/Fabric remain pending. The
-formal Web Node 24.18.0 CI artifact is also pending. POC-05 therefore remains
-`Validating` and is not marked `Accepted`.
+The scoped Windows host and Chrome DOM harness checks pass. The later RNW,
+Android RN and Apple RN/Fabric reports complete the cross-platform POC-05
+architecture risk proof; see the consolidated report for the final stage
+disposition. This historical report still correctly records that those
+adapters were not present at the time of this run.

@@ -1,6 +1,6 @@
 # Canvas v2 项目总体框架
 
-> 状态：Architecture Baseline v1.3；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
+> 状态：Architecture Baseline v1.4；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating，POC-05 / Accepted（跨 Web、Windows RNW、Android RN、iOS/iPadOS RN/Fabric 的受控 Overlay 风险验证）；主路线：C++20 + Skia Ganesh + 可替换平台 Shell
 
 Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯的白板应用、Skia Renderer 或跨平台 UI 框架，而是整个产品体系共享的语义文档、编辑、笔迹、文本、场景、渲染、持久化与协作运行时。
 
@@ -82,7 +82,7 @@ V1 包含 Collaboration MVP：
 
 跨平台共享的是 Runtime，不是 UI 框架。Toolbar、Inspector、Dialog、Share、Account 和 Navigation 留在 Shell；Document、Operations、Ink、Text、Scene、HitTest 与 Renderer 留在 C++ Runtime。Persistence、Sync 和 Resource provider 是 Runtime 外部 ports，通过 Snapshot/Operation/Resource/Event C ABI 连接；Runtime 不拥有数据库、文件、网络或服务器配置。Serialization 是 Operations、Persistence 和 Bridge 使用的版本化 codec 机制，不是独立领域状态所有者。
 
-React/Tauri 和 React Native 是当前接受的 Tier A 产品选择；长期不变量是窄 Bridge、native canvas/surface 边界以及高频 Pointer/IME/Render 数据面不经过不必要的 JS 往返。替换 Shell framework 需要产品/平台决策和 contract regression evidence；只有改变上述 Runtime 边界时才构成架构变更。
+React/Tauri 和 React Native 是当前接受的 Tier A 产品选择；POC-05 进一步验证了 RNW 与 Apple RN/Fabric 的受控 Overlay Shell 可行性，但不自动替换 ADR-0015 的产品 Shell 选择。长期不变量是窄 Bridge、native canvas/surface 边界以及高频 Pointer/IME/Render 数据面不经过不必要的 JS 往返。替换 Shell framework 需要产品/平台决策和 contract regression evidence；只有改变上述 Runtime 边界时才构成架构变更。
 
 ## 4. 固定总体架构
 
@@ -469,7 +469,7 @@ canvas/
 | POC-02 | Ink Engine | Pointer batch、Vector/Dab、Preview/Canonical 双路径成立 |
 | POC-03 | 100K Scene | 基础 Scene 正确性、跨端效果与 Integrated Ink；生产 R-tree/Tile/LOD 仍走 RF-01～03 |
 | POC-04 | RichText / IME | Web/Windows/Android 文本编辑语义成立 |
-| POC-05 | Hybrid Surface | 非 V1 future-capability risk proof：Overlay 与 z-order 边界可行 |
+| POC-05 | Hybrid Surface | **Accepted** 非 V1 future-capability risk proof：Web、Windows RNW、Android RN、Apple RN/Fabric 的受控 Overlay 与 z-order 边界可行 |
 | POC-06 | FastInk | 应用级低延迟预览与 Canonical 交接可行 |
 
 技术依赖采用 DAG，而不是无条件串行：
@@ -488,7 +488,7 @@ flowchart LR
   P3 --> P5["POC-05 Hybrid Surface risk proof"]
 ```
 
-POC-02/03/04 的核心工作可以在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后即可解除 POC-03 integrated ink gate、POC-06 和 R1 foundation 的启动阻塞；该资格只允许消费实验性契约，不等于 POC-02 `Accepted` 或产品 ABI 冻结。POC-03 的集成体验验收负责联合验证历史对象规模、Dirty Region 和 Raster/Tile cache 下的 Ink 性能，但当前 direct Skia、Linear/Uniform Grid 和 L1 原型只作为 baseline；RF-01～RF-03 再完成 Scene/SkSG 边界、动态空间查询和分层 Tile/raster scheduling。POC-05 只证明未来 ExternalSurface 扩展边界，不进入 V1；POC-06 可与 R1 工程化并行，但在通过前阻塞 R3 FastInk 产品化。
+POC-02/03/04 的核心工作可以在 POC-01 后并行。POC-02 达到 `Integration Ready / Validating` 后即可解除 POC-03 integrated ink gate、POC-06 和 R1 foundation 的启动阻塞；该资格只允许消费实验性契约，不等于 POC-02 `Accepted` 或产品 ABI 冻结。POC-03 的集成体验验收负责联合验证历史对象规模、Dirty Region 和 Raster/Tile cache 下的 Ink 性能，但当前 direct Skia、Linear/Uniform Grid 和 L1 原型只作为 baseline；RF-01～RF-03 再完成 Scene/SkSG 边界、动态空间查询和分层 Tile/raster scheduling。POC-05 已完成受控 Overlay 风险验证，但仍不进入 V1；其产品化 bridge、任意 DOM/native 穿插和 zero-copy texture 由后续 ADR/R1～R3 决定。POC-06 可与 R1 工程化并行，但在通过前阻塞 R3 FastInk 产品化。
 
 ### 产品化层
 
@@ -506,7 +506,7 @@ R1 acceptance 的最低架构证据是 POC-01～04；POC-05 不阻塞 V1，POC-0
 
 ## 11. 已接受与待验证决策
 
-已经接受：Visual Document Runtime 定位、可替换 Shell 与平台支持分级、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权、共享 Preview Model/FastInk sink、坐标/DPI、资源身份、Undo 补偿 Operation、数值确定性、平台帧调度、输入背压、ChangeSet/hints、DocumentSnapshot/Operation continuation 恢复边界、Runtime Scene/SkSG、动态空间索引、DamageTracker、Tile/LOD 的所有权边界，以及 Runtime Public C ABI、Control/Hot Path、Persistence/Sync/Resource ports 和 Canvas C++ 风格。
+已经接受：Visual Document Runtime 定位、可替换 Shell 与平台支持分级、Document/Scene 分离、双路径 Ink/FastInk、Ganesh v1、RichText 一级模型、缓存接口前置、POC 单线程策略、不可变 Skia SDK、Renderer/Platform Surface 所有权、共享 Preview Model/FastInk sink、坐标/DPI、资源身份、Undo 补偿 Operation、数值确定性、平台帧调度、输入背压、ChangeSet/hints、DocumentSnapshot/Operation continuation 恢复边界、Runtime Scene/SkSG、动态空间索引、DamageTracker、Tile/LOD 的所有权边界、Hybrid Surface 受控 Overlay，以及 Runtime Public C ABI、Control/Hot Path、Persistence/Sync/Resource ports 和 Canvas C++ 风格。
 
 仍需实验型 ADR：
 
