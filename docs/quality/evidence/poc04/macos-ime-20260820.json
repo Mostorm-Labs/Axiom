@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "platform": "macos",
+  "protocol": "NSTextInputClient",
+  "evidence": "controlled-system-input",
+  "controlled_flow": "ni hao -> 你好",
+  "controlled_flow_passed": true,
+  "final_text": "你好",
+  "selection": [2, 0],
+  "marked_range": [],
+  "caret": [16, 20, 1, 20],
+  "digest": "022a3d56715929e23e94411fb71ffe50",
+  "event_count": 7,
+  "observed_marked_text": true,
+  "observed_commit": true,
+  "events": [
+    {"event": "setMarkedText", "marked_range": [0, 1], "presented_text": "n", "selection": [1, 0]},
+    {"event": "setMarkedText", "marked_range": [0, 2], "presented_text": "ni", "selection": [2, 0]},
+    {"event": "insertText", "marked_range": [], "presented_text": "你", "selection": [1, 0]},
+    {"event": "setMarkedText", "marked_range": [1, 1], "presented_text": "你h", "selection": [2, 0]},
+    {"event": "setMarkedText", "marked_range": [1, 2], "presented_text": "你ha", "selection": [3, 0]},
+    {"event": "setMarkedText", "marked_range": [1, 3], "presented_text": "你hao", "selection": [4, 0]},
+    {"event": "insertText", "marked_range": [], "presented_text": "你好", "selection": [2, 0]}
+  ],
+  "build": {
+    "source_commit": "54207deab2e0317d74c851d74b01239b46442134",
+    "skia_profile": "poc04-richtext-v2",
+    "device": "macOS arm64",
+    "input_source": "Simplified Chinese Pinyin",
+    "app_bundle": "dev.mostorm.canvas.poc04.macos-ime"
+  }
+}

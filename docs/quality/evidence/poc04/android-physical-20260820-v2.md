@@ -3,9 +3,9 @@
 Status: **Passed for the Android v2 canonical Runtime and physical-device
 performance gate.** Real Gboard `InputConnection` callback delivery remains
 recorded by the earlier physical-input report; this run does not pretend that
-the canonical recorder synthesized or repeated system-keyboard input. It does
-not enable cross-platform acceptance or change POC-04 from `Validating` to
-`Accepted`.
+the canonical recorder synthesized or repeated system-keyboard input. It is
+one required physical-device report; the aggregate CI job owns the unified
+POC-04 acceptance decision.
 
 ## Locked identity
 
