@@ -1,6 +1,6 @@
 # RF-01 Scene Rendering Foundation 接口与迁移方案
 
-> Status: **Implementation Baseline / RF01-3 Validating**
+> Status: **Implementation Baseline / RF01-5 Validating**
 > Date: 2026-08-19
 > Scope: RF-01；后续由 RF-02 动态空间索引、RF-03 Tile/LOD/Raster 调度继续实现
 > Depends on: [ADR-0003](../adr/0003-semantic-document-runtime-scene.md)、
@@ -102,6 +102,7 @@ src/
 │   ├── scene_frame.hpp
 │   ├── scene_view.hpp
 │   ├── render_scene.hpp
+│   ├── shadow_render_scene.hpp
 │   ├── spatial_index.hpp
 │   └── damage_tracker.hpp
 ├── scene/
@@ -829,6 +830,23 @@ RF01-4 仍为 `Validating`：本轮建立 two-stage contract 和 Direct baseline
 - 增加私有 `SkSgRenderScene` target；只有该 target include SkSG。
 - Direct/SkSG 同时消费 snapshot/delta，输出独立 diagnostics 和 reference readback。
 - 在所有跨平台 correctness/golden 门禁通过前，默认仍为 Direct。
+
+当前 RF01-5 baseline：
+
+- `ShadowRenderScene` 已实现通用双 participant orchestration：同一 snapshot/delta 必须在
+  primary 与 shadow 两侧都 prepare 成功后才生成一个可提交 update；commit 依次消费两侧已准备
+  状态，不允许单侧发布。draw-list 与 precise-hit 的可观察结果不一致时返回结构化
+  `kParticipantRejected` 并累计 mismatch diagnostics。
+- 当前锁定的 `poc01-minimal-v1` Skia SDK 只包含 Ganesh core 静态库和 public core headers；
+  manifest/归档中没有 `modules/sksg` headers 或独立 SkSG target。因此本提交不伪造
+  `SkSgRenderScene`，也不从 Skia source tree 或 GN/Ninja 隐式回退。真实 adapter 需要新的
+  producer profile/SDK ID（包含 SkSG headers、实现库和 license）后才能在 private target 中接入。
+- Direct renderer 继续是默认 oracle；`ShadowRenderScene` 的双 participant contract 可先被
+  Fake/Direct 组合验证，不把这项 contract 测试写成 SkSG visual/golden 已通过。
+
+RF01-5 状态为 `Validating`：双 participant 原子性和 observable comparison 已通过 host/ASan
+语料；SkSG SDK profile、真实 SkSG node/bounds/invalidation/readback、跨平台 shadow golden 和
+无 SkSG 类型泄漏门禁仍 Pending。
 
 退出：node/bounds/draw-list/hit/damage/revision 等价；RGBA 达到既有视觉门禁；无 SkSG 泄漏。
 

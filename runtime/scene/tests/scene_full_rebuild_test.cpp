@@ -1,6 +1,8 @@
 #include "canvas/scene/direct_render_scene.hpp"
 #include "canvas/scene/scene.hpp"
 #include "canvas/scene/scene_record_store.hpp"
+#include "canvas/scene/shadow_render_scene.hpp"
+#include "canvas/scene/testing/fake_render_scene.hpp"
 #include "canvas/scene/uniform_grid_spatial_index.hpp"
 #include "canvas/scene/testing/fake_spatial_index.hpp"
 
@@ -36,6 +38,7 @@ using canvas::SceneRecord;
 using canvas::SceneRecordFlags;
 using canvas::SceneRecordStore;
 using canvas::SceneRevision;
+using canvas::ShadowRenderScene;
 using canvas::SpatialMutation;
 using canvas::UniformGridSpatialIndex;
 using canvas::WorldPoint;
@@ -457,6 +460,51 @@ void testHitTestToleranceAndInvalidRequests(TestContext& context) {
     EXPECT(context, invalidMaximum.error().code == ErrorCode::kInvalidArgument);
 }
 
+void testShadowRenderSceneKeepsParticipantsAtomic(TestContext& context) {
+    auto primary = std::make_unique<DirectRenderScene>();
+    auto shadow = std::make_unique<canvas::testing::FakeRenderScene>();
+    ShadowRenderScene render(std::move(primary), std::move(shadow));
+    const SceneRecord first = makeRecord(1U, 1U, WorldRect{0.0F, 0.0F, 5.0F, 5.0F});
+    auto prepared = render.prepareReplace(std::vector<SceneRecord>{first}, SceneRevision(1U));
+    EXPECT(context, prepared.hasValue());
+    if (prepared) {
+        render.commit(std::move(prepared.value()));
+    }
+    const auto draw = render.buildDrawList(std::vector<ObjectId>{first.objectId});
+    EXPECT(context, draw.hasValue());
+    if (draw) {
+        EXPECT(context, draw.value().items.size() == 1U);
+    }
+    const auto hit = render.preciseHitTest(
+        canvas::PreciseHitRequest{first.objectId, canvas::WorldPoint{2.0F, 2.0F}, 0.0F});
+    EXPECT(context, hit.hasValue());
+    EXPECT(context, render.shadowDiagnostics().mismatchCount == 0U);
+
+    const auto mismatch = render.preciseHitTest(
+        canvas::PreciseHitRequest{first.objectId, canvas::WorldPoint{20.0F, 20.0F}, 0.0F});
+    EXPECT(context, !mismatch.hasValue());
+    EXPECT(context, mismatch.error().code == ErrorCode::kParticipantRejected);
+    EXPECT(context, render.shadowDiagnostics().mismatchCount == 1U);
+}
+
+void testShadowPrepareFailureDoesNotCommitEitherParticipant(TestContext& context) {
+    auto primary = std::make_unique<DirectRenderScene>();
+    auto shadow = std::make_unique<canvas::testing::FakeRenderScene>();
+    canvas::testing::FakeRenderScene* shadowRaw = shadow.get();
+    shadowRaw->setRejectPrepare(true);
+    ShadowRenderScene render(std::move(primary), std::move(shadow));
+    const SceneRecord first = makeRecord(1U, 1U, WorldRect{0.0F, 0.0F, 5.0F, 5.0F});
+    const auto rejected =
+        render.prepareReplace(std::vector<SceneRecord>{first}, SceneRevision(1U));
+    EXPECT(context, !rejected.hasValue());
+    EXPECT(context, rejected.error().code == ErrorCode::kParticipantRejected);
+    const auto diagnostics = render.shadowDiagnostics();
+    EXPECT(context, diagnostics.primary.commitCount == 0U);
+    EXPECT(context, diagnostics.shadow.commitCount == 0U);
+    EXPECT(context, diagnostics.primary.revision == SceneRevision(0U));
+    EXPECT(context, diagnostics.shadow.revision == SceneRevision(0U));
+}
+
 void testFrameInputUsesOneSceneRevision(TestContext& context) {
     Scene scene(std::make_unique<DirectRenderScene>(),
                 std::make_unique<UniformGridSpatialIndex>());
@@ -498,6 +546,8 @@ int main() {
     testFrameInputUsesOneSceneRevision(context);
     testTwoStageHitTestIsOrderIndependentAndFiltered(context);
     testHitTestToleranceAndInvalidRequests(context);
+    testShadowRenderSceneKeepsParticipantsAtomic(context);
+    testShadowPrepareFailureDoesNotCommitEitherParticipant(context);
     if (context.failures != 0) {
         std::cerr << context.failures << " RF01-1 full rebuild expectations failed\n";
         return EXIT_FAILURE;
