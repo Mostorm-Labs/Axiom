@@ -152,4 +152,117 @@ TEST(CApiTest, FlatReplacementRejectsSurrogateSplits) {
   EXPECT_EQ(canvas_poc04_session_destroy(session), CANVAS_POC04_STATUS_OK);
 }
 
+TEST(CApiTest, NewlineMovesSelectionAndCaretToNextVisualLine) {
+  canvas_poc04_create_info_t info{sizeof(info), CANVAS_POC04_ABI_VERSION};
+  canvas_poc04_handle_t session = 0;
+  ASSERT_EQ(canvas_poc04_session_create(&info, &session),
+            CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_focus(session), CANVAS_POC04_STATUS_OK);
+
+  ASSERT_EQ(canvas_poc04_session_insert_utf8(session, "a", 1),
+            CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_insert_utf8(session, "\n", 1),
+            CANVAS_POC04_STATUS_OK);
+
+  canvas_poc04_utf16_range_t selection{};
+  ASSERT_EQ(canvas_poc04_session_selection_flat_utf16(session, &selection),
+            CANVAS_POC04_STATUS_OK);
+  EXPECT_EQ(selection.location, 2U);
+  EXPECT_EQ(selection.length, 0U);
+
+  size_t required = 0;
+  ASSERT_EQ(canvas_poc04_session_presented_text_range_utf8(
+                session, 0, 2, nullptr, 0, &required),
+            CANVAS_POC04_STATUS_BUFFER_TOO_SMALL);
+  std::string text(required, '\0');
+  ASSERT_EQ(canvas_poc04_session_presented_text_range_utf8(
+                session, 0, 2, text.data(), text.size(), &required),
+            CANVAS_POC04_STATUS_OK);
+  text.resize(required - 1);
+  EXPECT_EQ(text, "a\n");
+
+  canvas_poc04_rect_t caret{};
+  ASSERT_EQ(canvas_poc04_session_caret_rect_for_offset_utf16(
+                session, selection.location, 320.0F, &caret),
+            CANVAS_POC04_STATUS_OK);
+  EXPECT_FLOAT_EQ(caret.x, 0.0F);
+  EXPECT_FLOAT_EQ(caret.y, 20.0F);
+  EXPECT_FLOAT_EQ(caret.height, 20.0F);
+  EXPECT_EQ(canvas_poc04_session_destroy(session), CANVAS_POC04_STATUS_OK);
+}
+
+TEST(CApiTest, ConsecutiveNewlinesKeepCaretOnEachEmptyVisualLine) {
+  canvas_poc04_create_info_t info{sizeof(info), CANVAS_POC04_ABI_VERSION};
+  canvas_poc04_handle_t session = 0;
+  ASSERT_EQ(canvas_poc04_session_create(&info, &session),
+            CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_focus(session), CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_insert_utf8(session, "a\n\n\n", 4),
+            CANVAS_POC04_STATUS_OK);
+
+  canvas_poc04_utf16_range_t selection{};
+  ASSERT_EQ(canvas_poc04_session_selection_flat_utf16(session, &selection),
+            CANVAS_POC04_STATUS_OK);
+  EXPECT_EQ(selection.location, 4U);
+  EXPECT_EQ(selection.length, 0U);
+
+  canvas_poc04_rect_t caret{};
+  ASSERT_EQ(canvas_poc04_session_caret_rect_for_offset_utf16(
+                session, selection.location, 320.0F, &caret),
+            CANVAS_POC04_STATUS_OK);
+  EXPECT_FLOAT_EQ(caret.x, 0.0F);
+  EXPECT_FLOAT_EQ(caret.y, 60.0F);
+  EXPECT_FLOAT_EQ(caret.height, 20.0F);
+  EXPECT_EQ(canvas_poc04_session_destroy(session), CANVAS_POC04_STATUS_OK);
+}
+
+TEST(CApiTest, AppleMarkedSpacingKeepsCaretNearNativePreeditWidth) {
+  canvas_poc04_create_info_t info{sizeof(info), CANVAS_POC04_ABI_VERSION};
+  canvas_poc04_handle_t session = 0;
+  ASSERT_EQ(canvas_poc04_session_create(&info, &session),
+            CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_focus(session), CANVAS_POC04_STATUS_OK);
+  const std::string marked = "g\xE2\x80\x86g";  // g + U+2006 + g.
+  ASSERT_EQ(canvas_poc04_session_insert_utf8(session, marked.data(), marked.size()),
+            CANVAS_POC04_STATUS_OK);
+
+  canvas_poc04_rect_t caret{};
+  ASSERT_EQ(canvas_poc04_session_caret_rect_for_offset_utf16(
+                session, 3, 320.0F, &caret),
+            CANVAS_POC04_STATUS_OK);
+  // U+2006 is deliberately narrow so the marked syllable separator does not
+  // create the large gap produced by treating it as an ordinary space.
+  EXPECT_FLOAT_EQ(caret.x, 21.55F);
+  EXPECT_FLOAT_EQ(caret.y, 0.0F);
+  EXPECT_EQ(canvas_poc04_session_destroy(session), CANVAS_POC04_STATUS_OK);
+}
+
+TEST(CApiTest, AsciiSpacesUseProportionalEditorAdvance) {
+  canvas_poc04_create_info_t info{sizeof(info), CANVAS_POC04_ABI_VERSION};
+  canvas_poc04_handle_t session = 0;
+  ASSERT_EQ(canvas_poc04_session_create(&info, &session),
+            CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_focus(session), CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_insert_utf8(session, "a  b", 4),
+            CANVAS_POC04_STATUS_OK);
+
+  canvas_poc04_rect_t before_spaces{};
+  canvas_poc04_rect_t after_spaces{};
+  ASSERT_EQ(canvas_poc04_session_caret_rect_for_offset_utf16(
+                session, 1, 320.0F, &before_spaces),
+            CANVAS_POC04_STATUS_OK);
+  ASSERT_EQ(canvas_poc04_session_caret_rect_for_offset_utf16(
+                session, 3, 320.0F, &after_spaces),
+            CANVAS_POC04_STATUS_OK);
+  EXPECT_FLOAT_EQ(after_spaces.x - before_spaces.x, 8.4F);
+  EXPECT_FLOAT_EQ(after_spaces.y, before_spaces.y);
+
+  uint64_t hit = 0;
+  ASSERT_EQ(canvas_poc04_session_character_offset_for_point(
+                session, after_spaces.x, after_spaces.y, 320.0F, &hit),
+            CANVAS_POC04_STATUS_OK);
+  EXPECT_EQ(hit, 3U);
+  EXPECT_EQ(canvas_poc04_session_destroy(session), CANVAS_POC04_STATUS_OK);
+}
+
 }  // namespace

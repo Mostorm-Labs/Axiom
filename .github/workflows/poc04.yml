@@ -264,8 +264,11 @@ jobs:
           name: poc04-apple-${{ matrix.platform }}
           path: out/poc04-${{ matrix.platform }}/
 
+  # POC-04 has one final status. This aggregate intentionally remains closed
+  # until both evidence tracks are complete: canonical Runtime artifacts and
+  # real native IME evidence (including the controlled Chinese semantic flow).
   cross-platform-acceptance:
-    if: ${{ false }} # Enabled after physical browser/IMM/Apple IME evidence review.
+    if: ${{ false }} # Enable only after the unified POC-04 evidence review.
     needs: [web, windows, android, apple]
     runs-on: ubuntu-24.04
     steps:

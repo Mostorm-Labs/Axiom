@@ -97,6 +97,17 @@ void ValidateFlatRange(std::u16string_view text, uint64_t location,
 }
 
 float UnitAdvance(char16_t unit) {
+  // The Apple recorder draws its 16 pt editor text with the platform's
+  // proportional system font. An ASCII space is therefore much narrower
+  // than the 9.6 px Latin probe advance below. Treating it as an ordinary
+  // Latin glyph makes the Runtime caret drift farther right after every
+  // space, even though the visible text remains correctly spaced.
+  if (unit == u' ') return 4.2F;
+  // Apple Pinyin keyboards use U+2006 (SIX-PER-EM SPACE) between marked
+  // syllable units.  It is a real, narrow glyph rather than an ordinary
+  // editor space; keeping its advance narrow prevents the Runtime caret from
+  // drifting far to the right of the native pre-edit text.
+  if (unit == u'\u2006') return 2.35F;
   if (unit >= 0xd800 && unit <= 0xdfff) return 8.0F;
   if (unit >= 0x2e80 || unit == 0xfffc) return 16.0F;
   return 9.6F;

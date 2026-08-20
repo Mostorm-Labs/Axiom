@@ -1,8 +1,9 @@
 # POC-04 RichText / IME
 
-POC-04 proves that `TextDocument`, edit state, operation replay, canonical font
-identity, and layout are owned by the shared C++20 Runtime while Web, Win32,
-and Android only adapt their platform IME contracts.
+POC-04 is one unified RichText / IME proof across Web, Windows, Android,
+macOS, iOS, and iPadOS. It proves that `TextDocument`, edit state, operation
+replay, canonical font identity, layout, and native IME state are owned by the
+shared C++20 Runtime; each platform only adapts its own input contract.
 
 This directory is experimental. Its C ABI, NDJSON replay schema, snapshot JSON,
 and layout dump are POC-only and do not promise R1 source or binary
@@ -114,10 +115,10 @@ selection queries, attributed substrings, screen-coordinate composition
 geometry, and point hit-testing. On iOS and iPadOS it implements `UITextInput`
 plus `UIKeyInput`, custom UTF-16 `UITextPosition`/`UITextRange`/
 `UITextSelectionRect`, selection and composition callbacks, caret/selection
-geometry, and hit-testing. The simulator recorder runs once on an iPhone and
-once on an iPad; both reuse `ios-simulator-arm64-metal` while producing
-separate behavior artifacts. Real hardware keyboard/pinyin evidence remains a
-separate gate.
+geometry, and hit-testing. The simulator recorder runs on both an iPhone and
+an iPad; both reuse `ios-simulator-arm64-metal` while producing separate
+behavior artifacts. Real hardware keyboard/pinyin evidence is part of this
+same POC's native-IME track, not a separate Apple POC.
 
 The Windows RichText SDK also packages the pinned `icudtl.dat` next to the
 static archives. CMake copies it beside the demo executable because Skia's
@@ -135,21 +136,42 @@ Android InputConnection event evidence remains a separate manual/device gate.
 The physical Android gate was executed on a Pixel 7 and is recorded in
 [`docs/quality/evidence/poc04/android-physical-20260819.md`](../../docs/quality/evidence/poc04/android-physical-20260819.md).
 It closes the Android physical performance and Gboard `InputConnection`
-evidence only; browser and Windows native IME evidence remain pending, so
-POC-04 stays `Validating`.
+evidence only; browser and Windows native IME evidence remain pending, so the
+single unified POC-04 stays `Validating`.
 
 The Apple physical bring-up gate was executed on an iPhone 15 Pro and an iPad
 Air 4 and is recorded in
 [`docs/quality/evidence/poc04/apple-physical-20260820.md`](../../docs/quality/evidence/poc04/apple-physical-20260820.md).
 Both devices displayed the editor, showed the system keyboard, and delivered
 real UIKit callbacks into the shared C++ session with an identical deterministic
-digest. These runs did not observe a `setMarkedText` Chinese-Pinyin callback;
-that marked-text evidence remains an explicit manual gate and POC-04 stays
-`Validating`.
+digest. The latest signed bundle also captured real `setMarkedText` and
+`unmarkText` callbacks on both devices. The observed candidate strings were
+not a controlled `ni hao → 你好` script, so the native callback gate is closed
+but the controlled Chinese semantic-result gate remains open; the single
+unified POC-04 stays `Validating`.
 
-The final three-platform evidence must cover English, simplified Chinese,
+The final unified evidence must cover English, simplified Chinese,
 pinyin composition, newline, mixed runs, selection, caret, clipboard,
 undo/redo, cancel/commit atomicity, digest, fixed-font line/cluster/selection
 geometry, missing/corrupt/fallback resources, 10K-character latency, and 100
 focus/unfocus/view-destroy cycles. `tools/behavior_conformance.py` rejects an
-incomplete platform set or any semantic/layout mismatch.
+incomplete canonical platform set or any semantic/layout mismatch.
+
+## Unified acceptance tracks
+
+POC-04 has one status and one exit decision. Its evidence is collected through
+two complementary tracks:
+
+1. **Canonical Runtime track** — Web, Windows, and Android compare the same
+   digest, behavior matrix, fixed-font layout, performance, and lifecycle
+   artifact.
+2. **Native IME track** — Web, Windows, Android, macOS, iOS, and iPadOS prove
+   real platform callback delivery, composition/commit/cancel mapping, final
+   text state, selection/caret updates, and view lifecycle behavior. Platforms
+   are not required to emit identical callback names; they must produce the
+   same Runtime semantics.
+
+Neither track can independently mark POC-04 complete. The aggregate review
+must have both tracks, the controlled `ni hao → 你好` semantic-result evidence,
+and the v2 SDK identity before changing the single status from `Validating` to
+`Accepted`.

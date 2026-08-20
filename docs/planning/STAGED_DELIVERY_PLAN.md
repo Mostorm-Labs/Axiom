@@ -284,7 +284,10 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 ### 目标
 
-证明 RichText 是可跨平台共享的一级模型，并在 Web、Windows、Android 上完成真实 IME 编辑闭环。
+证明 RichText 是可跨平台共享的一级模型，并在 Web、Windows、Android、
+macOS、iOS 和 iPadOS 上完成统一的真实 IME 编辑闭环。POC-04 只有一个
+阶段状态；canonical Runtime 与 native IME 是两条互补证据轨道，不拆成
+独立的 Apple 子 POC。
 
 ### 设计
 
@@ -298,11 +301,12 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 ### 验证
 
-- 三平台运行同一行为矩阵：英文、简体中文、中文拼音、换行、混合 runs、selection、caret、clipboard、undo/redo。
+- Web、Windows、Android 运行同一 canonical 行为矩阵：英文、简体中文、中文拼音、换行、混合 runs、selection、caret、clipboard、undo/redo。
+- Web、Windows、Android、macOS、iOS、iPadOS 分别提交真实 native IME 回调、组合/提交/取消、最终文本、selection/caret 和 view 生命周期证据；平台回调名称不要求相同。
 - composition cancel 不产生 Operation；commit 只产生一次可回放事务。
-- 同一已提交编辑序列的 TextDocument digest 在三平台 100% 一致。
+- 同一已提交编辑序列的 TextDocument digest 在 Web/Windows/Android canonical 轨道 100% 一致；Apple 设备提交独立 digest 证据。
 - 使用固定字体时，layout line/cluster/selection geometry 与黄金数据一致；允许的像素差异按黄金图门禁处理。
-- 同一 FontResourceId/ContentHash/fallback chain 在三平台产生相同 canonical shaping、换行、caret 与 selection geometry；系统安装字体差异不能改变结果。
+- 同一 FontResourceId/ContentHash/fallback chain 在 Web/Windows/Android 产生相同 canonical shaping、换行、caret 与 selection geometry；系统安装字体差异不能改变结果。
 - font missing、hash mismatch、fallback 缺失和资源替换有确定 placeholder/diagnostic、layout invalidation 与 Document digest 变化。
 - 10K 字符文档中的普通输入和 caret 移动 p95 ≤ 16.7 ms；全量 layout p95 ≤ 33.3 ms。
 - 连续 focus/unfocus、切换节点和销毁 view 100 次，无残留 composition 或崩溃。
@@ -319,14 +323,16 @@ semantic digest。ADR-0017～0019 分别在首次消费帧调度、输入队列�
 
 - RichText schema、logical position 和 IME 状态机规范。
 - Font identity/fallback/missing-resource 规范和跨平台字体 conformance corpus。
-- 三平台 demo、行为语料、layout/golden 结果。
+- 六平台 demo/adapter、canonical 行为语料、native IME、layout/golden 结果。
 - 输入/布局延迟和生命周期报告。
 - 协作文本原子边界的待决 ADR 输入。
 
 ### 退出条件
 
-- [ ] 三平台行为矩阵 100% 通过。
-- [ ] TextDocument digest 跨平台完全一致。
+- [ ] Web/Windows/Android canonical 行为矩阵 100% 通过。
+- [ ] Web/Windows/Android/macOS/iOS/iPadOS native IME 真实回调和生命周期证据齐全。
+- [ ] 至少一条受控中文输入流程（`ni hao` → `你好` 或等价候选流）在每个纳入平台产生最终提交文本和 Runtime digest；随机候选或合成 C++ 调用不计入。
+- [ ] Web/Windows/Android canonical TextDocument digest 完全一致，Apple 设备提交 digest 与状态证据。
 - [ ] cancel/commit/undo 没有重复或部分 Operation。
 - [ ] 10K 字符输入与布局达到 16.7/33.3 ms 门禁。
 - [ ] RichText 模型不依赖任何平台 widget 或 JS 数据模型。

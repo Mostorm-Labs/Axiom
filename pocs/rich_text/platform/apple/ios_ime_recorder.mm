@@ -51,7 +51,10 @@ NSArray<NSNumber*>* RangeValue(UITextRange* range) {
       textRangeFromPosition:self.textView.beginningOfDocument
                  toPosition:self.textView.endOfDocument];
   NSString* text = [self.textView textInRange:documentRange] ?: @"";
-  self.textLabel.text = text.length ? text : @"(waiting for system keyboard input)";
+  // The editor surface renders the same presented text directly from the C++
+  // session.  Keep this label as a small callback indicator rather than a
+  // second text renderer, otherwise the test UI can hide a rendering bug.
+  self.textLabel.text = [NSString stringWithFormat:@"Last system callback: %@", event];
   NSDictionary<NSString*, id>* entry = @{
     @"event": event,
     @"presented_text": text,
@@ -144,7 +147,10 @@ NSArray<NSNumber*>* RangeValue(UITextRange* range) {
   // controller has no view yet, so reading controller.view.bounds here would
   // create a zero-sized view and make the recorder appear blank on hardware.
   controller.textView = [[CanvasPoc04IosTextView alloc]
-      initWithFrame:controller.view.bounds session:session];
+      initWithFrame:CGRectMake(24.0, 136.0,
+                               controller.view.bounds.size.width - 48.0,
+                               controller.view.bounds.size.height - 176.0)
+          session:session];
   controller.textView.autoresizingMask = UIViewAutoresizingFlexibleWidth |
                                          UIViewAutoresizingFlexibleHeight;
   [controller.view addSubview:controller.textView];
@@ -159,11 +165,10 @@ NSArray<NSNumber*>* RangeValue(UITextRange* range) {
   controller.instructionLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
   [controller.view addSubview:controller.instructionLabel];
   controller.textLabel = [[UILabel alloc] initWithFrame:CGRectMake(
-      24.0, 136.0, controller.view.bounds.size.width - 48.0,
-      controller.view.bounds.size.height - 160.0)];
-  controller.textLabel.numberOfLines = 0;
-  controller.textLabel.text = @"(waiting for system keyboard input)";
-  controller.textLabel.font = [UIFont systemFontOfSize:28.0];
+      24.0, 108.0, controller.view.bounds.size.width - 48.0, 24.0)];
+  controller.textLabel.numberOfLines = 1;
+  controller.textLabel.text = @"Waiting for system keyboard input";
+  controller.textLabel.font = [UIFont systemFontOfSize:13.0];
   controller.textLabel.textColor = UIColor.labelColor;
   controller.textLabel.userInteractionEnabled = NO;
   controller.textLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth |
