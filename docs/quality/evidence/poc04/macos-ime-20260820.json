@@ -23,7 +23,7 @@
     {"event": "insertText", "marked_range": [], "presented_text": "你好", "selection": [2, 0]}
   ],
   "build": {
-    "source_commit": "54207deab2e0317d74c851d74b01239b46442134",
+    "source_commit": "36eade2585c0d1df113e33e1b9737332168dea56",
     "skia_profile": "poc04-richtext-v2",
     "device": "macOS arm64",
     "input_source": "Simplified Chinese Pinyin",

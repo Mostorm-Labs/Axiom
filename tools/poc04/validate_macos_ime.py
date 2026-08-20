@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 
@@ -13,6 +14,7 @@ def validate(path: Path) -> None:
         "schema_version", "platform", "protocol", "evidence", "controlled_flow",
         "controlled_flow_passed", "final_text", "selection", "caret", "marked_range",
         "digest", "event_count", "observed_marked_text", "observed_commit", "events",
+        "build",
     }
     missing = sorted(required - report.keys())
     if missing:
@@ -36,6 +38,13 @@ def validate(path: Path) -> None:
         raise RuntimeError(f"{path}: invalid selection/caret geometry")
     if not isinstance(report["digest"], str) or len(report["digest"]) != 32:
         raise RuntimeError(f"{path}: invalid Runtime digest")
+    build = report["build"]
+    if not re.fullmatch(r"[0-9a-f]{40}", build.get("source_commit", "")):
+        raise RuntimeError(f"{path}: invalid source commit binding")
+    if build.get("skia_profile") != "poc04-richtext-v2":
+        raise RuntimeError(f"{path}: evidence is not bound to the v2 SDK")
+    if build.get("app_bundle") != "dev.mostorm.canvas.poc04.macos-ime":
+        raise RuntimeError(f"{path}: unexpected AppKit recorder bundle")
     print(f"PASS macos: {path}")
 
 

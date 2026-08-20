@@ -33,6 +33,7 @@ final report contains committed text, selection, caret and Runtime digest.
 - [Windows and Chrome revalidation](windows-web-physical-20260820-r2.md)
 - [Android Gboard physical input](android-physical-20260819.md)
 - [Android v2 Runtime/performance](android-physical-20260820-v2.md)
+- [Android machine-readable complementary evidence](android-ime-20260820.json)
 - [macOS controlled AppKit input](macos-ime-20260820.json)
 - [iPhone/iPad controlled UIKit input](apple-physical-20260820.md)
 

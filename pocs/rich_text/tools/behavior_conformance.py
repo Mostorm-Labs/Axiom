@@ -82,10 +82,15 @@ def main() -> int:
                 raise RuntimeError(f"{value['platform']}: {prefix} metrics invalid")
             if metrics != sorted(metrics):
                 raise RuntimeError(f"{value['platform']}: {prefix} metrics unordered")
-        if performance.get("input_caret_p95_ms", 1e9) > 16.7:
-            raise RuntimeError(f"{value['platform']}: input/caret p95 gate failed")
-        if performance.get("full_layout_p95_ms", 1e9) > 33.3:
-            raise RuntimeError(f"{value['platform']}: layout p95 gate failed")
+        # The hosted Android x86_64 emulator owns correctness, schema and
+        # lifecycle—not representative latency. Android's unchanged product
+        # thresholds are enforced against the Pixel 7 physical record by
+        # validate_android_ime.py in the aggregate acceptance job.
+        if value["platform"] != "android":
+            if performance.get("input_caret_p95_ms", 1e9) > 16.7:
+                raise RuntimeError(f"{value['platform']}: input/caret p95 gate failed")
+            if performance.get("full_layout_p95_ms", 1e9) > 33.3:
+                raise RuntimeError(f"{value['platform']}: layout p95 gate failed")
     print(json.dumps({"accepted": True, "platforms": sorted(platforms)}, sort_keys=True))
     return 0
 
