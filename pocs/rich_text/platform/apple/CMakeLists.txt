@@ -33,9 +33,14 @@ else()
   target_compile_options(canvas_poc04_apple_ime PRIVATE -fobjc-arc)
   target_include_directories(canvas_poc04_apple_ime PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-  add_executable(canvas_poc04_macos_ime_recorder macos_ime_recorder.mm)
+  add_executable(canvas_poc04_macos_ime_recorder MACOSX_BUNDLE macos_ime_recorder.mm)
   target_compile_definitions(canvas_poc04_macos_ime_recorder PRIVATE CANVAS_POC04_MACOS=1)
   target_compile_options(canvas_poc04_macos_ime_recorder PRIVATE -fobjc-arc)
   target_link_libraries(canvas_poc04_macos_ime_recorder PRIVATE
     canvas_poc04_apple_ime ${CANVAS_POC04_APPKIT})
+  set_target_properties(canvas_poc04_macos_ime_recorder PROPERTIES
+    MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/MacInfo.plist.in
+    MACOSX_BUNDLE_GUI_IDENTIFIER "dev.mostorm.canvas.poc04.macos-ime"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "dev.mostorm.canvas.poc04.macos-ime"
+    MACOSX_BUNDLE_BUNDLE_NAME "Canvas POC-04 macOS IME")
 endif()

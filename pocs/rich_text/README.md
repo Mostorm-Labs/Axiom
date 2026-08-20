@@ -146,8 +146,10 @@ Both devices displayed the editor, showed the system keyboard, and delivered
 real UIKit callbacks into the shared C++ session. The latest signed v2 bundle
 captured the controlled `setMarkedText` sequence `n → ni → ni hao → 你好`,
 `unmarkText`, final text `你好`, and identical digest on both devices. The
-Apple controlled semantic-result gate is now closed; the single unified
-POC-04 stays `Validating` pending aggregate CI/review.
+Apple controlled semantic-result gate is now closed. The macOS AppKit recorder
+also routes real key events through `interpretKeyEvents:` and records the
+native `setMarkedText`/`insertText` sequence; its controlled report is
+[`docs/quality/evidence/poc04/macos-ime-20260820.json`](../../docs/quality/evidence/poc04/macos-ime-20260820.json).
 
 The final unified evidence must cover English, simplified Chinese,
 pinyin composition, newline, mixed runs, selection, caret, clipboard,
@@ -170,10 +172,10 @@ two complementary tracks:
    are not required to emit identical callback names; they must produce the
    same Runtime semantics.
 
-Neither track can independently mark POC-04 complete. The aggregate review
-must have both tracks, the controlled `ni hao → 你好` semantic-result evidence,
-and the v2 SDK identity before changing the single status from `Validating` to
-`Accepted`.
+Neither track independently changes the status. The unified acceptance job
+requires both tracks, the controlled `ni hao → 你好` semantic-result evidence,
+and the v2 SDK identity. Once that aggregate passes, the single POC-04 status
+is `Accepted`.
 
 ## Windows and Chrome Stable physical revalidation
 

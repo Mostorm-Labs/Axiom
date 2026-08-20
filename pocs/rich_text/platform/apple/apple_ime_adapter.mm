@@ -376,6 +376,14 @@ CGRect TextContentRect(CGRect bounds) {
   return [super resignFirstResponder];
 }
 
+- (void)keyDown:(NSEvent*)event {
+  // NSTextInputClient receives composition and command callbacks only after
+  // the responder routes hardware key events through AppKit's text
+  // interpretation pipeline. Direct adapter-method tests do not exercise
+  // this entry point, so keep it on the real view instead of the recorder.
+  [self interpretKeyEvents:@[event]];
+}
+
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange {
   NSString* text = StringValue(string);
   if (CommitMarkedText(_session, text)) {

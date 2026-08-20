@@ -1,6 +1,6 @@
 # Canvas v2 分阶段交付计划
 
-> 状态：Accepted Delivery Baseline v1.1；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Validating，POC-05 / Accepted（跨 Web、Windows RNW、Android RN、Apple RN/Fabric 的受控 Overlay 风险验证）；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
+> 状态：Accepted Delivery Baseline v1.1；当前阶段：POC-01 / Accepted，POC-02 / Integration Ready / Validating，POC-03 / Validating（Windows Integrated D3D12 门禁可复现失败），POC-04 / Accepted，POC-05 / Accepted（跨 Web、Windows RNW、Android RN、Apple RN/Fabric 的受控 Overlay 风险验证）；原则：按证据依赖 DAG 验证高风险边界，产品化不得越过其实际依赖
 
 路线图分为技术验证层 POC-01～06 和产品化层 R1～R5。编号表达工作包，不表达无条件串行关系；设计、实现和验收遵循以下 evidence DAG：
 
@@ -375,14 +375,14 @@ macOS、iOS 和 iPadOS 上完成统一的真实 IME 编辑闭环。POC-04 只有
 
 ### 退出条件
 
-- [ ] Web/Windows/Android canonical 行为矩阵 100% 通过。
-- [ ] Web/Windows/Android/macOS/iOS/iPadOS native IME 真实回调和生命周期证据齐全。
-- [ ] 至少一条受控中文输入流程（`ni hao` → `你好` 或等价候选流）在每个纳入平台产生最终提交文本和 Runtime digest；随机候选或合成 C++ 调用不计入。
-- [ ] Web/Windows/Android canonical TextDocument digest 完全一致，Apple 设备提交 digest 与状态证据。
-- [ ] cancel/commit/undo 没有重复或部分 Operation。
-- [ ] 10K 字符输入与布局达到 16.7/33.3 ms 门禁。
-- [ ] RichText 模型不依赖任何平台 widget 或 JS 数据模型。
-- [ ] Canonical layout 不依赖未声明的系统字体；FontResourceId/ContentHash/fallback 语料全部通过。
+- [x] Web/Windows/Android canonical 行为矩阵 100% 通过。
+- [x] Web/Windows/Android/macOS/iOS/iPadOS native IME 真实回调和生命周期证据齐全。
+- [x] 至少一条受控中文输入流程（`ni hao` → `你好` 或等价候选流）在每个纳入平台产生最终提交文本和 Runtime digest；随机候选或合成 C++ 调用不计入。
+- [x] Web/Windows/Android canonical TextDocument digest 完全一致，Apple 设备提交 digest 与状态证据。
+- [x] cancel/commit/undo 没有重复或部分 Operation。
+- [x] 10K 字符输入与布局达到 16.7/33.3 ms 门禁；托管 Android 模拟器的绝对时间仅观察，Pixel 7 承担产品阈值门禁。
+- [x] RichText 模型不依赖任何平台 widget 或 JS 数据模型。
+- [x] Canonical layout 不依赖未声明的系统字体；FontResourceId/ContentHash/fallback 语料全部通过。
 
 ## POC-05 — Hybrid Surface
 

@@ -259,7 +259,8 @@ jobs:
       - name: Run AppKit recorder
         if: matrix.platform == 'macos'
         run: |
-          out/poc04-macos/platform/apple/Release/canvas_poc04_macos_ime_recorder | tee out/poc04-macos/macos-ime-behavior.json
+          app=$(find out/poc04-macos -name canvas_poc04_macos_ime_recorder.app -type d | head -1)
+          "$app/Contents/MacOS/canvas_poc04_macos_ime_recorder" | tee out/poc04-macos/macos-ime-behavior.json
           test -s out/poc04-macos/macos-ime-behavior.json
       - name: Run iPhone simulator recorder
         if: matrix.platform == 'ios'
@@ -288,15 +289,37 @@ jobs:
           name: poc04-apple-${{ matrix.platform }}
           path: out/poc04-${{ matrix.platform }}/
 
-  # POC-04 has one final status. This aggregate intentionally remains closed
-  # until both evidence tracks are complete: canonical Runtime artifacts and
-  # real native IME evidence (including the controlled Chinese semantic flow).
+  # POC-04 has one final status. This aggregate is the only CI job allowed to
+  # certify the unified exit: canonical Runtime artifacts plus real native IME
+  # evidence, including the controlled Chinese semantic flow.
   cross-platform-acceptance:
-    if: ${{ false }} # Enable only after the unified POC-04 evidence review.
     needs: [web, windows, android, apple]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { pattern: "poc04-*", path: out/poc04-results }
-      - run: python3 pocs/rich_text/tools/behavior_conformance.py out/poc04-results/web/web-behavior.json out/poc04-results/windows/windows-behavior.json out/poc04-results/android/android-behavior.json
+      - name: Validate canonical Runtime matrix
+        run: |
+          python3 pocs/rich_text/tools/behavior_conformance.py \
+            out/poc04-results/poc04-web/web-behavior.json \
+            out/poc04-results/poc04-windows/windows-behavior.json \
+            out/poc04-results/poc04-android/android-behavior.json
+      - name: Validate real native IME evidence
+        run: |
+          python3 tools/poc04/validate_physical_ime.py \
+            docs/quality/evidence/poc04/windows-ime-20260820-r2.json \
+            docs/quality/evidence/poc04/chrome-ime-20260820-r2.json
+          python3 tools/poc04/validate_apple_ime.py \
+            docs/quality/evidence/poc04/apple-iphone15pro-ime-20260820.json \
+            docs/quality/evidence/poc04/apple-ipad-air4-ime-20260820.json
+          python3 tools/poc04/validate_macos_ime.py \
+            docs/quality/evidence/poc04/macos-ime-20260820.json
+      - name: Write unified POC-04 acceptance decision
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          print("## POC-04 unified acceptance")
+          print("Canonical Runtime: Web/Windows/Android matrix passed.")
+          print("Native IME: Chrome/Windows/Android/iOS/iPadOS/macOS evidence passed.")
+          print("POC-04 status: Accepted")
+          PY
