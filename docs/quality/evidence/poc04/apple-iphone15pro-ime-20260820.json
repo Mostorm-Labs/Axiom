@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "platform": "ios",
+  "protocol": "UITextInput+UIKeyInput",
+  "evidence": "controlled-system-keyboard-semantic-result",
+  "controlled_flow": "ni hao -> 你好",
+  "controlled_flow_passed": true,
+  "final_text": "你好",
+  "presented_text": "你好",
+  "selection": [2, 0],
+  "caret": [36, 8, 1, 20],
+  "marked_range": [],
+  "digest": "d8e61ceae722c2eb4eabefa4af30e4dc",
+  "event_count": 7,
+  "observed_marked_text": true,
+  "observed_controlled_pinyin": true,
+  "observed_commit": true,
+  "events": [
+    {"event": "setMarkedText", "marked_range": [0, 1], "presented_text": "n", "selection": [1, 0]},
+    {"event": "setMarkedText", "marked_range": [0, 2], "presented_text": "ni", "selection": [2, 0]},
+    {"event": "setMarkedText", "marked_range": [0, 4], "presented_text": "ni h", "selection": [4, 0]},
+    {"event": "setMarkedText", "marked_range": [0, 5], "presented_text": "ni ha", "selection": [5, 0]},
+    {"event": "setMarkedText", "marked_range": [0, 6], "presented_text": "ni hao", "selection": [6, 0]},
+    {"event": "setMarkedText", "marked_range": [0, 2], "presented_text": "你好", "selection": [2, 0]},
+    {"event": "unmarkText", "marked_range": [], "presented_text": "你好", "selection": [2, 0]}
+  ],
+  "device": {"model": "iPhone 15 Pro", "platform_version": "iOS 26.6", "architecture": "arm64"},
+  "build": {
+    "source_baseline_commit": "a57eb8d53c1232651514c3db58b98fc9967e7106",
+    "source_worktree_changes_pending_commit": false,
+    "skia_profile": "poc04-richtext-v2",
+    "skia_sdk_id": "c8a0a834740051abdda1732506459ccd40b38548a7bcde77eff8ddc7bf4fff64",
+    "app_executable_sha256": "0b297f4f8c49a864fb49b211383ec667f9e3e7f069f8207a4c7566a2682c116c",
+    "raw_recorder_artifact_sha256": "b5c25e8108865518077682a920ae93f2fe4459fa66f44c2da75911c49a9de8b5"
+  }
+}

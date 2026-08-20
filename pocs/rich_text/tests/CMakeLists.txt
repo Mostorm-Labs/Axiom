@@ -21,5 +21,11 @@ if(TARGET canvas_poc04_skparagraph)
   target_compile_definitions(canvas_poc04_skparagraph_tests PRIVATE
     CANVAS_POC04_FONT_PATH="${CANVAS_POC04_FONT_PATH}"
     CANVAS_POC04_CJK_FONT_PATH="${CANVAS_POC04_CJK_FONT_PATH}")
+  if(WIN32 AND CANVAS_POC04_ICU_DATA_PATH)
+    add_custom_command(TARGET canvas_poc04_skparagraph_tests POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CANVAS_POC04_ICU_DATA_PATH}"
+        "$<TARGET_FILE_DIR:canvas_poc04_skparagraph_tests>/icudtl.dat")
+  endif()
   gtest_discover_tests(canvas_poc04_skparagraph_tests DISCOVERY_TIMEOUT 30)
 endif()

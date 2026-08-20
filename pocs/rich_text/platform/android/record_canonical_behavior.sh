@@ -28,7 +28,8 @@ adb logcat -c
 adb shell am force-stop "$package_name"
 adb shell rm -f "$device_output_dir/$artifact_name" \
   "$device_output_dir/$failed_artifact_name" || true
-adb shell am start -W -n "$activity_name" --ez recordCanonicalBehavior true
+adb shell am start -S -W --activity-clear-task -n "$activity_name" \
+  --ez recordCanonicalBehavior true
 
 for attempt in $(seq 1 180); do
   if adb shell test -s "$device_output_dir/$artifact_name"; then

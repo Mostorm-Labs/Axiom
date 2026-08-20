@@ -133,22 +133,21 @@ from Web/Chromium, Windows, and Android/emulator consumers. It does not claim
 to synthesize native pinyin IME keystrokes: real browser IME, Win32 IMM, and
 Android InputConnection event evidence remains a separate manual/device gate.
 
-The physical Android gate was executed on a Pixel 7 and is recorded in
-[`docs/quality/evidence/poc04/android-physical-20260819.md`](../../docs/quality/evidence/poc04/android-physical-20260819.md).
-It closes the Android physical performance and Gboard `InputConnection`
-evidence only; browser and Windows native IME evidence remain pending, so the
-single unified POC-04 stays `Validating`.
+The v2 physical Android gate was executed on a Pixel 7 and is recorded in
+[`docs/quality/evidence/poc04/android-physical-20260820-v2.md`](../../docs/quality/evidence/poc04/android-physical-20260820-v2.md).
+The hosted x86_64 emulator remains a correctness recorder; representative
+performance is gated on the physical device without lowering the 16.7/33.3 ms
+thresholds.
 
 The Apple physical bring-up gate was executed on an iPhone 15 Pro and an iPad
 Air 4 and is recorded in
 [`docs/quality/evidence/poc04/apple-physical-20260820.md`](../../docs/quality/evidence/poc04/apple-physical-20260820.md).
 Both devices displayed the editor, showed the system keyboard, and delivered
-real UIKit callbacks into the shared C++ session with an identical deterministic
-digest. The latest signed bundle also captured real `setMarkedText` and
-`unmarkText` callbacks on both devices. The observed candidate strings were
-not a controlled `ni hao → 你好` script, so the native callback gate is closed
-but the controlled Chinese semantic-result gate remains open; the single
-unified POC-04 stays `Validating`.
+real UIKit callbacks into the shared C++ session. The latest signed v2 bundle
+captured the controlled `setMarkedText` sequence `n → ni → ni hao → 你好`,
+`unmarkText`, final text `你好`, and identical digest on both devices. The
+Apple controlled semantic-result gate is now closed; the single unified
+POC-04 stays `Validating` pending aggregate CI/review.
 
 The final unified evidence must cover English, simplified Chinese,
 pinyin composition, newline, mixed runs, selection, caret, clipboard,
@@ -175,3 +174,31 @@ Neither track can independently mark POC-04 complete. The aggregate review
 must have both tracks, the controlled `ni hao → 你好` semantic-result evidence,
 and the v2 SDK identity before changing the single status from `Validating` to
 `Accepted`.
+
+## Windows and Chrome Stable physical revalidation
+
+Run the physical validation from a clean checkout of
+`codex/poc04-windows-web-revalidation` on the Windows machine. The preparation
+script consumes only the locked `poc04-richtext-v2` SDKs, builds and tests the
+Windows canonical target, builds the Web/WASM recorder, and prints the exact
+commands for both interactive gates:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/poc04/prepare_windows_web_validation.ps1
+```
+
+For Windows, select Microsoft Pinyin in the Win32 recorder, enter `ni hao`,
+commit `你好`, and close the window. For Web, serve the printed recorder
+directory and open `physical_recorder.html` in installed Chrome Stable; repeat
+the same controlled input and download its JSON report. Validate both reports
+before archiving them:
+
+```powershell
+python tools/poc04/validate_physical_ime.py `
+  out/poc04-windows-web-revalidation/windows/windows-ime.json `
+  $HOME/Downloads/poc04-chrome-ime.json
+```
+
+The reports deliberately keep the final controlled text because the semantic
+result is the gate under test. Other IME updates are represented by callback
+metadata; no unrelated user text should be entered in either recorder.

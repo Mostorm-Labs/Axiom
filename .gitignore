@@ -18,3 +18,4 @@ __pycache__/
 pocs/shared_engine/platform/web/public/
 pocs/ink_engine/playground/web/public/
 pocs/rich_text/platform/android/app/src/main/assets/fonts/
+pocs/rich_text/platform/web/physical-dist/

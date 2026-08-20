@@ -63,9 +63,11 @@ class RichTextActivity : Activity() {
             performance.getInt("full_layout_warmup_samples") == 5) {
             "Canvas POC-04 canonical performance sample schema failed"
         }
-        check(performance.getDouble("input_caret_p95_ms") <= 16.7 &&
-            performance.getDouble("full_layout_p95_ms") <= 33.3) {
-            "Canvas POC-04 canonical performance gate failed"
+        if (BuildConfig.CANVAS_POC04_ENFORCE_PERFORMANCE_GATE) {
+            check(performance.getDouble("input_caret_p95_ms") <= 16.7 &&
+                performance.getDouble("full_layout_p95_ms") <= 33.3) {
+                "Canvas POC-04 canonical physical-device performance gate failed"
+            }
         }
     }
 
