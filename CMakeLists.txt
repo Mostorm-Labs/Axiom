@@ -21,6 +21,7 @@ option(CANVAS_POC03_ENABLE_SANITIZERS "Enable POC-03 host sanitizers" OFF)
 option(CANVAS_BUILD_POC05 "Build the POC-05 Hybrid Surface experiment" OFF)
 option(CANVAS_POC05_BUILD_TESTS "Build POC-05 unit and contract tests" ON)
 option(CANVAS_POC05_ENABLE_SANITIZERS "Enable POC-05 host sanitizers" OFF)
+option(CANVAS_POC05_ENABLE_SKIA "Render the POC-05 Windows canvas with Skia" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

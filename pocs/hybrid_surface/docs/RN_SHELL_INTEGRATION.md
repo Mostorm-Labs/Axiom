@@ -66,9 +66,16 @@ are applied directly by the native registry/backend.
 The Apple adapter is now implemented against React Native 0.84.1/Fabric with
 real `WKWebView` and video-layer objects. Its simulator build and iPad
 physical launch are validated; the human iPad/iPhone gate remains in progress.
-Android and Windows adapters remain Pending until their actual RN versions and
-native dependencies are pinned. A colored native rectangle cannot stand in for
-WebView/video evidence.
+The Windows adapter now pins React Native 0.84.1 and React Native Windows
+0.84.0, registers a code-generated Fabric component, renders through a real
+Skia Ganesh/D3D12 swap chain, and mounts real WebView2 controllers. For the
+Windows physical validation run, that Canvas uses a private POC-03 C++
+`RuntimeScene` bridge configured to the Android-equivalent 100K scene. This is
+deliberately outside the stable C ABI boundary and is recorded as
+`runtime_c_abi_binary_conformance: false`; it must not be presented as the
+final product architecture. Android and Apple product RN adapters remain
+Pending where their remaining physical gates are not complete. A colored
+native rectangle cannot stand in for WebView/video evidence.
 ## JS-stall acceptance corpus
 
 Every native adapter must deliberately block the JS thread for 100 ms while a

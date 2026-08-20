@@ -4,11 +4,16 @@
   "private": true,
   "scripts": {
     "android:release": "cd android && gradle app:assembleRelease",
-    "start": "react-native start"
+    "windows": "npx @react-native-community/cli run-windows",
+    "windows:release": "powershell -ExecutionPolicy Bypass -File ../../tools/run_windows_rnw_shell.ps1",
+    "windows:restore": "react-native autolink-windows",
+    "start": "react-native start",
+    "test:windows": "jest --config jest.config.windows.js"
   },
   "dependencies": {
     "react": "19.2.3",
-    "react-native": "0.84.1"
+    "react-native": "0.84.1",
+    "react-native-windows": "0.84.0"
   },
   "devDependencies": {
     "@babel/core": "7.28.4",
@@ -20,15 +25,17 @@
     "@react-native/codegen": "0.84.1",
     "@react-native/metro-config": "0.84.1",
     "@react-native/typescript-config": "0.84.1",
+    "@types/jest": "29.5.14",
     "@types/react": "19.2.2",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@rnx-kit/jest-preset": "^0.3.1"
   },
   "engines": {
     "node": ">=22.11.0"
   },
   "codegenConfig": {
     "name": "AxiomPoc05Spec",
-    "type": "components",
+    "type": "all",
     "jsSrcsDir": "src/specs",
     "android": {
       "javaPackageName": "dev.mostorm.axiom.poc05"
@@ -39,6 +46,20 @@
           "className": "AxiomHybridSurfaceComponentView"
         }
       }
+    },
+    "windows": {
+      "namespace": "AxiomPoc05Codegen",
+      "outputDirectory": "windows/AxiomPoc05/codegen",
+      "separateDataTypes": true,
+      "generators": ["componentsWindows"]
     }
-  }
+  },
+  "react-native-windows": {
+    "init-windows": {
+      "name": "AxiomPoc05",
+      "namespace": "AxiomPoc05",
+      "template": "cpp-app"
+    }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

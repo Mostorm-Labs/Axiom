@@ -59,4 +59,9 @@ if(ANDROID)
 elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS" AND
        CANVAS_POC03_ENABLE_SKIA)
   add_subdirectory(platform/apple)
+elseif(WIN32)
+  # The Windows peer is independently buildable.  It is enabled when the
+  # pinned WebView2 SDK is available, but does not make host/CI POC-05 tests
+  # depend on a Windows SDK installation.
+  add_subdirectory(platform/windows)
 endif()
