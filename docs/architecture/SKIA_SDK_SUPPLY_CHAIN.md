@@ -25,6 +25,14 @@ flowchart LR
 
 [`poc01-minimal-v1.json`](../../tools/skia/profiles/poc01-minimal-v1.json)
 定义公共 GN 参数、七个 target、实际链接的 archive 和 toolchain 最低身份约束。
+RF-01 的真实 SkSG shadow adapter 使用独立
+[`rf01-sksg-v1.json`](../../tools/skia/profiles/rf01-sksg-v1.json) producer profile。它保持相同
+七端 Ganesh/toolchain 基线，但显式构建 `skia` 与 `sksg` Ninja target，并将 SkSG module
+headers 与静态库纳入 manifest。该 profile 生成独立 SDK/set ID 和 prerelease，不修改或覆盖
+POC-01 已锁定资产。普通 Runtime/POC CI 仍不得 checkout Skia source、运行 GN/Ninja 或隐式
+回退；只有 producer workflow 的人工 dispatch 可以构建并发布 RF-01 SDK。Producer PR 会同时
+构建两个 profile 的七个平台并运行 source-free smoke；人工发布只构建所选择的 profile。RF-01
+smoke 还必须编译并链接一个真实调用 `sksg::Scene` 的 probe，不能仅检查 archive 已进入 ZIP。
 target ID 固定为：
 
 - `windows-x64-d3d12`

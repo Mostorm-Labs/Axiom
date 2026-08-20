@@ -13,7 +13,7 @@ import zipfile
 
 from sdk import (
     DEFAULT_PROFILE, ROOT, file_sha256, load_profile, normalized_args_text,
-    target_definition, validate_manifest,
+    module_headers, target_definition, validate_manifest,
 )
 
 
@@ -109,12 +109,12 @@ def verify_archive(
 
         required = {
             "args.gn", "include/core/SkCanvas.h",
-            "modules/skcms/skcms.h", "modules/skcms/src/skcms_public.h",
             "resources/fonts/Roboto-Regular.ttf",
             "licenses/Skia.txt", "licenses/FreeType.txt",
             "licenses/libpng.txt", "licenses/zlib.txt",
             "lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake",
         }
+        required.update(module_headers(profile))
         required.update(f"lib/{name}" for name in target["libraries"])
         absent = sorted(required - actual_payload)
         if absent:

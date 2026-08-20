@@ -13,7 +13,7 @@ import zipfile
 
 from sdk import (
     DEFAULT_PROFILE, SDK_FORMAT, SKIA_ROOT, canonical_sha256, file_sha256,
-    load_profile, make_identity, normalized_args_text, target_definition,
+    load_profile, make_identity, module_headers, normalized_args_text, target_definition,
 )
 
 
@@ -24,10 +24,6 @@ LICENSES = {
     "zlib.txt": "third_party/externals/zlib/LICENSE",
 }
 FONT = "resources/fonts/Roboto-Regular.ttf"
-MODULE_HEADERS = (
-    "modules/skcms/skcms.h",
-    "modules/skcms/src/skcms_public.h",
-)
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
 
@@ -168,7 +164,7 @@ def package(
     with tempfile.TemporaryDirectory(prefix=f"canvas-skia-{target_name}-") as temporary:
         stage = Path(temporary) / "sdk"
         shutil.copytree(skia_root / "include", stage / "include")
-        for header in MODULE_HEADERS:
+        for header in module_headers(profile):
             copy_file(skia_root / header, stage / header)
         copy_file(skia_root / FONT, stage / FONT)
         for destination, source in LICENSES.items():

@@ -7,6 +7,15 @@ on:
       - "tools/skia/**"
       - ".github/workflows/skia-sdk-producer.yml"
   workflow_dispatch:
+    inputs:
+      profile:
+        description: SDK producer profile
+        required: true
+        default: poc01-minimal-v1
+        type: choice
+        options:
+          - poc01-minimal-v1
+          - rf01-sksg-v1
 
 permissions:
   contents: read
@@ -18,6 +27,8 @@ concurrency:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
+    outputs:
+      profiles: ${{ steps.profiles.outputs.profiles }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,6 +39,15 @@ jobs:
         run: test "${GITHUB_REF}" = "refs/heads/main"
       - name: Validate schemas, identities, archives, and canonical hashes
         run: python -m unittest discover -s tools/skia/tests -v
+      - name: Select profiles for this run
+        id: profiles
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo 'profiles=["${{ github.event.inputs.profile }}"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'profiles=["poc01-minimal-v1","rf01-sksg-v1"]' >> "$GITHUB_OUTPUT"
+          fi
       - name: Repository hygiene
         run: |
           python tools/check_docs.py
@@ -38,6 +58,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        profile: ${{ fromJSON(needs.preflight.outputs.profiles) }}
+        target:
+          - windows-x64-d3d12
+          - web-wasm-webgl2
+          - macos-arm64-metal
+          - ios-arm64-metal
+          - ios-simulator-arm64-metal
+          - android-arm64-v8a-gles3
+          - android-x86_64-gles3
         include:
           - target: windows-x64-d3d12
             os: windows-2025
@@ -61,9 +90,14 @@ jobs:
             os: ubuntu-24.04
             family: android
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.target }}
+    name: ${{ matrix.profile }} / ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v4
+      - name: Select producer profile
+        shell: bash
+        run: |
+          profile="${{ matrix.profile }}"
+          echo "SKIA_PROFILE=tools/skia/profiles/${profile}.json" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - uses: ilammy/msvc-dev-cmd@v1
@@ -94,69 +128,79 @@ jobs:
         shell: bash
         run: |
           source .deps/emsdk/emsdk_env.sh
-          python tools/skia/identify_toolchain.py --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
-          python tools/skia/build.py --target "${{ matrix.target }}"
+          python tools/skia/identify_toolchain.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
+          python tools/skia/build.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}"
       - name: Build and identify Windows toolchain
         if: matrix.family == 'windows'
         shell: pwsh
         run: |
-          python tools/skia/identify_toolchain.py --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
-          python tools/skia/build.py --target "${{ matrix.target }}" --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
+          python tools/skia/identify_toolchain.py --profile "$env:SKIA_PROFILE" --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
+          python tools/skia/build.py --profile "$env:SKIA_PROFILE" --target "${{ matrix.target }}" --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
       - name: Build and identify Apple toolchain
         if: matrix.family == 'apple'
         run: |
-          python tools/skia/identify_toolchain.py --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
-          python tools/skia/build.py --target "${{ matrix.target }}"
+          python tools/skia/identify_toolchain.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
+          python tools/skia/build.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}"
       - name: Build and identify Android toolchain
         if: matrix.family == 'android'
         run: |
-          python tools/skia/identify_toolchain.py --target "${{ matrix.target }}" --ndk "$ANDROID_NDK_ROOT" --output out/skia-sdk/toolchain.json
-          python tools/skia/build.py --target "${{ matrix.target }}" --ndk "$ANDROID_NDK_ROOT"
+          python tools/skia/identify_toolchain.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --ndk "$ANDROID_NDK_ROOT" --output out/skia-sdk/toolchain.json
+          python tools/skia/build.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --ndk "$ANDROID_NDK_ROOT"
       - name: Package twice and prove deterministic bytes
+        shell: bash
         run: |
-          python tools/skia/package.py --target "${{ matrix.target }}" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-a
-          python tools/skia/package.py --target "${{ matrix.target }}" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-b
+          python tools/skia/package.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-a
+          python tools/skia/package.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-b
           python -c "from pathlib import Path; import sys; a=Path('out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip').read_bytes(); b=Path('out/skia-sdk/package-b/skia-sdk-${{ matrix.target }}.zip').read_bytes(); sys.exit(0 if a == b else 'SDK archive is not deterministic')"
-          python tools/skia/verify.py "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --expected-target "${{ matrix.target }}"
+          python tools/skia/verify.py "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --profile "$SKIA_PROFILE" --expected-target "${{ matrix.target }}"
       - name: Source-free Canvas smoke (Web)
         if: matrix.family == 'web'
         shell: bash
         run: |
           source .deps/emsdk/emsdk_env.sh
-          python tools/skia/smoke_consumer.py --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip"
+          python tools/skia/smoke_consumer.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip"
       - name: Source-free Canvas smoke (Windows)
         if: matrix.family == 'windows'
         shell: pwsh
-        run: python tools/skia/smoke_consumer.py --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
+        run: python tools/skia/smoke_consumer.py --profile "$env:SKIA_PROFILE" --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
       - name: Source-free Canvas smoke (Apple)
         if: matrix.family == 'apple'
-        run: python tools/skia/smoke_consumer.py --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip"
+        run: python tools/skia/smoke_consumer.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip"
       - name: Source-free Canvas smoke (Android)
         if: matrix.family == 'android'
-        run: python tools/skia/smoke_consumer.py --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --ndk "$ANDROID_NDK_ROOT"
+        run: python tools/skia/smoke_consumer.py --profile "$SKIA_PROFILE" --target "${{ matrix.target }}" --archive "out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip" --ndk "$ANDROID_NDK_ROOT"
       - uses: actions/upload-artifact@v4
         with:
-          name: skia-sdk-${{ matrix.target }}
+          name: skia-sdk-${{ matrix.profile }}-${{ matrix.target }}
           path: out/skia-sdk/package-a/skia-sdk-${{ matrix.target }}.zip
           if-no-files-found: error
           retention-days: 7
 
   aggregate:
-    needs: build
+    needs: [preflight, build]
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.preflight.outputs.profiles) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Select producer profile
+        shell: bash
+        run: |
+          profile="${{ matrix.profile }}"
+          echo "SKIA_PROFILE=tools/skia/profiles/${profile}.json" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@v4
         with:
-          pattern: skia-sdk-*
+          pattern: skia-sdk-${{ matrix.profile }}-*
           path: out/skia-sdk/assets
       - name: Require all targets and create immutable release set
-        run: python tools/skia/aggregate.py --assets out/skia-sdk/assets --output out/skia-sdk/release
+        run: python tools/skia/aggregate.py --profile "$SKIA_PROFILE" --assets out/skia-sdk/assets --output out/skia-sdk/release
       - uses: actions/upload-artifact@v4
         with:
-          name: skia-sdk-release-set
+          name: skia-sdk-release-set-${{ matrix.profile }}
           path: out/skia-sdk/release
           if-no-files-found: error
           retention-days: 7
@@ -176,7 +220,7 @@ jobs:
         with: { python-version: "3.12" }
       - uses: actions/download-artifact@v4
         with:
-          name: skia-sdk-release-set
+          name: skia-sdk-release-set-${{ github.event.inputs.profile }}
           path: out/skia-sdk/release
       - name: Generate GitHub provenance for ZIPs and index
         uses: actions/attest@v4

@@ -16,7 +16,7 @@ sys.path.insert(0, str(SKIA_TOOLS))
 from sdk import (  # noqa: E402
     DEFAULT_PROFILE, SDK_FORMAT, SchemaError, canonical_bytes,
     canonical_sha256, load_profile, make_identity, normalized_recipe_bytes,
-    validate_manifest, validate_toolchain,
+    module_headers, ninja_targets, validate_manifest, validate_toolchain,
 )
 from package import cmake_config, copy_file  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
@@ -44,6 +44,31 @@ class SdkMetadataTest(unittest.TestCase):
 
     def test_profile_contains_exact_target_set(self) -> None:
         self.assertEqual(len(self.profile["targets"]), 7)
+        self.assertEqual(ninja_targets(self.profile), ["skia"])
+        self.assertEqual(
+            module_headers(self.profile),
+            ["modules/skcms/skcms.h", "modules/skcms/src/skcms_public.h"],
+        )
+
+    def test_rf01_profile_declares_sksg_target_headers_and_libraries(self) -> None:
+        profile_path = DEFAULT_PROFILE.parent / "rf01-sksg-v1.json"
+        profile = load_profile(profile_path)
+        self.assertEqual(ninja_targets(profile), ["skia", "sksg"])
+        sksg_headers = {
+            header for header in module_headers(profile)
+            if header.startswith("modules/sksg/include/")
+        }
+        self.assertEqual(len(sksg_headers), 23)
+        self.assertIn("modules/sksg/include/SkSGGroup.h", sksg_headers)
+        self.assertIn("modules/sksg/include/SkSGRect.h", sksg_headers)
+        self.assertIn("modules/sksg/include/SkSGScene.h", sksg_headers)
+        for target in profile["targets"].values():
+            expected = (
+                "sksg.lib" if target["platform"] == "windows"
+                else "libsksg.wasm.a" if target["platform"] == "web"
+                else "libsksg.a"
+            )
+            self.assertIn(expected, target["libraries"])
 
     def test_canonical_hash_is_order_independent_and_rejects_nan(self) -> None:
         self.assertEqual(canonical_sha256({"b": 2, "a": 1}), canonical_sha256({"a": 1, "b": 2}))

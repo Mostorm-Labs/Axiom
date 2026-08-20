@@ -841,6 +841,11 @@ RF01-4 仍为 `Validating`：本轮建立 two-stage contract 和 Direct baseline
   manifest/归档中没有 `modules/sksg` headers 或独立 SkSG target。因此本提交不伪造
   `SkSgRenderScene`，也不从 Skia source tree 或 GN/Ninja 隐式回退。真实 adapter 需要新的
   producer profile/SDK ID（包含 SkSG headers、实现库和 license）后才能在 private target 中接入。
+- `rf01-sksg-v1` producer profile 与 workflow 已准备：它显式声明 `skia + sksg` Ninja targets、
+  SkSG module headers 和各平台 archive，并保持七 target 聚合、确定性 ZIP、source-free smoke
+  与 prerelease 发布规则；source-free smoke 会实际编译、链接并调用 `sksg::Scene`，不是只验证
+  archive 存在。当前尚未在 `main` 人工 dispatch 并发布/锁定该 SDK，因此真实 adapter 仍不能
+  开始消费。
 - Direct renderer 继续是默认 oracle；`ShadowRenderScene` 的双 participant contract 可先被
   Fake/Direct 组合验证，不把这项 contract 测试写成 SkSG visual/golden 已通过。
 

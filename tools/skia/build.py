@@ -11,7 +11,7 @@ import subprocess
 
 from sdk import (
     DEFAULT_PROFILE, SKIA_ROOT, actual_gn_args, gn_args_line, load_profile,
-    target_definition,
+    ninja_targets, target_definition,
 )
 
 
@@ -64,7 +64,7 @@ def main() -> int:
         raise RuntimeError("missing GN; run bootstrap_deps.py --skia --sync-skia")
     output = skia_root / "out" / target["output_name"]
     run([str(gn), "gen", str(output), f"--args={gn_args}"], skia_root)
-    run([args.ninja, "-C", str(output), "skia"], skia_root)
+    run([args.ninja, "-C", str(output), *ninja_targets(profile)], skia_root)
     missing = [name for name in target["libraries"] if not (output / name).is_file()]
     if missing:
         raise RuntimeError(f"build did not produce required libraries: {missing}")

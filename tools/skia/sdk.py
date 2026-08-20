@@ -17,6 +17,7 @@ PROFILE_FIELDS = {
     "schema_version", "profile", "description", "skia_commit",
     "common_gn_args", "targets",
 }
+PROFILE_OPTIONAL_FIELDS = {"ninja_targets", "module_headers"}
 TARGET_FIELDS = {
     "platform", "arch", "backend", "output_name", "gn_args", "libraries",
     "toolchain",
@@ -78,9 +79,15 @@ def require_fields(value: Any, required: set[str], where: str) -> dict[str, Any]
 
 
 def load_profile(path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
-    profile = require_fields(
-        json.loads(path.read_text(encoding="utf-8")), PROFILE_FIELDS, "profile",
-    )
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(profile, dict):
+        raise SchemaError("profile must be an object")
+    unknown = set(profile) - PROFILE_FIELDS - PROFILE_OPTIONAL_FIELDS
+    missing = PROFILE_FIELDS - set(profile)
+    if unknown:
+        raise SchemaError(f"profile has unknown fields: {', '.join(sorted(unknown))}")
+    if missing:
+        raise SchemaError(f"profile is missing fields: {', '.join(sorted(missing))}")
     if profile["schema_version"] != 1:
         raise SchemaError("profile schema_version must be 1")
     if profile["profile"] != path.stem:
@@ -91,6 +98,19 @@ def load_profile(path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
         raise SchemaError("profile Skia commit does not match deps.lock.json")
     if not isinstance(profile["common_gn_args"], dict):
         raise SchemaError("common_gn_args must be an object")
+    if not isinstance(ninja_targets(profile), list) or not ninja_targets(profile):
+        raise SchemaError("ninja_targets must be a non-empty list")
+    if len(ninja_targets(profile)) != len(set(ninja_targets(profile))) or any(
+        not isinstance(target, str) or not target for target in ninja_targets(profile)
+    ):
+        raise SchemaError("ninja_targets must contain unique non-empty strings")
+    if not isinstance(module_headers(profile), list):
+        raise SchemaError("module_headers must be a list")
+    if len(module_headers(profile)) != len(set(module_headers(profile))) or any(
+        not isinstance(header, str) or not header or header.startswith("/") or ".." in Path(header).parts
+        for header in module_headers(profile)
+    ):
+        raise SchemaError("module_headers must contain unique safe relative paths")
     targets = profile["targets"]
     if not isinstance(targets, dict) or not targets:
         raise SchemaError("targets must be a non-empty object")
@@ -128,6 +148,17 @@ def load_profile(path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
            toolchain["api_level"] != dependencies["android_ndk"]["api_level"]:
             raise SchemaError(f"{target_name} toolchain does not match deps.lock.json")
     return profile
+
+
+def ninja_targets(profile: dict[str, Any]) -> list[str]:
+    return profile.get("ninja_targets", ["skia"])
+
+
+def module_headers(profile: dict[str, Any]) -> list[str]:
+    return profile.get("module_headers", [
+        "modules/skcms/skcms.h",
+        "modules/skcms/src/skcms_public.h",
+    ])
 
 
 def profile_hash(profile: dict[str, Any]) -> str:

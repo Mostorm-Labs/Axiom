@@ -49,6 +49,12 @@ def main() -> int:
         "-DCMAKE_BUILD_TYPE=Release",
         f"-DCanvasSkia_DIR={sdk_root / 'lib/cmake/CanvasSkia'}",
     ]
+    if profile["profile"].startswith("rf01-sksg"):
+        configure += [
+            "-DCANVAS_BUILD_RF01=ON",
+            "-DCANVAS_RF01_BUILD_TESTS=OFF",
+        ]
+        probe_configure.append("-DCANVAS_SKIA_PROBE_SKSG=ON")
     platform = target["platform"]
     if platform == "web":
         configure += [
