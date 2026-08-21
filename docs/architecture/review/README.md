@@ -3,7 +3,7 @@
 > 状态：Draft / Non-normative
 > 建立日期：2026-08-21
 > 输入：SRC-USER-ARCH-REVIEW-BRIEF-20260821
-> 当前进度：步骤 0、步骤 1、步骤 2 已完成；下一步进入步骤 3“需求基线”
+> 当前进度：步骤 0、步骤 1、步骤 2 已完成；步骤 3“需求基线”正在审核第一组规则
 > 现行规范：在新的决定通过评审前，仍以
 > [项目总体框架](../../PROJECT_FRAMEWORK.md)、
 > [系统架构](../SYSTEM_ARCHITECTURE.md)和
@@ -69,7 +69,7 @@ Native React Native Shell 和 Shared TypeScript Data Runtime 边界，其中一�
 | 0 | 本文、[文档工作流](DOCUMENTATION_WORKFLOW.md)、[术语表](GLOSSARY.md) | 怎样讨论、批准和保存架构决定？ | 文档类型、状态、编号、隐私和评审规则 | 工作流和术语表分别获得用户明确确认 | Completed（2026-08-21） |
 | 1 | [来源目录](SOURCE_CATALOG.md) | 当前有哪些可靠输入，可以怎样引用？ | 来源 ID、覆盖主题、访问/读取范围、证据角色和引用限制 | 来源全集可复算；每项五个维度齐全；缺口和影响明确；用户逐组确认；校验通过 | Completed（2026-08-21） |
 | 2 | `02_CURRENT_STATE_AUDIT.md` | 仓库、Notion 和讨论中已经有哪些决定、矛盾和缺口？ | 逐文件迁移表、ADR 对账、冲突清单 | 每个现有规范和 ADR 都有处理建议 | Completed（2026-08-21） |
-| 3 | `03_REQUIREMENTS_BASELINE.md` | V1 产品到底必须做什么？ | 带稳定 ID 的功能与非功能需求、Vibe 对齐、非目标 | 每个 P0/P1 需求有平台范围和验收方法 | Next |
+| 3 | [需求基线](03_REQUIREMENTS_BASELINE.md) | V1 产品到底必须做什么？ | 带稳定 ID 的功能与非功能需求、Vibe 对齐、非目标 | 每个 P0/P1 需求有平台范围和验收方法 | In progress：第一组规则审核 |
 | 4 | `04_SYSTEM_CONTEXT_AND_BOUNDARIES.md` | Axiom、Arc、Shell、Host、Data Runtime 和外部系统分别拥有何种状态？ | 系统语境、所有权、生命周期和信任边界 | 顶层模块没有重叠的权威状态 | Not started |
 | 5 | `05_DECISION_BACKLOG_AND_DAG.md` | 哪些决定必须先做，哪些可以继续实验？ | 决策清单、依赖 DAG、风险和验证方式 | 所有待决主题有 owner、前置条件和文档等级 | Not started |
 | 6 | 每个主题一组独立文档 | 对单个架构主题，问题、替代方案和证据是什么？ | Problem、RFC、ADR、Spec/Contract、Validation | 逐主题通过明确评审 | Not started |
@@ -140,8 +140,9 @@ Native React Native Shell 和 Shared TypeScript Data Runtime 边界，其中一�
 - [术语表](GLOSSARY.md)
 - [来源目录](SOURCE_CATALOG.md)
 - [步骤 2：当前状态审计](02_CURRENT_STATE_AUDIT.md)
+- [步骤 3：需求基线](03_REQUIREMENTS_BASELINE.md)
 
 步骤 2 已完成五组审核，现状、冲突和 Decision Backlog 输入见[当前状态审计](02_CURRENT_STATE_AUDIT.md)。
-下一步进入步骤 3：把产品功能基线、竞品矩阵、`SRC-CHAT-07`、用户明确目标和现行 V1 范围
-接收为候选项，逐项拆分、去重并形成可审核的 Requirement baseline。需求文档不会直接替换
-现行 ADR，也不会把 178 个竞品 source rows 原样变成 178 个正式需求。
+步骤 3 已开始：先审核需求接收、编号、状态和去重规则，再把产品功能基线、竞品矩阵、用户
+明确目标和现行 V1 范围逐组接收为候选项。需求文档不会直接替换现行 ADR，也不会把 178 个
+竞品 source rows 原样变成 178 个正式需求；`SRC-CHAT-07` 在正文可核验前保持来源级缺口。
