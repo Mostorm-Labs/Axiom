@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -32,6 +33,7 @@ MODULE_HEADERS = (
     "modules/skcms/src/skcms_public.h",
 )
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+QUOTED_INCLUDE = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.MULTILINE)
 
 
 def cmake_config(
@@ -158,6 +160,41 @@ def copy_file(source: Path, destination: Path) -> None:
     shutil.copyfile(source, destination)
 
 
+def validate_header_closure(source_root: Path, sdk_root: Path) -> None:
+    """Reject an SDK whose packaged headers reference unpackaged Skia headers."""
+    missing: dict[str, set[str]] = {}
+    for top_level in ("include", "modules", "src"):
+        packaged_root = sdk_root / top_level
+        if not packaged_root.is_dir():
+            continue
+        for packaged in sorted(path for path in packaged_root.rglob("*") if path.is_file()):
+            relative = packaged.relative_to(sdk_root)
+            source = source_root / relative
+            if not source.is_file():
+                continue
+            includes = QUOTED_INCLUDE.findall(
+                source.read_text(encoding="utf-8", errors="ignore")
+            )
+            for include in includes:
+                root_candidate = source_root / include
+                local_candidate = source.parent / include
+                dependency = None
+                for candidate in (local_candidate, root_candidate):
+                    if candidate.is_file():
+                        dependency = candidate.relative_to(source_root)
+                        break
+                if dependency is not None and not (sdk_root / dependency).is_file():
+                    missing.setdefault(dependency.as_posix(), set()).add(
+                        relative.as_posix()
+                    )
+    if missing:
+        details = ", ".join(
+            f"{dependency} (from {', '.join(sorted(parents))})"
+            for dependency, parents in sorted(missing.items())
+        )
+        raise RuntimeError(f"SDK header closure is incomplete: {details}")
+
+
 def download_locked_file(url: str, sha256: str, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with urllib.request.urlopen(url) as response:
@@ -259,6 +296,7 @@ def package(
             shutil.copytree(source, stage / directory)
         for header in profile.get("module_headers", []):
             copy_file(skia_root / header, stage / header)
+        validate_header_closure(skia_root, stage)
         copy_file(skia_root / FONT, stage / FONT)
         licenses = dict(LICENSES)
         licenses.update(profile.get("licenses", {}))

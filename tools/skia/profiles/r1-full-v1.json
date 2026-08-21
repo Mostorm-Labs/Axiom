@@ -124,6 +124,16 @@
   "module_headers": [
     "modules/skcms/skcms.h",
     "modules/skcms/src/skcms_public.h",
+    "modules/skottie/src/SkottieValue.h",
+    "modules/skottie/src/animator/Animator.h",
+    "modules/skottie/src/text/Font.h",
+    "modules/skottie/src/text/TextAdapter.h",
+    "modules/skottie/src/text/TextAnimator.h",
+    "modules/skottie/src/text/TextValue.h",
+    "src/core/SkChecksum.h",
+    "src/core/SkMathPriv.h",
+    "src/core/SkTHash.h",
+    "src/core/SkTLazy.h",
     "src/core/SkUTF.h"
   ],
   "licenses": {

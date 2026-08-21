@@ -20,7 +20,10 @@ from sdk import (  # noqa: E402
     normalized_gn_args, validate_manifest, validate_symbols_manifest,
     validate_toolchain,
 )
-from package import cmake_config, copy_file, download_locked_file, role  # noqa: E402
+from package import (  # noqa: E402
+    cmake_config, copy_file, download_locked_file, role,
+    validate_header_closure,
+)
 from build import gn_archive_closure, gn_label  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
 
@@ -268,6 +271,35 @@ class SdkMetadataTest(unittest.TestCase):
     def test_private_sdk_header_has_header_role(self) -> None:
         self.assertEqual(role("src/core/SkUTF.h"), "header")
 
+    def test_header_closure_rejects_unpacked_private_dependencies(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            sdk = root / "sdk"
+            (source / "modules/example/include").mkdir(parents=True)
+            (source / "src/example").mkdir(parents=True)
+            (sdk / "modules/example/include").mkdir(parents=True)
+            public = '#include "src/example/Private.h"\n'
+            private = '#include "include/core/SkTypes.h"\n'
+            (source / "modules/example/include/Public.h").write_text(
+                public, encoding="utf-8"
+            )
+            (source / "src/example/Private.h").write_text(
+                private, encoding="utf-8"
+            )
+            (sdk / "modules/example/include/Public.h").write_text(
+                public, encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                RuntimeError, "src/example/Private.h"
+            ):
+                validate_header_closure(source, sdk)
+            copy_file(
+                source / "src/example/Private.h",
+                sdk / "src/example/Private.h",
+            )
+            validate_header_closure(source, sdk)
+
     def test_r1_full_profile_freezes_matrix_variants_and_capabilities(self) -> None:
         profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"
         profile = load_profile(profile_path)
@@ -280,6 +312,24 @@ class SdkMetadataTest(unittest.TestCase):
         self.assertFalse(profile["common_gn_args"]["skia_use_dng_sdk"])
         self.assertFalse(profile["common_gn_args"]["skia_use_piex"])
         self.assertFalse(profile["common_gn_args"]["skia_enable_tools"])
+        self.assertEqual(
+            set(profile["module_headers"]),
+            {
+                "modules/skcms/skcms.h",
+                "modules/skcms/src/skcms_public.h",
+                "modules/skottie/src/SkottieValue.h",
+                "modules/skottie/src/animator/Animator.h",
+                "modules/skottie/src/text/Font.h",
+                "modules/skottie/src/text/TextAdapter.h",
+                "modules/skottie/src/text/TextAnimator.h",
+                "modules/skottie/src/text/TextValue.h",
+                "src/core/SkChecksum.h",
+                "src/core/SkMathPriv.h",
+                "src/core/SkTHash.h",
+                "src/core/SkTLazy.h",
+                "src/core/SkUTF.h",
+            },
+        )
         for argument in (
             "skia_use_system_expat",
             "skia_use_system_freetype2",
