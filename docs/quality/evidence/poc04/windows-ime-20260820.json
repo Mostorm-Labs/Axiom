@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "platform": "windows",
+  "protocol": "Win32 IMM",
+  "controlled_flow": "ni hao -> 你好",
+  "final_text": "你好",
+  "controlled_flow_passed": true,
+  "observed_composition_start": true,
+  "observed_composition_update": true,
+  "observed_composition_commit": true,
+  "selection": [2, 0],
+  "caret": [32, 0, 1, 20],
+  "digest": "022a3d56715929e23e94411fb71ffe50",
+  "lifecycle": {"cycles": 100, "failures": 0},
+  "events": [
+    {"sequence": 0, "event": "focus", "utf16_length": 0, "composing": false},
+    {"sequence": 1, "event": "composition_start", "utf16_length": 0, "composing": true},
+    {"sequence": 2, "event": "composition_update", "utf16_length": 1, "composing": true},
+    {"sequence": 3, "event": "composition_update", "utf16_length": 2, "composing": true},
+    {"sequence": 4, "event": "composition_update", "utf16_length": 1, "composing": true},
+    {"sequence": 5, "event": "composition_commit", "utf16_length": 1, "composing": false},
+    {"sequence": 6, "event": "composition_end", "utf16_length": 0, "composing": false},
+    {"sequence": 7, "event": "composition_start", "utf16_length": 0, "composing": true},
+    {"sequence": 8, "event": "composition_update", "utf16_length": 1, "composing": true},
+    {"sequence": 9, "event": "composition_update", "utf16_length": 2, "composing": true},
+    {"sequence": 10, "event": "composition_update", "utf16_length": 3, "composing": true},
+    {"sequence": 11, "event": "composition_update", "utf16_length": 1, "composing": true},
+    {"sequence": 12, "event": "composition_commit", "utf16_length": 1, "composing": false},
+    {"sequence": 13, "event": "composition_end", "utf16_length": 0, "composing": false},
+    {"sequence": 14, "event": "blur", "utf16_length": 0, "composing": false}
+  ]
+}

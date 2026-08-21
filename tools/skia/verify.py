@@ -13,7 +13,7 @@ import zipfile
 
 from sdk import (
     DEFAULT_PROFILE, ROOT, file_sha256, load_profile, normalized_args_text,
-    module_headers, target_definition, validate_manifest,
+    target_definition, validate_manifest,
 )
 
 
@@ -114,9 +114,33 @@ def verify_archive(
             "licenses/libpng.txt", "licenses/zlib.txt",
             "lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake",
         }
-        required.update(module_headers(profile))
+        for directory in profile.get("module_header_dirs", []):
+            prefix = directory.rstrip("/") + "/"
+            if not any(path.startswith(prefix) for path in actual_payload):
+                required.add(prefix + "<header>")
+        required.update(profile.get("module_headers", []))
+        required.update(
+            f"licenses/{name}" for name in profile.get("licenses", {})
+        )
+        required.update(
+            f"licenses/{name}"
+            for name in profile.get("license_dependencies", {})
+        )
+        required.update(profile.get("fixture_fonts", {}))
+        required.update(
+            item["destination"] for item in profile.get("runtime_files", [])
+            if item["target"] == expected_target
+        )
         required.update(f"lib/{name}" for name in target["libraries"])
-        absent = sorted(required - actual_payload)
+        absent = sorted(
+            path for path in required
+            if path not in actual_payload and not (
+                path.endswith("/<header>") and any(
+                    item.startswith(path.removesuffix("<header>"))
+                    for item in actual_payload
+                )
+            )
+        )
         if absent:
             raise RuntimeError(f"SDK is incomplete: {absent}")
         if archive.read("args.gn").decode("utf-8") != normalized_args_text(profile, expected_target):
@@ -126,6 +150,10 @@ def verify_archive(
         actual_font = hashlib.sha256(archive.read("resources/fonts/Roboto-Regular.ttf")).hexdigest()
         if actual_font != expected_font:
             raise RuntimeError("Roboto fixture checksum mismatch")
+        for font_path, dependency_name in profile.get("fixture_fonts", {}).items():
+            expected_fixture = lock["dependencies"][dependency_name]["sha256"]
+            if hashlib.sha256(archive.read(font_path)).hexdigest() != expected_fixture:
+                raise RuntimeError(f"font fixture checksum mismatch: {font_path}")
         expected_archive_arch = {
             "windows": "x64", "web": "wasm32", "macos": "arm64",
             "ios": "arm64", "ios-simulator": "arm64",

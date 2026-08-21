@@ -31,7 +31,7 @@
     "skia_use_system_zlib": false,
     "skia_use_wuffs": false
   },
-  "ninja_targets": [
+  "build_targets": [
     "skia",
     "sksg"
   ],

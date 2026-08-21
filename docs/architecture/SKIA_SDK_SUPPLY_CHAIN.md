@@ -6,6 +6,14 @@
 JPEG/WebP、SVG、PDF、Vulkan、Graphite、Debug 或符号包。Producer 是唯一允许获取
 Skia source 并运行 GN/Ninja 的路径；Canvas 普通 CI 是只读 Consumer。
 
+POC-04 使用独立的
+[`poc04-richtext-v2`](../../tools/skia/profiles/poc04-richtext-v2.json) profile。
+它在保留既有 Web、Windows 和
+Android RichText SDK 的基础上，增加 `macos-arm64-metal`、`ios-arm64-metal` 和
+`ios-simulator-arm64-metal`。iOS device SDK 同时服务 iPhone 与 iPad，iOS
+simulator SDK 同时服务 iPhone 与 iPad simulator；这些是 SDK producer 和
+source-free linking 门禁，不等同于 AppKit/UIKit IME 行为验收。
+
 ```mermaid
 flowchart LR
   Profile["poc01-minimal-v1 profile"] --> Matrix["7-target producer matrix"]

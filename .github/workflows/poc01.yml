@@ -83,7 +83,6 @@ jobs:
         working-directory: pocs/shared_engine/platform/web
         run: |
           npm ci
-          npx playwright install --with-deps chromium
           python3 ../../../../tools/ci_time.py --label "Canvas Web demo build" --summary-file "$GITHUB_STEP_SUMMARY" -- npm run build
           python3 ../../../../tools/ci_time.py --label "Canvas Web acceptance" --summary-file "$GITHUB_STEP_SUMMARY" -- npm run test:e2e
       - name: Visual gate

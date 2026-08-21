@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize POC-01 dependencies into the ignored .deps directory.
+"""Materialize locked Canvas POC dependencies into the ignored .deps directory.
 
 The lock file is the source of truth. This script deliberately refuses to use a
 moving branch after checkout and verifies every resulting Git revision. Skia's
@@ -228,14 +228,17 @@ def bootstrap_skia_archive(lock: dict, sync: bool) -> None:
 
 def bootstrap_font(lock: dict) -> None:
     skia = lock["dependencies"]["skia"]
-    font = lock["dependencies"]["roboto_regular"]
-    relative = font["source"].split("skia/", 1)[1]
-    destination = DEPS / "assets" / "Roboto-Regular.ttf"
-    download(
-        f"https://raw.githubusercontent.com/google/skia/{skia['commit']}/{relative}",
-        destination,
-        font["sha256"],
-    )
+    for dependency, filename in (
+        ("roboto_regular", "Roboto-Regular.ttf"),
+        ("noto_sans_cjk_subset", "NotoSansCJK-VF-subset.otf.ttc"),
+    ):
+        font = lock["dependencies"][dependency]
+        relative = font["source"].split("skia/", 1)[1]
+        download(
+            f"https://raw.githubusercontent.com/google/skia/{skia['commit']}/{relative}",
+            DEPS / "assets" / filename,
+            font["sha256"],
+        )
 
 
 def bootstrap_web(lock: dict) -> None:
@@ -316,7 +319,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--core", action="store_true", help="Fetch test/header dependencies")
     parser.add_argument("--skia", action="store_true", help="Fetch the pinned Skia checkout")
-    parser.add_argument("--font-only", action="store_true", help="Fetch and verify only pinned Roboto")
+    parser.add_argument(
+        "--font-only", action="store_true",
+        help="Fetch and verify pinned Latin and CJK font fixtures",
+    )
     parser.add_argument("--skia-archive", action="store_true", help="Use gh API archive fallback for Skia")
     parser.add_argument("--sync-skia", action="store_true", help="Also run Skia tools/git-sync-deps")
     parser.add_argument("--web", action="store_true", help="Install and activate pinned emsdk")

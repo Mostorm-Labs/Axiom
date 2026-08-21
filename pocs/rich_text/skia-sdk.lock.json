@@ -1,0 +1,90 @@
+{
+  "format": "canvas-skia-sdk-lock-v1",
+  "profile": "poc04-richtext-v2",
+  "profile_hash": "37d944c60545aba8c723c5817182d14701dc4d65288f163ce299fee382e98118",
+  "repository": "Mostorm-Labs/Axiom",
+  "schema_version": 1,
+  "set_id": "72f006b19ac77233cd6187f2cac5476b6eda041043ae0b646f1a3e7f5c1b3674",
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "source_commit": "b7a16eb544c3c0c98a6ab494bf0faaba9f12410c",
+  "tag": "skia-sdk-poc04-richtext-v2-72f006b19ac77233",
+  "targets": {
+    "android-arm64-v8a-gles3": {
+      "asset": "skia-sdk-android-arm64-v8a-gles3.zip",
+      "sdk_id": "fee8d9c93e4e4c7122d64374ed53e7ffd1b65deca9b80717ee752451386d4be0",
+      "sha256": "c97664dfbdd23f0cbf97348e13e4389f8a1f80648454b02e86be732ba8c22f13",
+      "size": 17505764,
+      "toolchain": {
+        "android_ndk": "27.2.12479018",
+        "api_level": 26
+      }
+    },
+    "android-x86_64-gles3": {
+      "asset": "skia-sdk-android-x86_64-gles3.zip",
+      "sdk_id": "75d6f4dbf3933be3b59b1bec6a53f805100d8c110aad57120c82ed30b3f5d303",
+      "sha256": "cdd2ebd5c9bd0419fdf68a5f376140737ecb94df07b7cf6273f577234bd979be",
+      "size": 17474465,
+      "toolchain": {
+        "android_ndk": "27.2.12479018",
+        "api_level": 26
+      }
+    },
+    "ios-arm64-metal": {
+      "asset": "skia-sdk-ios-arm64-metal.zip",
+      "sdk_id": "c8a0a834740051abdda1732506459ccd40b38548a7bcde77eff8ddc7bf4fff64",
+      "sha256": "b9145ffe36bc6acb1f3566ad484a12fa6a294c82f3e0faf5c1b49610e5af6886",
+      "size": 14323610,
+      "toolchain": {
+        "deployment_target": "17.0",
+        "sdk": "iphoneos",
+        "sdk_version": "18.5",
+        "xcode": "Xcode 16.4; Build version 16F6"
+      }
+    },
+    "ios-simulator-arm64-metal": {
+      "asset": "skia-sdk-ios-simulator-arm64-metal.zip",
+      "sdk_id": "4f7d601f19227488896435fdd5f268b5b77f2f2812a80e47863db990e1022b40",
+      "sha256": "6c2e333bd2640e7c22260a9150bc44a91e5858508d8254f169c4f6b3dd96b2ba",
+      "size": 14353640,
+      "toolchain": {
+        "deployment_target": "17.0",
+        "sdk": "iphonesimulator",
+        "sdk_version": "18.5",
+        "xcode": "Xcode 16.4; Build version 16F6"
+      }
+    },
+    "macos-arm64-metal": {
+      "asset": "skia-sdk-macos-arm64-metal.zip",
+      "sdk_id": "045e5d9c76baea993e8b69bc6530e7694ee4225a2d391ca78ec16443a5cfc60a",
+      "sha256": "79d1e717c6f327d309941a3e825a0ee48e7e50990961993886b7e6894b416a5e",
+      "size": 16640783,
+      "toolchain": {
+        "sdk": "macosx",
+        "sdk_version": "15.5",
+        "xcode": "Xcode 16.4; Build version 16F6"
+      }
+    },
+    "web-wasm-webgl2": {
+      "asset": "skia-sdk-web-wasm-webgl2.zip",
+      "sdk_id": "875f2519b656fbfd42c42596551c3e836d2d29657a021b01ca23c5521f1c9db2",
+      "sha256": "f71878450a3ffd022974c551ae13519825beab2f9e15ab0351fb56a3d8b01d6b",
+      "size": 11213266,
+      "toolchain": {
+        "emscripten": "6.0.6",
+        "llvm": "22.1.8",
+        "pthread": false
+      }
+    },
+    "windows-x64-d3d12": {
+      "asset": "skia-sdk-windows-x64-d3d12.zip",
+      "sdk_id": "2154617d78bb73556e8238901e4ee1a233eded9bd0897ad795124772dc03902c",
+      "sha256": "80a1716847938d6765605f70a683e1fecb2bd63075d05fbab1b95903db1e1fc6",
+      "size": 30360108,
+      "toolchain": {
+        "llvm": "22.1.8",
+        "msvc_toolset": "14.51.36231",
+        "windows_sdk": "10.0.26100.0"
+      }
+    }
+  }
+}

@@ -47,10 +47,12 @@ def read_installed_manifest(root: Path) -> dict | None:
         return None
 
 
-def verify_locked_identity(manifest: dict, lock: dict, target_name: str) -> None:
+def verify_locked_identity(
+    manifest: dict, lock: dict, target_name: str, profile_path: Path,
+) -> None:
     target = lock["targets"][target_name]
     identity = manifest["identity"]
-    profile = load_profile(DEFAULT_PROFILE)
+    profile = load_profile(profile_path)
     current = {
         "profile": profile["profile"],
         "profile_hash": profile_hash(profile),
@@ -78,12 +80,14 @@ def verify_locked_identity(manifest: dict, lock: dict, target_name: str) -> None
         raise RuntimeError("manifest GN identity does not match the locked profile")
 
 
-def verify_installed(root: Path, lock: dict, target_name: str) -> dict:
+def verify_installed(
+    root: Path, lock: dict, target_name: str, profile_path: Path = DEFAULT_PROFILE,
+) -> dict:
     manifest = read_installed_manifest(root)
     if manifest is None:
         raise RuntimeError("installed SDK has no valid manifest")
     validate_manifest(manifest, expected_target=target_name)
-    verify_locked_identity(manifest, lock, target_name)
+    verify_locked_identity(manifest, lock, target_name, profile_path)
     listed = manifest["files"]
     expected_paths = {"manifest.json", *(entry["path"] for entry in listed)}
     actual_paths = {
@@ -101,6 +105,7 @@ def verify_installed(root: Path, lock: dict, target_name: str) -> dict:
 def install(
     target_name: str, lock_path: Path = LOCK_PATH, *,
     install_root: Path = INSTALL_ROOT, base_url: str | None = None,
+    profile_path: Path = DEFAULT_PROFILE,
 ) -> dict:
     started = time.monotonic()
     lock = load_lock(lock_path)
@@ -112,7 +117,7 @@ def install(
     if not destination.exists() and previous.exists():
         previous.replace(destination)
     try:
-        manifest = verify_installed(destination, lock, target_name)
+        manifest = verify_installed(destination, lock, target_name, profile_path)
         return {
             "target": target_name, "sdk_id": manifest["sdk_id"], "bytes": 0,
             "seconds": round(time.monotonic() - started, 3), "source": "installed",
@@ -133,12 +138,12 @@ def install(
         if file_sha256(archive) != target["sha256"]:
             raise RuntimeError("download SHA-256 does not match SDK lock")
         summary = verify_archive(
-            archive, DEFAULT_PROFILE, target_name, extract,
+            archive, profile_path, target_name, extract,
             enforce_current_recipe=False,
         )
         if summary["sdk_id"] != target["sdk_id"]:
             raise RuntimeError("verified archive SDK ID does not match lock")
-        verify_installed(extract, lock, target_name)
+        verify_installed(extract, lock, target_name, profile_path)
         if previous.exists():
             shutil.rmtree(previous)
         if destination.exists():
@@ -165,11 +170,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True)
     parser.add_argument("--lock", type=Path, default=LOCK_PATH)
+    parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--install-root", type=Path, default=INSTALL_ROOT)
     parser.add_argument("--summary-file", type=Path)
     args = parser.parse_args()
     result = install(
         args.target, args.lock.resolve(), install_root=args.install_root.resolve(),
+        profile_path=args.profile.resolve(),
     )
     if args.summary_file:
         with args.summary_file.open("a", encoding="utf-8") as summary:

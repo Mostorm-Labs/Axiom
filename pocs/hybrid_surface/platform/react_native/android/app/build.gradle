@@ -1,0 +1,65 @@
+apply plugin: 'com.android.application'
+apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'com.facebook.react'
+
+react {
+    autolinkLibrariesWithApp()
+    hermesCommand = file('../../node_modules/hermes-compiler/hermesc/osx-bin/hermesc').absolutePath
+}
+
+def canvasAbi = providers.gradleProperty('canvasPoc05Abi').orElse('arm64-v8a')
+def canvasSdkTarget = canvasAbi.map { abi ->
+    if (abi == 'arm64-v8a') return 'android-arm64-v8a-gles3'
+    if (abi == 'x86_64') return 'android-x86_64-gles3'
+    throw new GradleException("Unsupported POC-05 ABI: ${abi}")
+}
+
+android {
+    namespace 'dev.mostorm.axiom.poc05'
+    compileSdk rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    ndkVersion rootProject.ext.ndkVersion
+
+    defaultConfig {
+        applicationId 'dev.mostorm.axiom.poc05'
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName '0.1'
+        externalNativeBuild {
+            cmake {
+                arguments '-DCANVAS_BUILD_POC01=OFF',
+                        '-DCANVAS_BUILD_POC02=ON',
+                        '-DCANVAS_POC02_BUILD_TESTS=OFF',
+                        '-DCANVAS_POC02_ENABLE_SKIA=ON',
+                        '-DCANVAS_POC02_BUILD_PLATFORM_SHELLS=OFF',
+                        '-DCANVAS_BUILD_POC03=ON',
+                        '-DCANVAS_POC03_BUILD_TESTS=OFF',
+                        '-DCANVAS_POC03_ENABLE_SKIA=ON',
+                        '-DCANVAS_POC03_ENABLE_INK_INTEGRATION=ON',
+                        '-DCANVAS_BUILD_POC05=ON',
+                        '-DCANVAS_POC05_BUILD_TESTS=OFF',
+                        "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../../.deps/skia-sdk/${canvasSdkTarget.get()}"
+                cppFlags '-std=c++20'
+                targets 'canvas_poc05_android'
+            }
+        }
+        ndk { abiFilters canvasAbi.get() }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('../../../../../../CMakeLists.txt')
+            version '3.30.5'
+        }
+    }
+
+    packagingOptions {
+        jniLibs { useLegacyPackaging = false }
+    }
+}
+
+dependencies {
+    implementation('com.facebook.react:react-android')
+    implementation('com.facebook.react:hermes-android')
+}

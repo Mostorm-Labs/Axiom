@@ -1,0 +1,9 @@
+{
+  "package": "Microsoft.Web.WebView2",
+  "version": "1.0.2592.51",
+  "runtime_compatibility": "151.0.4129.93",
+  "native_header_sha256": "61FBECE755D9EA5AF42AB5EADF512B673317A4FE8B3BCF1D403EBFB2D18CDA3B",
+  "nupkg_sha256": "805C79E05184FAB18C9FE7B8BA820C598399B97ADC1FBF5B0EA490EFAD91D5B8",
+  "architecture": "x64",
+  "loader": "build/native/x64/WebView2LoaderStatic.lib"
+}

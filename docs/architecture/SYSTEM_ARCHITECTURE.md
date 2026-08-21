@@ -694,6 +694,13 @@ eviction order、memory-pressure fallback 和计费归属必须在真实设备�
 
 POC-05 固定使用 Overlay 做未来能力的 architecture risk proof；ExternalSurface/Video/Embed 不进入 V1 产品实现：
 
+POC-05 已由 Web（POC-01 WASM/WebGL2 Canvas + POC-05 DOM Overlay）、Windows
+RNW、Android RN 与 Apple RN/Fabric 的真实 Web/video surface 验证并标记
+`Accepted`。接受范围是受控 Overlay 边界，不是产品 C ABI bridge、任意节点间
+DOM/native 穿插或 zero-copy texture composition；详见
+[ADR-0023](../adr/0023-hybrid-surface-controlled-overlays.md) 和
+[收敛报告](../evidence/poc05/consolidated-validation-20260820.md)。
+
 - RuntimeScene 保存 ExternalSurface 的语义 bounds、clip、opacity、pass info 和稳定 `ExternalSurfaceId`；native view/surface handle 只存在于 Platform Shell 的 `ExternalSurfaceRegistry`/adapter。
 - Platform Shell 通过 ExternalSurfaceId 查找 registry entry，创建并定位 WebView/Video surface。
 - Compositor 输出 overlay placement，不把外部 surface 当 Skia texture。

@@ -28,6 +28,7 @@ ADR 记录会长期影响 Runtime 边界、平台集成、兼容性或性能演�
 | [0020](0020-document-snapshot-operation-recovery.md) | Accepted | DocumentSnapshot + committed Operation continuation 确定性恢复目标 Document |
 | [0021](0021-render-scene-spatial-index-tiling-boundaries.md) | Accepted | Runtime Scene facade、SkSG 内部 Render DAG、动态空间索引、DamageTracker 与 Tile/LOD 所有权边界 |
 | [0022](0022-runtime-public-c-api-and-cpp-style.md) | Accepted | 产品 Runtime 使用稳定 C ABI；固定 Control/Hot Path、ports、ABI versioning 与 Canvas C++ 风格 |
+| [0023](0023-hybrid-surface-controlled-overlays.md) | Accepted | Web、Windows RNW、Android RN、Apple RN/Fabric 统一采用受控 Overlay；固定 z-order 与 native hot path |
 
 ## 必须后续建立的实验型 ADR
 

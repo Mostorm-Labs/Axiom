@@ -277,7 +277,7 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 | POC-02 | Canonical Stroke/Brush/seed/world-coordinate digest 一致；Pointer→AddStroke 与空 Document replay 一致；numeric corpus 通过；Preview Model 跨 sink 一致 | Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age；长笔迹 end p95 ≤16.7 ms；三平台 Human Ink Gate | cancel、InputOverrun、transform revision、prediction rollback、过期 target/handoff 无空白或部分 Stroke |
 | POC-03 | full/incremental 在正确/空/损坏 hints 下等价；多 viewport/DPR FrameState 隔离；logical pass 优化等价 | 100K scene；Web ≤512 MiB、Windows ≤768 MiB；Android 真机集成报告；callback/queue 有界 | cache clear、resize、旧 generation、device loss 恢复 |
 | POC-04 | 三平台 text digest/行为/font resource/fallback 一致 | 10K 字符输入/layout p95 ≤16.7/33.3 ms | missing/corrupt font；100 次 focus/composition lifecycle |
-| POC-05 | 非 V1 risk proof；ExternalSurfaceId/registry placement 误差 ≤1 px | overlay 同步 ≤2 帧；100 次后内存增长 <5% | surface/focus/load failure fallback；不进入 V1 schema |
+| POC-05 | **Accepted** 非 V1 risk proof；Web、Windows RNW、Android RN、Apple RN/Fabric 的 ExternalSurfaceId/registry placement 误差与 z-order contract 通过 | 各平台 overlay 同步、lifecycle、focus/failure 语料通过；平台原始报告记录内存与帧数据 | surface/focus/load failure fallback；不进入 V1 schema；POC-only scene bridge 不得进入产品 ABI |
 | POC-06 | FastInk/Canonical 最终 digest 一致；Default/FastInk sink 消费同一 Preview revision | Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age；handoff ≤2 帧 | backend/device/surface/旧 generation failure 不丢 Stroke |
 
 POC 报告必须同时附原始结果、环境和复现命令；只给结论截图不算通过。

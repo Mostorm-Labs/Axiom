@@ -59,7 +59,7 @@ def main() -> int:
             if digest and digest != f"sha256:{target['sha256']}":
                 raise RuntimeError(f"GitHub asset digest mismatch: {target['asset']}")
         if set(sums) != expected_assets - {"SHA256SUMS"}:
-            raise RuntimeError("SHA256SUMS asset set does not match index and seven SDKs")
+            raise RuntimeError("SHA256SUMS asset set does not match index and SDK targets")
         index_digest = assets.get("skia-sdk-index.json", {}).get("digest")
         if index_digest and index_digest != f"sha256:{file_sha256(index_path)}":
             raise RuntimeError("GitHub index asset digest mismatch")
@@ -67,7 +67,7 @@ def main() -> int:
         if sums_digest and sums_digest != f"sha256:{file_sha256(sums_path)}":
             raise RuntimeError("GitHub SHA256SUMS asset digest mismatch")
         if set(assets) != expected_assets:
-            raise RuntimeError("release asset set is not exactly index, sums, and seven SDKs")
+            raise RuntimeError("release asset set is not exactly index, sums, and SDK targets")
     output = args.output.resolve()
     output.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"lock": str(output), "set_id": lock["set_id"], "tag": args.tag}, sort_keys=True))
