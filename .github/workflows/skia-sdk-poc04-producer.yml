@@ -1,13 +1,6 @@
 name: POC-04 RichText Skia SDK Producer
 
 on:
-  pull_request:
-    paths:
-      - "deps.lock.json"
-      - "tools/skia/**"
-      - "pocs/rich_text/**"
-      - "!pocs/rich_text/skia-sdk.lock.json"
-      - ".github/workflows/skia-sdk-poc04-producer.yml"
   workflow_dispatch:
 
 permissions:

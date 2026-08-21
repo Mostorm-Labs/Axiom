@@ -26,6 +26,7 @@ from package import (  # noqa: E402
 )
 from build import gn_archive_closure, gn_label  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
+from smoke_consumer import canvas_variant_cmake_args, cmake_apple_arch  # noqa: E402
 
 
 class SdkMetadataTest(unittest.TestCase):
@@ -385,6 +386,50 @@ class SdkMetadataTest(unittest.TestCase):
         )
         self.assertIn("SkPath::Rect", probe)
         self.assertNotIn("left.addRect", probe)
+
+    def test_apple_cmake_arch_translates_gn_x64(self) -> None:
+        self.assertEqual(cmake_apple_arch("x64"), "x86_64")
+        self.assertEqual(cmake_apple_arch("arm64"), "arm64")
+
+    def test_full_asan_consumer_links_the_asan_runtime_explicitly(self) -> None:
+        self.assertEqual(
+            canvas_variant_cmake_args("asan"),
+            [
+                "-DCANVAS_SKIA_SDK_ASAN_CONSUMER=ON",
+                "-DCMAKE_PROJECT_INCLUDE="
+                f"{SKIA_TOOLS / 'cmake/asan_consumer.cmake'}",
+            ],
+        )
+        self.assertEqual(canvas_variant_cmake_args("release"), [])
+        injector = (SKIA_TOOLS / "cmake/asan_consumer.cmake").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("set(CANVAS_POC01_ENABLE_SANITIZERS ON", injector)
+        self.assertIn("add_link_options(-fsanitize=address)", injector)
+
+    def test_only_r1_full_producer_tracks_shared_skia_tooling(self) -> None:
+        workflows = SKIA_TOOLS.parents[1] / ".github/workflows"
+        legacy_producers = (
+            workflows / "skia-sdk-producer.yml",
+            workflows / "skia-sdk-poc04-producer.yml",
+        )
+        for workflow in legacy_producers:
+            trigger = workflow.read_text(encoding="utf-8").split(
+                "permissions:", maxsplit=1
+            )[0]
+            self.assertNotIn("pull_request:", trigger)
+            self.assertIn("workflow_dispatch:", trigger)
+        full_trigger = (workflows / "skia-sdk-r1-full-producer.yml").read_text(
+            encoding="utf-8"
+        ).split("permissions:", maxsplit=1)[0]
+        self.assertIn("pull_request:", full_trigger)
+        self.assertIn('"tools/skia/**"', full_trigger)
+        for consumer in ("poc01.yml", "poc03.yml", "poc04.yml"):
+            trigger = (workflows / consumer).read_text(encoding="utf-8").split(
+                "concurrency:", maxsplit=1
+            )[0]
+            self.assertNotIn('"tools/skia/**"', trigger)
+            self.assertNotIn('"tools/**"', trigger)
 
     def test_r1_full_profile_requires_bundled_dependencies(self) -> None:
         profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")

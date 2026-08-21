@@ -9,10 +9,17 @@ on:
       - "skia-sdk.lock.json"
       - "cmake/**"
       - "pocs/shared_engine/**"
-      - "tools/**"
       - ".github/workflows/poc01.yml"
   push:
     branches: [main]
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "deps.lock.json"
+      - "skia-sdk.lock.json"
+      - "cmake/**"
+      - "pocs/shared_engine/**"
+      - ".github/workflows/poc01.yml"
   workflow_dispatch:
 
 concurrency:

@@ -27,6 +27,22 @@ def built_probe(build: Path, platform: str) -> Path:
     return candidates[0]
 
 
+def cmake_apple_arch(profile_arch: str) -> str:
+    """Translate profile/GN architecture names to Apple's CMake spellings."""
+    return {"x64": "x86_64", "arm64": "arm64"}.get(profile_arch, profile_arch)
+
+
+def canvas_variant_cmake_args(variant: str) -> list[str]:
+    """Return explicit Canvas consumer instrumentation for an SDK variant."""
+    if variant == "asan":
+        injector = ROOT / "tools/skia/cmake/asan_consumer.cmake"
+        return [
+            "-DCANVAS_SKIA_SDK_ASAN_CONSUMER=ON",
+            f"-DCMAKE_PROJECT_INCLUDE={injector}",
+        ]
+    return []
+
+
 def run_asan_runtime_smoke(build: Path, platform: str) -> None:
     probe = built_probe(build, platform)
     if platform in ("windows", "macos"):
@@ -99,8 +115,7 @@ def main() -> int:
         f"-DCANVAS_SKIA_SDK_EXPECTED_ID={verified['sdk_id']}",
         f"-DCANVAS_SKIA_SDK_VARIANT={args.variant}",
     ]
-    if args.variant == "asan":
-        configure.append("-DCANVAS_POC01_ENABLE_SANITIZERS=ON")
+    configure += canvas_variant_cmake_args(args.variant)
     probe_configure = [
         "cmake", "-S", str(ROOT / "tools/skia/cmake_probe"), "-B", str(probe_build),
         f"-DCMAKE_BUILD_TYPE={configuration}",
@@ -135,8 +150,9 @@ def main() -> int:
             probe_configure.append(f"-DCMAKE_CXX_COMPILER={Path(args.cxx).resolve()}")
         build_target = "canvas_poc01_windows"
     elif platform == "macos":
-        configure += ["-G", "Ninja", f"-DCMAKE_OSX_ARCHITECTURES={target['arch']}"]
-        probe_configure += ["-G", "Ninja", f"-DCMAKE_OSX_ARCHITECTURES={target['arch']}"]
+        apple_arch = cmake_apple_arch(target["arch"])
+        configure += ["-G", "Ninja", f"-DCMAKE_OSX_ARCHITECTURES={apple_arch}"]
+        probe_configure += ["-G", "Ninja", f"-DCMAKE_OSX_ARCHITECTURES={apple_arch}"]
         build_target = "canvas_poc01_macos_runner"
     elif platform in ("ios", "ios-simulator"):
         toolchain = "ios.toolchain.cmake" if platform == "ios" else "ios-simulator.toolchain.cmake"

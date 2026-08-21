@@ -36,6 +36,17 @@ set_property(CACHE CANVAS_SKIA_SDK_VARIANT PROPERTY STRINGS release debug asan)
 if(NOT CANVAS_SKIA_SDK_VARIANT MATCHES "^(release|debug|asan)$")
   message(FATAL_ERROR "CANVAS_SKIA_SDK_VARIANT must be release, debug, or asan")
 endif()
+if(CANVAS_SKIA_SDK_VARIANT STREQUAL "asan" AND
+   NOT CANVAS_SKIA_SDK_ASAN_CONSUMER)
+  message(FATAL_ERROR
+    "The ASan Skia SDK requires -DCANVAS_SKIA_SDK_ASAN_CONSUMER=ON so the "
+    "consumer and final binary link the matching sanitizer runtime")
+endif()
+if(CANVAS_SKIA_SDK_ASAN_CONSUMER AND
+   NOT CANVAS_SKIA_SDK_VARIANT STREQUAL "asan")
+  message(FATAL_ERROR
+    "CANVAS_SKIA_SDK_ASAN_CONSUMER may only be used with the asan SDK variant")
+endif()
 set(CANVAS_SKIA_SDK_LOCK "" CACHE FILEPATH
     "Consumer lock for the selected Skia SDK profile")
 
