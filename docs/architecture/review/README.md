@@ -146,3 +146,9 @@ Native React Native Shell 和 Shared TypeScript Data Runtime 边界，其中一�
 步骤 3 的需求接收、编号、状态和去重规则已经确认，当前正在审核 Canvas、Page/Viewport、
 对象、本地编辑、Ink 与 RichText。需求文档不会直接替换现行 ADR，也不会把 178 个竞品
 source rows 原样变成 178 个正式需求；`SRC-CHAT-07` 在正文可核验前保持来源级缺口。
+
+2026-08-22，用户对第二组范围作了明确修正：Connector、Group、Frame、Sticky、PDF，
+Lasso、Align/Distribute、Smart Snap，以及 whole-stroke、segment、Pixel/Dab erase 都进入
+实现范围；Arc Preview backend 为硬性实现能力，Arc 失效时必须回退到 Canonical-only rendering。
+这些内容当前记录为需求审查中的 `INT-*`/`REQ-*` Candidate，不自动改写现行 Accepted 文档、
+稳定 ABI 或实现状态；对应的冲突和后续 ADR 输入见[步骤 3 需求基线](03_REQUIREMENTS_BASELINE.md)。

@@ -292,6 +292,25 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 `INT-OBJ-*`，RichText/IME 先进入 `INT-STRUCT-*`；它们分别可以产生 `REQ-EDIT-*` 和
 `REQ-TEXT-*`，无需为本组静默修改已确认的编号规则。
 
+### 2.1 用户范围修正（待本组确认）
+
+用户已明确要求把以下能力纳入实现范围：
+
+- Connector、Group、Frame、Sticky 和 PDF 不再作为“V1 后置”或“仅冻结扩展边界”；它们进入
+  本组候选需求，具体对象语义、资源边界、布局深度和交付阶段仍需逐项验收；
+- Lasso、对齐/分布（Align/Distribute）和 Smart Snap 进入选择与变换范围；候选算法、阈值、
+  参考系和关闭策略仍不在本轮冻结；
+- 整笔、分段（Segment）和 Pixel/Dab 三种擦除语义都要实现。三者的 Stroke identity、几何
+  分裂、栅格/遮罩、撤销重放和缓存语义必须分别验证；
+- Arc Preview backend 是硬性实现要求。Arc 不可用或 presentation 失败时，必须自动切换为
+  Canonical-only rendering：不得丢失已确认输入、取消 Canonical 提交、污染 Document 或
+  改变 Stroke/Document digest。
+
+这些是用户确认的范围方向，不等于本步骤已经批准了 P0/P1、稳定 ABI、具体 schema 或算法。
+其中 Canonical-only 是比现行 ADR 对 fallback 目标更窄的产品约束；现行 ADR 已保证 Arc 故障
+不得传播到 Canonical/Document，具体切换目标和可见性门禁留给后续 ADR 澄清。
+下文将其拆成独立 `INT-*`/`REQ-*` 候选，并保留 `Candidate`、`Pending` 等成熟度状态。
+
 ### 2. 已规范化的接收项
 
 | Intake ID | 规范化结果 | 主要来源与去重 | 当前处理 |
@@ -302,15 +321,19 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 | `INT-CAN-004` | Mini-map、outline、第二窗口和 presentation view 是独立产品能力。 | 功能基线 CAN-05；矩阵 overview/presentation | `Deferred`；不能由多 View conformance 自动推出 V1 UI |
 | `INT-OBJ-001` | Shape、Image、VectorPath 分别需要真实的创建、编辑、删除、变换和稳定语义。 | 仓库 V1 节点；功能基线 OBJ-01/02/03/05；矩阵 basic objects | `Split` 为三个对象需求 |
 | `INT-OBJ-002` | 用户需要命中、选择、多选并变换对象；Selection 本身不是 Document 内容。 | 功能基线 SEL-01～06；矩阵 select/transform/duplicate | `Split`；最小选择和变换深度待确认 |
-| `INT-OBJ-003` | 对象的锁定、可见性和前后顺序需要与渲染、HitTest 和编辑结果一致。 | 功能基线 OBJ-06/07；矩阵 lock/z-order | `Received`；Group/Frame 不随之进入 V1 |
+| `INT-OBJ-003` | 对象的锁定、可见性和前后顺序需要与渲染、HitTest 和编辑结果一致；容器对象也必须遵守同一规则。 | 功能基线 OBJ-06/07；矩阵 lock/z-order | `Received` |
 | `INT-OBJ-004` | 本地 Undo/Redo 应覆盖已承诺编辑，并形成可重放的新修改，而不是回拨 Document。 | 功能基线 HIS-01/SEL-07；矩阵 undo/redo；ADR-0014 | `Received`；Version History 已拆到第三组 |
-| `INT-OBJ-005` | Connector、Group、Frame、Sticky 等结构化对象是产品范围候选。 | 功能基线和矩阵；仓库扩展边界 | `Conflict`：来源称 V1 候选，现行仓库明确非 V1 |
+| `INT-OBJ-005` | Group、Frame、Sticky 进入实现范围；容器层级、承载关系、文本编辑和选择/变换需要独立可观察语义。 | 用户范围修正；功能基线和矩阵；现行扩展边界（冲突记录） | `Split`：Group/Frame/Sticky 的对象语义待分别确认 |
+| `INT-OBJ-006` | Connector 进入实现范围；连接关系、端点、命中、路径更新和渲染结果不能退化为普通 VectorPath。 | 用户范围修正；功能基线和矩阵；现行 Connector 扩展边界（冲突记录） | `Received`；routing 深度和布局约束待确认 |
+| `INT-OBJ-007` | PDF 进入实现范围；用户可观察到的导入、分页/页内内容、渲染、变换、资源缺失和错误行为需要定义。 | 用户范围修正；功能基线和矩阵；现行 PDF 扩展边界（冲突记录） | `Received`；解码、分页和资源安全边界待确认 |
+| `INT-OBJ-008` | Lasso、Align/Distribute 和 Smart Snap 是本地选择/变换工具，而不是可选的市场差异化附加项。 | 用户范围修正；功能基线 SEL/XFORM；竞品矩阵 | `Split`：几何规则、参考系、阈值和 opt-out 待确认 |
 | `INT-IO-001` | 对当前 Selection 的 copy/cut/paste 需要清楚的对象语义和平台格式。 | 功能基线 Clipboard；矩阵 copy/paste | `Deferred` 到第四组；本组只记录依赖 |
 | `INT-INK-001` | confirmed 笔输入产生可编辑、可回放的 Vector/Dab Canonical Stroke。 | 功能基线 INK-01/02/04/05；矩阵 stylus/brush；POC-02 | `Received` |
 | `INT-INK-002` | 活动笔迹有即时 Preview；cancel、过载或 Preview 故障不产生部分 Document 或丢失 Canonical Stroke。 | 功能基线 low-latency；矩阵 Ink；POC-02/06 | `Received`；具体 SLO 留第五组 |
 | `INT-INK-003` | V1 笔刷要有清楚的颜色、宽度、透明度、pressure/tilt 与 Vector/Dab 参数范围。 | 功能基线 pen preset；矩阵 pen/highlighter/texture | `Received`；自定义纹理和产品 preset 数量待定 |
-| `INT-INK-004` | 用户需要可撤销的橡皮擦结果，整笔、分段和 pixel/dab erase 是不同语义。 | 功能基线 INK-03；矩阵 eraser variants；仓库 extension boundary | `Conflict`：尚未选择 V1 最小模式 |
-| `INT-INK-005` | Ink lasso、group/split/merge、识别为文本和 smart shape 是后续候选。 | 功能基线 INK-06/07；竞品矩阵 | `Deferred`；不由市场频次扩大当前 V1 |
+| `INT-INK-004` | 用户需要可撤销的橡皮擦结果；整笔、分段和 Pixel/Dab erase 都是必须分别支持的语义。 | 用户范围修正；功能基线 INK-03；矩阵 eraser variants；仓库 extension boundary（冲突记录） | `Split`：三种语义分别建立候选需求 |
+| `INT-INK-005` | Ink stroke 的 group/split/merge、识别为文本和 smart shape 仍是与擦除、选择工具不同的能力；这里的 group 不指 Group 容器对象。 | 功能基线 INK-06/07；竞品矩阵 | `Deferred`；不把相邻能力误并入本轮擦除需求 |
+| `INT-INK-006` | Arc Preview backend 必须存在并与 Canonical Renderer 共享 Stroke 语义；Arc 失败时必须可切换 Canonical-only。 | 用户范围修正；ADR-0004/0011/0024 | `Received`；实现约束与产品故障行为分开验收 |
 | `INT-STRUCT-001` | RichText 是 paragraphs/runs/styles/attributes 的一级语义对象，不是带字符串的 Shape。 | 仓库 ADR-0006；功能基线 OBJ-01；POC-04 | `Received` |
 | `INT-STRUCT-002` | 用户需要 selection、caret、composition、直接输入、删除、粘贴和 Undo/Redo 的统一文本编辑结果。 | 功能基线 Text；矩阵 Rich Text；POC-04 | `Split` 为文本模型、IME 和 History 需求 |
 | `INT-STRUCT-003` | V1 富文本样式需要明确而有限的 run/paragraph 能力。 | 功能基线 EXT-03；竞品矩阵 | `Received`；样式矩阵待确认 |
@@ -322,10 +345,10 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 
 - Page semantic root 与产品页签/导航；
 - 单 View 状态隔离与 V1 第二窗口/mini-map 产品功能；
-- VectorPath 与自动 routing Connector；
-- Selection 与 lasso/eraser；
+- VectorPath 与 Connector；Connector 的 routing 深度另行验收，但不再把 Connector 整体排除；
+- Selection、Lasso、Align/Distribute 与 Smart Snap；
 - Undo/Redo 与持久 Version History；
-- 整笔擦、分段擦和 pixel/dab erase；
+- whole-stroke、segment 和 Pixel/Dab erase 三种不同擦除语义；
 - TextDocument、平台 IME UI 和系统字体；
 - canonical RichText 基础能力与复杂字符级协作。
 
@@ -342,20 +365,32 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 | `REQ-FUNC-OBJ-001` | 用户可以创建、编辑几何/样式、变换、排序和删除 Shape，并通过保存/重放保持相同语义结果。 | `INT-OBJ-001`；V1 Shape | R2 | `Candidate`；POC only；mechanism exists；Evidence `Partial` |
 | `REQ-FUNC-OBJ-002` | 用户可以插入、替换、布局/变换和删除 Image；资源不可用时不得静默换成别的内容。 | `INT-OBJ-001`；V1 Image | R2/R3 | `Candidate`；POC only；mechanism exists；Evidence `Partial`；资源与色彩移交第三/五组 |
 | `REQ-FUNC-OBJ-003` | 用户可以创建、编辑和变换 VectorPath，同时保留可重放的矢量语义，而非退化为 bitmap。 | `INT-OBJ-001`；V1 VectorPath | R2 | `Candidate`；最小 POC render；产品编辑深度和 Evidence `Pending` |
+| `REQ-FUNC-OBJ-004` | 用户可以创建、编辑、嵌套/解除嵌套、选择、变换和删除 Group/Frame 容器；容器与子对象的层级、裁剪/承载关系、命中、排序、保存、重放和撤销结果一致。 | `INT-OBJ-005`；用户范围修正；现行扩展边界待重审 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-FUNC-OBJ-005` | 用户可以创建、编辑、选择、变换和删除 Sticky；其文本、样式、尺寸、层级、命中、保存、重放和 Undo/Redo 结果保持一致。 | `INT-OBJ-005`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-FUNC-OBJ-006` | 用户可以创建、编辑、连接、移动端点和删除 Connector；连接关系、端点命中、路径更新、渲染、排序、保存、重放和撤销不得退化为普通 VectorPath。 | `INT-OBJ-006`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-FUNC-OBJ-007` | 用户可以导入并使用 PDF 内容；在声明的分页/页内模型下可查看、选择（若适用）、变换、保存和重放，且损坏或缺失资源有确定错误结果。 | `INT-OBJ-007`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
 | `REQ-EDIT-SEL-001` | 用户可以按明确的 SelectionPolicy 选择和多选可编辑对象；Selection/hover/handles 不进入 Document。 | `INT-OBJ-002/003` | R2/R3 | `Candidate`；POC harness；mechanism exists；产品 Evidence `Pending` |
+| `REQ-EDIT-SEL-002` | 用户可以使用 Lasso 选择符合 SelectionPolicy 的对象；点选、框选、Lasso 和多选对 locked/hidden/container/Connector 对象的结果可预测且不产生部分选择状态。 | `INT-OBJ-002/003/006/008`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
 | `REQ-EDIT-XFORM-001` | 对象移动、缩放、旋转和已声明样式修改作为原子语义编辑提交；取消或失败不暴露部分修改。 | `INT-OBJ-002`；Operation 唯一写路径 | R2 | `Candidate`；POC variants；mechanism exists；Evidence `Partial` |
+| `REQ-EDIT-XFORM-002` | 用户可以对选中的对象执行 Align/Distribute；参考系、间距、容器边界、最小对象数、舍入和失败行为明确，结果通过原子 Operation 提交并可撤销/重放。 | `INT-OBJ-002/003/005/008`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-EDIT-SNAP-001` | 变换和绘制过程中提供可关闭的 Smart Snap；候选、阈值、优先级、参考系和跨容器行为确定且可重放，未命中或取消不改变 Document。 | `INT-OBJ-002/003/005/006/008`；用户范围修正；ADR-0021 边界 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
 | `REQ-EDIT-ORDER-001` | 用户调整对象前后顺序后，渲染、HitTest、保存和重放使用同一稳定顺序；并发排序算法不在本组冻结。 | `INT-OBJ-003` | R2 | `Candidate`；implementation `Partial/Absent`；Evidence `Pending` |
 | `REQ-EDIT-HIST-001` | 用户可以撤销/重做本地已承诺编辑；系统生成新的原子 compensating Operations，并明确报告 applied/no-op/rejected/conflicted。 | `INT-OBJ-004`；ADR-0014 | R2；协作交错 R4 | `Candidate`；Text POC partial；mechanism exists；通用 Evidence `Pending` |
 | `REQ-INK-001` | 有效 confirmed 输入产生可编辑、保存和重放的 VectorStroke 或 DabStroke；历史样本不被静默丢失、重复或用新 Viewport 重解释。 | `INT-INK-001`；ADR-0004/0012/0018 | R2/R3 | `Candidate`；POC；mechanism exists；Evidence `Partial/Pending` |
 | `REQ-INK-002` | 书写过程中提供可降级的即时 Preview；prediction 不进入 Document，cancel/overrun/fallback 不留下部分 Stroke，最终显示与 Canonical Stroke 一致。 | `INT-INK-002`；ADR-0011/0024 | R3 | `Candidate`；POC；mechanism exists；物理延迟/visible handoff `Failed/Pending` |
 | `REQ-INK-003` | Vector/Dab Stroke 保存版本化 Brush 语义，并支持本组确认的最小颜色、宽度、透明度和输入映射；跨端重放结果一致。 | `INT-INK-003` | R2 | `Candidate`；POC；mechanism exists；产品 brush matrix `Pending` |
+| `REQ-INK-004` | 用户可以执行 whole-stroke erase；操作是原子的、可撤销、可保存和可重放，且不会留下孤立的 Stroke/资源引用。 | `INT-INK-004`；用户范围修正 | R2 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-INK-005` | 用户可以执行 segment erase；擦除后的 Stroke fragment identity、几何分裂、空间索引、渲染、Undo/Redo、保存和 replay 语义确定且不丢失未擦除部分。 | `INT-INK-004`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-INK-006` | 用户可以执行 Pixel/Dab erase；擦除区域、栅格/遮罩、质量、资源和缓存语义确定，可撤销、保存、重放并在跨端得到一致的可观察结果。 | `INT-INK-004`；用户范围修正 | R2/R3 | `Candidate`；实现 `Absent`；机制 `Planned`；Evidence `Pending` |
+| `REQ-INK-007` | Tier A 必须提供 Arc Preview backend，并与 Canonical Renderer 共享版本化 Stroke 语义；Arc 不可用或 presentation 失败时自动切换 Canonical-only rendering，不丢失 confirmed input、不取消 Canonical 提交、不污染 Document 或改变 digest。 | `INT-INK-002/006`；ADR-0004/0011/0024；用户范围修正 | R3 | `Candidate`；Arc `POC/Integration Ready`；mechanism exists；物理设备 Evidence `Pending` |
 | `REQ-TEXT-001` | RichText 从 V1 保存有序 paragraphs、runs、styles 和 attributes；平台 widget、JS state 或系统字体不能成为第二份文本真相。 | `INT-STRUCT-001`；ADR-0006 | R2 | `Candidate`；POC；mechanism exists；POC feasibility Evidence `Passed` |
 | `REQ-TEXT-002` | 用户可以编辑 selection/caret，输入、替换、换行、删除并完成 IME begin/update/commit/cancel；commit 产生一次原子可重放编辑，cancel 不改 Document。 | `INT-STRUCT-002` | R2/R3 | `Candidate`；POC；mechanism exists；POC-04 Evidence `Passed`，产品完整度 `Pending` |
 | `REQ-TEXT-003` | 给定声明的字体资源和 fallback，文本换行、selection/caret geometry 与最终语义可重复；缺字体/hash mismatch 有确定诊断。 | `INT-STRUCT-001/002` | R2/R3 | `Candidate`；POC；mechanism exists；POC-04 Evidence `Passed`，产品资源集成 `Pending` |
 | `REQ-TEXT-004` | V1 提供经本组确认的有限 run/paragraph 样式集合，并能保存、重放、撤销且跨 Tier A 得到相同语义。 | `INT-STRUCT-003` | R2/R3 | `Candidate`；POC `Partial`；具体范围和产品 Evidence `Pending` |
 
-这里没有创建 `REQ-INK-004`。在整笔、分段和 pixel/dab erase 的产品结果明确前，
-`INT-INK-004` 只是一项范围冲突；把 C ABI enum 或实验算法当作正式需求会倒置决策顺序。
+本轮已经分别创建 whole-stroke、segment 和 Pixel/Dab erase 候选需求，以及 Arc Preview
+backend/fallback 候选需求。它们仍是 `Candidate`，不表示当前实验 C ABI、POC enum 或算法已经
+满足产品语义；三种擦除必须分别提供 operation、history、replay、digest 和视觉验收证据。
 
 ## 十一、第二组验收方法草案
 
@@ -368,13 +403,17 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 - 若接受多 Page，另测 create/duplicate/delete/reorder、active page 切换、稳定 ID/order、保存、
   Undo/Redo 和缺失 Page 引用；具体保存/恢复故障进入第三组。
 
-### 2. Shape、Image、VectorPath 与本地编辑
+### 2. Shape、Image、VectorPath、结构化对象与本地编辑
 
-- 三种对象分别覆盖 create/edit/delete/transform/style/serialize/replay/undo/redo；
+- Shape、Image、VectorPath、Group、Frame、Sticky、Connector 和 PDF 分别覆盖其适用的
+  create/edit/delete/transform/style/serialize/replay/undo/redo；容器、连接关系和 PDF 分页/资源
+  行为不能用普通 Shape 的占位实现代替；
 - 选择变化只改变 EditorSession；提交变换只通过 Operation 修改 Document；
 - HitTest、selection overlay、最终 render 和 stable z-order 使用同一节点身份与顺序；
 - locked、hidden、透明对象、重叠对象和越界点击必须有明确 SelectionPolicy；
-- Image missing/corrupt、ResourceManifest 与 color/EXIF/ICC 的完整 oracle 分别移交第三、五组，
+- Lasso、Align/Distribute 和 Smart Snap 覆盖单对象、多对象、容器边界、负坐标、未命中、取消
+  和跨 View 语料；失败或取消不得产生部分 Operation；
+- Image/PDF missing/corrupt、ResourceManifest 与 color/EXIF/ICC 的完整 oracle 分别移交第三、五组，
   但本组不能用 placeholder 掩盖资源身份变化。
 
 ### 3. History
@@ -388,8 +427,11 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 
 - 录制 60/120/240 Hz、历史点、pressure/tilt 有/无、zoom/pan/DPR 与非法 transform 语料；
 - Vector/Dab 的 confirmed input、BrushDescriptor、Stroke/Document digest 和跨端回放一致；
+- whole-stroke、segment 和 Pixel/Dab erase 分别覆盖命中、结果对象/fragment 或 mask、Operation
+  原子性、Undo/Redo、保存/replay、空间索引和缓存失效；擦除失败不得丢失未擦除内容；
 - prediction rollback、cancel、InputOverrun、View destroy、surface/Preview failure 不产生部分
-  Document，Default/Arc sink 最终得到同一 Canonical Stroke；
+  Document，Arc/Default sink 最终得到同一 Canonical Stroke；Arc presentation 失败后必须可验证
+  Canonical-only rendering，且 confirmed input、Canonical 提交和 digest 不变；
 - 输入到 Preview、handoff 帧数和 Human Ink 的产品 SLO 在第五组绑定设备、刷新率和 Evidence
   level；本组不以 POC 数字替用户作承诺。
 
@@ -408,12 +450,12 @@ Notion 产品功能基线和竞品矩阵中的相关能力。引用规则保持�
 | ID | 需要决定的问题 | 建议基线 | 不这样决定的影响 |
 | --- | --- | --- | --- |
 | `G2-D01` | Page 是单页还是用户可管理的多 Page？每个 Page 是否为连续工作区？ | V1 支持 `DocumentRoot → Page*` 的用户语义：create/duplicate/delete/reorder；每个 Page 支持连续 pan/zoom 和负坐标，export/content bounds 不限制编辑。物理 schema 仍由 R2 ADR 设计。 | 继续后置会阻塞 Page schema、Operation、History、保存和产品导航验收。 |
-| `G2-D02` | 是否扩大现行 V1 节点？ | 保持 Shape、Image、VectorPath、RichText、VectorStroke、DabStroke；Connector、Group/Frame/Sticky、PDF 继续为扩展边界。 | 扩大范围会新增布局、routing、层级、迁移和协作语义，需重排 R2。 |
-| `G2-D03` | Selection 和对象变换的最小可用范围是什么？ | 接受 click/tap、marquee、additive multi-select、move/resize/rotate、前后顺序；locked 对象不可变换，hidden 对象不可命中。Lasso、align/distribute 和 smart snap 先保留候选。 | 若只做单选/移动，Shape/Image/Path 很难形成可用的本地编辑器；扩大全部高级工具会显著增加交互范围。 |
-| `G2-D04` | VectorPath 的“可编辑”到什么深度？ | V1 支持整体变换和 anchor/control-point 的移动、增删，支持 open/closed path；boolean operations、自动描摹和 Connector routing 后置。 | 只做整体变换与现行“可编辑矢量路径”表述不符；更深能力会扩大 geometry 和 UI 工作量。 |
+| `G2-D02` | 是否扩大现行 V1 节点？ | 用户已确认 Shape、Image、VectorPath、RichText、VectorStroke、DabStroke 之外，Connector、Group、Frame、Sticky、PDF 也进入实现范围；对象 schema、容器关系、PDF 资源/分页深度和分阶段交付仍需拆解。 | 若不拆分容器、连接器和 PDF 的语义，后续会把布局、routing、资源、迁移和协作问题混成一个不可验收的“大对象”。 |
+| `G2-D03` | Selection 和对象变换的最小可用范围是什么？ | 接受 click/tap、marquee、additive multi-select、Lasso、move/resize/rotate、Align/Distribute、前后顺序和 Smart Snap；locked 对象不可变换，hidden 对象不可命中。具体几何 oracle、阈值、参考系和 opt-out 仍待确认。 | 这些工具属于已确认的实现范围；若不先定义失败原子性和确定性，交互结果会跨平台漂移。 |
+| `G2-D04` | VectorPath 与 Connector 的可编辑深度是什么？ | V1 支持 VectorPath 的整体变换和 anchor/control-point 移动/增删；Connector 作为独立对象实现连接关系、端点命中和路径更新。boolean operations、自动描摹以及 routing 的具体算法/级别另行验证，不把 Connector 整体后置。 | 只把 Connector 当普通路径会丢失连接语义；一次冻结完整 routing 算法又会越过方案评审。 |
 | `G2-D05` | Brush 与 Ink 对象操作的最小范围是什么？ | 至少一类 Vector pen 和一类 Dab/highlighter；支持 color/width/opacity 和 pressure mapping；Stroke 可被普通 Selection 移动/缩放。用户自定义 texture、AI 识别和 split/merge 后置。 | 不给参数范围无法验收 Vector/Dab；过早开放自定义 brush 会先冻结资源和算法兼容。 |
-| `G2-D06` | V1 橡皮擦采用哪种语义？ | 把 whole-stroke eraser 纳入本地 V1，并通过普通 Operation/Undo；segment 和 pixel/dab erase 后置独立需求。 | 完全没有 eraser 会使 Ink 产品流不完整；同时实现三种模式会提前冻结复杂几何和 Stroke identity。 |
-| `G2-D07` | 低延迟 Preview 是否是产品硬需求？ | Tier A 书写必须有即时、可降级 Preview 和无错误 Canonical 交接；Arc 是候选实现而非需求。具体 p95/p99/帧数在第五组确认。 | 若 Preview 只是可选，V1 书写体验与当前产品定位不符；若把 Arc 写进需求，会提前决定架构方案。 |
+| `G2-D06` | V1 橡皮擦采用哪种语义？ | whole-stroke、segment 和 Pixel/Dab erase 都进入实现范围，并分别通过普通 Operation/Undo、保存/replay 和视觉/资源验收；具体 fragment、mask、质量和缓存规则另行冻结。 | 三种模式的结果对象和资源语义不同，必须拆开验证，不能用 whole-stroke 的测试覆盖其余模式。 |
+| `G2-D07` | 低延迟 Preview 和 Arc 是否是产品硬需求？ | Tier A 书写必须有 Arc Preview backend；Arc 与 Canonical 共享 Stroke 语义。Arc 无效、不可用或 presentation 失败时必须自动切换 Canonical-only rendering，不能丢 confirmed input、取消 Canonical 提交或改动 Document/digest。具体 p95/p99/帧数在第五组确认。 | Arc 是硬性实现能力，同时保留可靠 fallback；不能把 Arc 失败等同于输入失败，也不能让平台差异污染语义结果。 |
 | `G2-D08` | V1 RichText 样式边界是什么？ | 支持字体资源/产品字体集、字号或 H1/H2/H3/body preset、颜色、bold/italic/underline/strikethrough、left/center/right 和一级 bullet；链接、编号/嵌套列表、BiDi/复杂排版后置。 | 只验证 IME 不能形成可用 RichText；一次纳入完整排版会显著扩张字体、layout 和交互矩阵。 |
 | `G2-D09` | 多 View 是产品功能还是架构能力？ | 保持 Runtime 多 View 状态隔离为 V1 conformance；第二窗口、mini-map、outline 和 presentation view 不作为 V1 产品 UI。 | 把 conformance 误作产品功能会扩大 Shell；不保留 conformance 会让共享状态边界以后难以迁移。 |
 | `G2-D10` | Clipboard 和多 View 同节点编辑怎样处理？ | 本组只确认 Selection/History 对 adapter 和并发策略有依赖；对象 clipboard 格式、跨实例/跨应用和同节点本地冲突策略移交第四组及对应 RFC。 | 现在选格式或冲突算法会越过平台与 Data ownership 审核。 |
