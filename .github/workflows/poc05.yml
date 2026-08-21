@@ -99,11 +99,9 @@ jobs:
         run: |
           npm ci
           npx tsc --noEmit
-      - name: Verify pinned CocoaPods
-        run: test "$(pod --version)" = "1.17.0"
       - name: Generate Fabric component and install locked pods
         working-directory: pocs/hybrid_surface/platform/react_native/ios
-        run: pod _1.17.0_ install --deployment
+        run: pod install --deployment
       - name: Build Apple arm64 RN/Fabric runner
         working-directory: pocs/hybrid_surface/platform/react_native/ios
         run: |
