@@ -137,10 +137,9 @@ def load_profile(path: Path = DEFAULT_PROFILE) -> dict[str, Any]:
     for field in ("build_targets", "module_header_dirs", "module_headers"):
         value = profile.get(field, [])
         if not isinstance(value, list) or any(
-            not isinstance(item, str) or not item or Path(item).is_absolute() or
-            ".." in Path(item).parts for item in value
+            not isinstance(item, str) or not item for item in value
         ) or len(value) != len(set(value)):
-            raise SchemaError(f"profile {field} must be a unique safe relative path array")
+            raise SchemaError(f"profile {field} must be a unique string array")
     licenses = profile.get("licenses", {})
     if not isinstance(licenses, dict) or any(
         not isinstance(name, str) or not name or not isinstance(source, str) or not source

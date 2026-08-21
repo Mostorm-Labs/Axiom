@@ -841,16 +841,14 @@ RF01-4 仍为 `Validating`：本轮建立 two-stage contract 和 Direct baseline
   manifest/归档中没有 `modules/sksg` headers 或独立 SkSG target。因此本提交不伪造
   `SkSgRenderScene`，也不从 Skia source tree 或 GN/Ninja 隐式回退。真实 adapter 需要新的
   producer profile/SDK ID（包含 SkSG headers、实现库和 license）后才能在 private target 中接入。
-- `rf01-sksg-v1` producer profile 与 workflow 已准备：它显式声明 `skia + sksg` Ninja targets、
-  SkSG module headers 和各平台 archive，并保持七 target 聚合、确定性 ZIP、source-free smoke
-  与 prerelease 发布规则；source-free smoke 会实际编译、链接并调用 `sksg::Scene`，不是只验证
-  archive 存在。当前尚未在 `main` 人工 dispatch 并发布/锁定该 SDK，因此真实 adapter 仍不能
-  开始消费。
+- RF-01 不建立或冻结专属 Skia/SkSG SDK profile，也不把 producer 构建纳入本阶段门禁。真实
+  adapter 所需的 headers、实现库、license、工具链身份和消费方式由后续产品构建流程统一设计；
+  在该流程落地前，RF-01 只验证 Canvas-owned Scene contract 和无 Skia 的 Direct/Fake 路径。
 - Direct renderer 继续是默认 oracle；`ShadowRenderScene` 的双 participant contract 可先被
   Fake/Direct 组合验证，不把这项 contract 测试写成 SkSG visual/golden 已通过。
 
 RF01-5 状态为 `Validating`：双 participant 原子性和 observable comparison 已通过 host/ASan
-语料；SkSG SDK profile、真实 SkSG node/bounds/invalidation/readback、跨平台 shadow golden 和
+语料；产品级 Skia 供应链、真实 SkSG node/bounds/invalidation/readback、跨平台 shadow golden 和
 无 SkSG 类型泄漏门禁仍 Pending。
 
 退出：node/bounds/draw-list/hit/damage/revision 等价；RGBA 达到既有视觉门禁；无 SkSG 泄漏。

@@ -109,6 +109,7 @@ def verify_archive(
 
         required = {
             "args.gn", "include/core/SkCanvas.h",
+            "modules/skcms/skcms.h", "modules/skcms/src/skcms_public.h",
             "resources/fonts/Roboto-Regular.ttf",
             "licenses/Skia.txt", "licenses/FreeType.txt",
             "licenses/libpng.txt", "licenses/zlib.txt",

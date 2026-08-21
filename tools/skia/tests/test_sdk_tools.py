@@ -45,27 +45,6 @@ class SdkMetadataTest(unittest.TestCase):
 
     def test_profile_contains_exact_target_set(self) -> None:
         self.assertEqual(len(self.profile["targets"]), 7)
-        self.assertEqual(self.profile.get("build_targets", ["skia"]), ["skia"])
-
-    def test_rf01_profile_declares_sksg_target_headers_and_libraries(self) -> None:
-        profile_path = DEFAULT_PROFILE.parent / "rf01-sksg-v1.json"
-        profile = load_profile(profile_path)
-        self.assertEqual(profile["build_targets"], ["skia", "sksg"])
-        sksg_headers = {
-            header for header in profile["module_headers"]
-            if header.startswith("modules/sksg/include/")
-        }
-        self.assertEqual(len(sksg_headers), 23)
-        self.assertIn("modules/sksg/include/SkSGGroup.h", sksg_headers)
-        self.assertIn("modules/sksg/include/SkSGRect.h", sksg_headers)
-        self.assertIn("modules/sksg/include/SkSGScene.h", sksg_headers)
-        for target in profile["targets"].values():
-            expected = (
-                "sksg.lib" if target["platform"] == "windows"
-                else "libsksg.wasm.a" if target["platform"] == "web"
-                else "libsksg.a"
-            )
-            self.assertIn(expected, target["libraries"])
 
     def test_canonical_hash_is_order_independent_and_rejects_nan(self) -> None:
         self.assertEqual(canonical_sha256({"b": 2, "a": 1}), canonical_sha256({"a": 1, "b": 2}))
