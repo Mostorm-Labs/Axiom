@@ -395,7 +395,7 @@ class SdkMetadataTest(unittest.TestCase):
     def test_windows_debug_consumer_matches_static_runtime_and_stl_contract(self) -> None:
         args = windows_variant_cmake_args("debug")
         self.assertIn("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded", args)
-        self.assertTrue(any("_ITERATOR_DEBUG_LEVEL=0" in value for value in args))
+        self.assertFalse(any("CMAKE_CXX_FLAGS" in value for value in args))
         probe = (SKIA_TOOLS / "cmake_probe/CMakeLists.txt").read_text(
             encoding="utf-8"
         )

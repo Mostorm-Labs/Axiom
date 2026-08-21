@@ -61,13 +61,10 @@ def canvas_variant_cmake_args(variant: str) -> list[str]:
 
 def windows_variant_cmake_args(variant: str) -> list[str]:
     """Match the CMake consumer to Skia's static-CRT STL contract on Windows."""
-    args = ["-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"]
-    if variant in ("debug", "asan"):
-        args += [
-            "-DCMAKE_C_FLAGS=/D_ITERATOR_DEBUG_LEVEL=0 /D_HAS_ITERATOR_DEBUGGING=0",
-            "-DCMAKE_CXX_FLAGS=/D_ITERATOR_DEBUG_LEVEL=0 /D_HAS_ITERATOR_DEBUGGING=0",
-        ]
-    return args
+    # Do not override CMAKE_CXX_FLAGS here: CMake's clang-cl platform defaults
+    # include /EHsc, which the Windows demo needs. The root project and the
+    # imported CanvasSkia target propagate the STL debug macros themselves.
+    return ["-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"]
 
 
 def run_asan_runtime_smoke(build: Path, platform: str, sdk_root: Path) -> None:
