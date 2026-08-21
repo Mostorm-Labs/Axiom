@@ -130,8 +130,8 @@ jobs:
           source .deps/emsdk/emsdk_env.sh
           mkdir -p out/poc03-integrated-web
           for nodes in 1000 10000 50000 100000; do
-          node out/poc03-web-release/pocs/large_scene/canvas_poc03_integrated_benchmark.js \
-              --nodes=$nodes --output=out/poc03-integrated-web/result-$nodes.json
+            node out/poc03-web-release/pocs/large_scene/canvas_poc03_integrated_benchmark.js \
+              --nodes=$nodes > out/poc03-integrated-web/result-$nodes.json
           done
       - name: Normalize Web acceptance result
         run: |

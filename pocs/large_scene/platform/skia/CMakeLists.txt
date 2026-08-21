@@ -84,7 +84,7 @@ elseif(EMSCRIPTEN)
 elseif(WIN32)
   add_executable(canvas_poc03_windows_probe windows_probe.cpp)
   target_compile_definitions(canvas_poc03_windows_probe PRIVATE
-    NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0602 WINVER=0x0602)
+    NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00 WINVER=0x0A00)
   target_link_libraries(canvas_poc03_windows_probe PRIVATE
     canvas_poc03_skia d3d12 dxgi)
 elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
