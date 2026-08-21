@@ -292,7 +292,7 @@ jobs:
           out/acceptance/host/result-100000.json
           out/acceptance/web/out/poc03-integrated-web/result-100000.json
           out/acceptance/windows/integrated-100000.json
-          out/acceptance/android/out/poc03-android-result/result.json
+          out/acceptance/android/poc03-android-result/result.json
           --nodes 100000
           --output out/acceptance/cross-platform-result.json
       - uses: actions/upload-artifact@v4
