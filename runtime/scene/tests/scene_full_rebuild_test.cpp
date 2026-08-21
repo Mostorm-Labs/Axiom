@@ -247,8 +247,10 @@ void testSceneFullReplaceAndStaleDrawList(TestContext& context) {
         .mutations = {SceneMutation{
             .kind = SceneMutationKind::kInsert,
             .objectId = second.objectId,
+            .before = std::nullopt,
             .after = second,
         }},
+        .hints = std::nullopt,
     };
     const auto deltaResult = scene.apply(std::move(delta));
     EXPECT(context, deltaResult.hasValue());
@@ -322,6 +324,7 @@ void testDeltaSpatialPrepareFailurePreservesScene(TestContext& context) {
             .before = initial,
             .after = oversized,
         }},
+        .hints = std::nullopt,
     });
     EXPECT(context, !rejected.hasValue());
     EXPECT(context, rejected.error().code == ErrorCode::kInvalidArgument);
@@ -429,6 +432,7 @@ void testHitTestToleranceAndInvalidRequests(TestContext& context) {
     const auto outside = scene.hitTest(HitTestRequest{
         .worldPoint = canvas::WorldPoint{11.0F, 5.0F},
         .tolerance = 0.0F,
+        .filter = {},
         .maximumResults = 1U,
     });
     EXPECT(context, outside.hasValue());
@@ -438,6 +442,7 @@ void testHitTestToleranceAndInvalidRequests(TestContext& context) {
     const auto withinTolerance = scene.hitTest(HitTestRequest{
         .worldPoint = canvas::WorldPoint{11.0F, 5.0F},
         .tolerance = 1.0F,
+        .filter = {},
         .maximumResults = 1U,
     });
     EXPECT(context, withinTolerance.hasValue());
@@ -448,12 +453,15 @@ void testHitTestToleranceAndInvalidRequests(TestContext& context) {
     const auto invalidTolerance = scene.hitTest(HitTestRequest{
         .worldPoint = canvas::WorldPoint{0.0F, 0.0F},
         .tolerance = -1.0F,
+        .filter = {},
         .maximumResults = 1U,
     });
     EXPECT(context, !invalidTolerance.hasValue());
     EXPECT(context, invalidTolerance.error().code == ErrorCode::kInvalidArgument);
     const auto invalidMaximum = scene.hitTest(HitTestRequest{
         .worldPoint = canvas::WorldPoint{0.0F, 0.0F},
+        .tolerance = 0.0F,
+        .filter = {},
         .maximumResults = 0U,
     });
     EXPECT(context, !invalidMaximum.hasValue());

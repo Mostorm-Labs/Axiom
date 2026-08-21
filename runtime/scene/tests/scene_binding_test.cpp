@@ -103,8 +103,10 @@ void testRebuildAndIncrementalSync(TestContext& context) {
         .mutations = {canvas::SceneMutation{
             .kind = canvas::SceneMutationKind::kInsert,
             .objectId = second.objectId,
+            .before = std::nullopt,
             .after = second,
         }},
+        .hints = std::nullopt,
     };
     const auto synchronized = binding.synchronize(source);
     EXPECT(context, synchronized.hasValue());

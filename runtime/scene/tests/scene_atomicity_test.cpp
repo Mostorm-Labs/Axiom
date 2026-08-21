@@ -139,8 +139,10 @@ CompiledSceneDelta makeInsertDelta(std::uint64_t id = 3) {
         .mutations = {SceneMutation{
             .kind = SceneMutationKind::kInsert,
             .objectId = after.objectId,
+            .before = std::nullopt,
             .after = after,
         }},
+        .hints = std::nullopt,
     };
 }
 
@@ -182,6 +184,7 @@ void testSuccessfulInsertUpdateRemove(TestContext& context) {
             .before = before,
             .after = after,
         }},
+        .hints = std::nullopt,
     };
     EXPECT(context, fixture.scene->apply(std::move(update)).hasValue());
     EXPECT(context, fixture.scene->read().find(before.objectId)->worldBounds == after.worldBounds);
@@ -193,7 +196,9 @@ void testSuccessfulInsertUpdateRemove(TestContext& context) {
             .kind = SceneMutationKind::kRemove,
             .objectId = after.objectId,
             .before = after,
+            .after = std::nullopt,
         }},
+        .hints = std::nullopt,
     };
     EXPECT(context, fixture.scene->apply(std::move(remove)).hasValue());
     EXPECT(context, fixture.scene->read().find(after.objectId) == nullptr);
@@ -284,6 +289,7 @@ void testBeforeImageAndRecordValidationAreAtomic(TestContext& context) {
             .before = wrongBefore,
             .after = after,
         }},
+        .hints = std::nullopt,
     };
     auto mismatchResult = fixture.scene->apply(std::move(mismatch));
     EXPECT(context, !mismatchResult.hasValue());
@@ -316,7 +322,9 @@ void testDuplicateAndMissingObjectAreAtomic(TestContext& context) {
             .kind = SceneMutationKind::kRemove,
             .objectId = missing.objectId,
             .before = missing,
+            .after = std::nullopt,
         }},
+        .hints = std::nullopt,
     };
     const auto missingResult = fixture.scene->apply(std::move(removeMissing));
     EXPECT(context, !missingResult.hasValue());

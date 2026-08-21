@@ -41,7 +41,13 @@ struct TestContext final {
 SceneRecord record(std::uint64_t id, WorldRect bounds) {
     return SceneRecord{
         .objectId = canvas::ObjectId::fromUint64(id),
+        .orderKey = {},
+        .kind = canvas::SceneObjectKind::kShape,
+        .flags = canvas::SceneRecordFlags::kNone,
         .worldBounds = bounds,
+        .contentRevision = {},
+        .renderPayload = {},
+        .hitGeometry = {},
     };
 }
 
@@ -56,6 +62,7 @@ CompiledSceneDelta insertDelta(std::uint64_t before,
         .mutations = {SceneMutation{
             .kind = SceneMutationKind::kInsert,
             .objectId = canvas::ObjectId::fromUint64(id),
+            .before = std::nullopt,
             .after = record(id, bounds),
         }},
         .hints = std::move(hints),
@@ -98,11 +105,14 @@ void testRectAndByteLimits(TestContext& context) {
         .mutations = {
             SceneMutation{.kind = SceneMutationKind::kInsert,
                           .objectId = canvas::ObjectId::fromUint64(1U),
+                          .before = std::nullopt,
                           .after = record(1U, WorldRect{0.0F, 0.0F, 1.0F, 1.0F})},
             SceneMutation{.kind = SceneMutationKind::kInsert,
                           .objectId = canvas::ObjectId::fromUint64(2U),
+                          .before = std::nullopt,
                           .after = record(2U, WorldRect{2.0F, 2.0F, 3.0F, 3.0F})},
         },
+        .hints = std::nullopt,
     };
     auto prepared = rectLimited.prepareApply(delta);
     EXPECT(context, prepared.hasValue());
@@ -161,12 +171,15 @@ void testDefaultPublishedLimits(TestContext& context) {
     CompiledSceneDelta delta{
         .beforeRevision = SceneRevision(0U),
         .afterRevision = SceneRevision(1U),
+        .mutations = {},
+        .hints = std::nullopt,
     };
     delta.mutations.reserve(4097U);
     for (std::uint64_t id = 1U; id <= 4097U; ++id) {
         delta.mutations.push_back(SceneMutation{
             .kind = SceneMutationKind::kInsert,
             .objectId = canvas::ObjectId::fromUint64(id),
+            .before = std::nullopt,
             .after = record(id, WorldRect{static_cast<float>(id),
                                           0.0F,
                                           static_cast<float>(id + 1U),
