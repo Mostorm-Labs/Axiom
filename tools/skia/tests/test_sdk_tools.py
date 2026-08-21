@@ -280,6 +280,17 @@ class SdkMetadataTest(unittest.TestCase):
         self.assertFalse(profile["common_gn_args"]["skia_use_dng_sdk"])
         self.assertFalse(profile["common_gn_args"]["skia_use_piex"])
         self.assertFalse(profile["common_gn_args"]["skia_enable_tools"])
+        for argument in (
+            "skia_use_system_expat",
+            "skia_use_system_freetype2",
+            "skia_use_system_harfbuzz",
+            "skia_use_system_icu",
+            "skia_use_system_libjpeg_turbo",
+            "skia_use_system_libpng",
+            "skia_use_system_libwebp",
+            "skia_use_system_zlib",
+        ):
+            self.assertFalse(profile["common_gn_args"][argument])
         self.assertEqual(profile["variants"]["release"]["gn_args"]["symbol_level"], 0)
         self.assertEqual(profile["variants"]["debug"]["gn_args"]["symbol_level"], 2)
         self.assertEqual(profile["targets"]["macos-x64-metal"]["arch"], "x64")
@@ -317,6 +328,21 @@ class SdkMetadataTest(unittest.TestCase):
         for target in ("Paragraph", "Skottie", "Svg", "PathOps", "Media"):
             self.assertIn(f"CanvasSkia::{target}", config)
         self.assertIn("SK_ENABLE_SKOTTIE", config)
+
+    def test_r1_full_profile_requires_bundled_dependencies(self) -> None:
+        profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")
+        for argument in (
+            "skia_use_system_expat",
+            "skia_use_system_libjpeg_turbo",
+            "skia_use_system_libwebp",
+        ):
+            invalid = copy.deepcopy(profile)
+            invalid["common_gn_args"][argument] = True
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "r1-full-v1.json"
+                path.write_text(json.dumps(invalid), encoding="utf-8")
+                with self.assertRaisesRegex(SchemaError, "bundle all declared"):
+                    load_profile(path)
 
     def test_full_manifest_requires_archive_closure_and_symbols_schema(self) -> None:
         profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"

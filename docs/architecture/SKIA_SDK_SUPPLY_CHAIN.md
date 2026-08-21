@@ -61,6 +61,11 @@ PathOps、PNG/JPEG/WebP/Wuffs、FreeType/HarfBuzz/ICU/Expat/zlib；关闭 Graphi
 Vulkan、DNG/PIEX、viewer/tools/fuzzer、Perfetto、Lua 和 XPS。PathOps 没有虚构的 GN
 开关，能力由真实公共 API link probe 验证。
 
+`is_official_build=true` 会让部分 Skia GN 第三方依赖默认切到系统库，因此 Full profile
+显式设置 Expat、FreeType、HarfBuzz、ICU、JPEG、PNG、WebP 与 zlib 的全部
+`skia_use_system_*` 开关为 `false`。Release、Debug 与 ASan 由同一 Skia commit 构建并
+打包实际依赖闭包，不把 host 或平台预装 archive 隐式泄漏给 consumer。
+
 ## Profile 与 identity
 
 [`poc01-minimal-v1.json`](../../tools/skia/profiles/poc01-minimal-v1.json)

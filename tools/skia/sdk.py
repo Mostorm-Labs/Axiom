@@ -287,6 +287,18 @@ def _validate_full_profile(profile: dict[str, Any]) -> None:
     args = profile["common_gn_args"]
     if args.get("skia_use_dng_sdk") is not False or args.get("skia_use_piex") is not False:
         raise SchemaError("r1-full-v1 must disable DNG and PIEX on every target")
+    bundled_dependencies = (
+        "skia_use_system_expat",
+        "skia_use_system_freetype2",
+        "skia_use_system_harfbuzz",
+        "skia_use_system_icu",
+        "skia_use_system_libjpeg_turbo",
+        "skia_use_system_libpng",
+        "skia_use_system_libwebp",
+        "skia_use_system_zlib",
+    )
+    if any(args.get(argument) is not False for argument in bundled_dependencies):
+        raise SchemaError("r1-full-v1 must bundle all declared third-party dependencies")
     if args.get("skia_enable_skottie") is not True or args.get("skia_enable_pdf") is not True or args.get("skia_enable_svg") is not True:
         raise SchemaError("r1-full-v1 must enable Skottie, PDF, and SVG")
     runtime_disabled = {
