@@ -18,6 +18,7 @@ foundation::Result<SceneSyncReceipt> SceneBinding::rebuild(const ICompiledSceneS
         .revision = apply.afterRevision,
         .disposition = SceneSyncDisposition::kRebuiltFull,
         .apply = std::move(apply),
+        .incrementalFailure = std::nullopt,
     });
 }
 
@@ -43,6 +44,7 @@ foundation::Result<SceneSyncReceipt> SceneBinding::synchronize(const ICompiledSc
         .revision = apply.afterRevision,
         .disposition = SceneSyncDisposition::kAppliedIncremental,
         .apply = std::move(apply),
+        .incrementalFailure = std::nullopt,
     });
 }
 

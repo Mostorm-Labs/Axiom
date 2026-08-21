@@ -121,7 +121,10 @@ FakeRenderScene::preciseHitTest(const PreciseHitRequest& request) const {
 
 foundation::Result<SceneDrawList>
 FakeRenderScene::buildDrawList(std::span<const ObjectId> backToFront) const {
-    SceneDrawList drawList{.revision = _revision};
+    SceneDrawList drawList{
+        .revision = _revision,
+        .items = {},
+    };
     drawList.items.reserve(backToFront.size());
     for (ObjectId objectId : backToFront) {
         const auto found =

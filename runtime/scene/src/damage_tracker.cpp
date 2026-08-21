@@ -90,8 +90,12 @@ foundation::Result<PreparedDamage> DamageTracker::prepareReplace(
 foundation::Result<PreparedDamage>
 DamageTracker::prepareApply(const CompiledSceneDelta& delta) const {
     try {
-        DamageSet damage{.afterExclusive = delta.beforeRevision,
-                         .throughInclusive = delta.afterRevision};
+        DamageSet damage{
+            .afterExclusive = delta.beforeRevision,
+            .throughInclusive = delta.afterRevision,
+            .fullScene = false,
+            .rects = {},
+        };
         damage.rects.reserve(delta.mutations.size());
         for (const SceneMutation& mutation : delta.mutations) {
             WorldRect dirty;
@@ -186,9 +190,12 @@ foundation::Result<PreparedDamage> DamageTracker::prepareAppend(DamageSet damage
             });
         if (journal.size() > _limits.maxJournalEntries || rectCount > _limits.maxRectCount ||
             estimateBytes(journal) > _limits.maxBytes) {
-            DamageSet collapsed{.afterExclusive = _compactedThrough,
-                                .throughInclusive = journal.back().throughInclusive,
-                                .fullScene = true};
+            DamageSet collapsed{
+                .afterExclusive = _compactedThrough,
+                .throughInclusive = journal.back().throughInclusive,
+                .fullScene = true,
+                .rects = {},
+            };
             for (const DamageSet& item : journal) {
                 collapsed.throughInclusive =
                     std::max(collapsed.throughInclusive, item.throughInclusive);
@@ -213,8 +220,12 @@ void DamageTracker::commit(PreparedDamage damage) noexcept {
 
 DamageSet DamageTracker::collect(SceneRevision afterExclusive,
                                  SceneRevision throughInclusive) const {
-    DamageSet result{.afterExclusive = afterExclusive,
-                     .throughInclusive = throughInclusive};
+    DamageSet result{
+        .afterExclusive = afterExclusive,
+        .throughInclusive = throughInclusive,
+        .fullScene = false,
+        .rects = {},
+    };
     if (afterExclusive < _compactedThrough) {
         result.fullScene = true;
         return result;

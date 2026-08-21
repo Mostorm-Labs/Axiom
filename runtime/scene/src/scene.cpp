@@ -42,6 +42,8 @@ DamageSet damageForDelta(const CompiledSceneDelta& delta) {
     DamageSet damage{
         .afterExclusive = delta.beforeRevision,
         .throughInclusive = delta.afterRevision,
+        .fullScene = false,
+        .rects = {},
     };
     damage.rects.reserve(delta.mutations.size());
     for (const SceneMutation& mutation : delta.mutations) {
@@ -268,6 +270,7 @@ foundation::Result<SceneQueryResult> Scene::query(const SceneQuery& request) con
     try {
         SceneQueryResult result{
             .revision = _revision,
+            .backToFront = {},
             .diagnostics =
                 SceneQueryDiagnostics{
                     .candidatesExamined = spatialResult.value().examinedRecords,
@@ -327,7 +330,11 @@ foundation::Result<HitTestResult> Scene::hitTest(const HitTestRequest& request) 
         return foundation::Result<HitTestResult>::failure(spatialResult.error());
     }
     try {
-        HitTestResult result{.revision = _revision};
+        HitTestResult result{
+            .revision = _revision,
+            .frontToBack = {},
+            .diagnostics = {},
+        };
         result.diagnostics.candidatesExamined = spatialResult.value().examinedRecords;
         std::vector<ObjectId> candidates;
         candidates.reserve(spatialResult.value().candidates.size());

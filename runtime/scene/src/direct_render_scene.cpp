@@ -171,7 +171,10 @@ DirectRenderScene::preciseHitTest(const PreciseHitRequest& request) const {
 foundation::Result<SceneDrawList>
 DirectRenderScene::buildDrawList(std::span<const ObjectId> backToFront) const {
     try {
-        SceneDrawList drawList{.revision = _revision};
+        SceneDrawList drawList{
+            .revision = _revision,
+            .items = {},
+        };
         drawList.items.reserve(backToFront.size());
         for (ObjectId objectId : backToFront) {
             const auto found = _index.find(objectId);
