@@ -416,8 +416,6 @@ class SdkMetadataTest(unittest.TestCase):
                 "  if [ \"$3\" = //:root ]; then printf '%s\\n' //:root //:group; "
                 "elif [ \"$3\" = //:group ]; then printf '%s\\n' //:group //:dep; "
                 "else printf '%s\\n' \"$3\"; fi\n"
-                "elif [ \"$4\" = type ]; then\n"
-                "  if [ \"$3\" = //:group ]; then printf '%s\\n' group; else printf '%s\\n' static_library; fi\n"
                 "elif [ \"$3\" = //:group ]; then\n"
                 "  echo 'group outputs must not be queried' >&2; exit 91\n"
                 "elif [ \"$3\" = //:root ]; then printf '%s\\n' out/release/libroot.a\n"
