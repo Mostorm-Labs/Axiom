@@ -145,6 +145,9 @@ def install(
         pass
 
     install_root.mkdir(parents=True, exist_ok=True)
+    # The destination is nested below the install root (target/variant).  Make
+    # sure its parent exists before the final atomic directory replacement.
+    destination.parent.mkdir(parents=True, exist_ok=True)
     temporary_root = Path(tempfile.mkdtemp(prefix=f".{target_name}-", dir=install_root))
     archive = temporary_root / target["asset"]
     extract = temporary_root / "verified"
