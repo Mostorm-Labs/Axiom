@@ -37,6 +37,9 @@ def main() -> int:
         "android-x86_64-gles3",
         "pocs/large_scene/**",
         "pocs/ink_engine/**",
+        "runtime/**",
+        "tools/check_runtime_abi_manifest.py",
+        "tools/check_runtime_boundaries.py",
         "canvas_poc03_integrated_benchmark",
     ):
         if required not in text:

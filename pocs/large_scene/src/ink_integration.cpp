@@ -5,6 +5,7 @@
 #include <cmath>
 #include <exception>
 #include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace canvas::poc03 {

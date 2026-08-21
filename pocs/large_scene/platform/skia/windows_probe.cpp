@@ -240,7 +240,7 @@ void ApplyWindowToolInput(HWND window, UINT message, WPARAM wparam,
       (message != WM_LBUTTONDOWN && message != WM_MOUSEMOVE &&
        message != WM_LBUTTONUP && message != WM_POINTERDOWN &&
        message != WM_POINTERUPDATE && message != WM_POINTERUP &&
-       message != WM_POINTERCANCEL && message != WM_KEYDOWN)) return;
+       message != WM_POINTERCAPTURECHANGED && message != WM_KEYDOWN)) return;
   if (message == WM_KEYDOWN) {
     // The current physical shell only exposes Select/Drag. Keep the tool
     // switch explicit so later Vector/Dab input cannot be mistaken for a
@@ -259,11 +259,11 @@ void ApplyWindowToolInput(HWND window, UINT message, WPARAM wparam,
   const bool pointer_message = message == WM_POINTERDOWN ||
                                message == WM_POINTERUPDATE ||
                                message == WM_POINTERUP ||
-                               message == WM_POINTERCANCEL;
+                               message == WM_POINTERCAPTURECHANGED;
   const bool pointer_begin = message == WM_POINTERDOWN;
   const bool pointer_move = message == WM_POINTERUPDATE;
   const bool pointer_end = message == WM_POINTERUP ||
-                           message == WM_POINTERCANCEL;
+                           message == WM_POINTERCAPTURECHANGED;
   if (message == WM_LBUTTONDOWN || pointer_begin) {
     if (pointer_message) {
       input->pointer_id = GET_POINTERID_WPARAM(wparam);

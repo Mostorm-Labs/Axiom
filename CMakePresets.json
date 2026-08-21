@@ -7,6 +7,20 @@
   },
   "configurePresets": [
     {
+      "name": "rf01-host-debug",
+      "displayName": "RF-01 Scene Foundation (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/rf01-host-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CANVAS_BUILD_POC01": "OFF",
+        "CANVAS_BUILD_POC02": "OFF",
+        "CANVAS_BUILD_POC03": "OFF",
+        "CANVAS_BUILD_RF01": "ON",
+        "CANVAS_RF01_BUILD_TESTS": "ON"
+      }
+    },
+    {
       "name": "host-debug",
       "displayName": "POC-01 host core (Debug)",
       "generator": "Ninja",
@@ -162,7 +176,8 @@
         "CANVAS_BUILD_POC03": "ON",
         "CANVAS_POC03_BUILD_TESTS": "ON",
         "CANVAS_POC03_ENABLE_SKIA": "OFF",
-        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON"
+        "CANVAS_POC03_ENABLE_INK_INTEGRATION": "ON",
+        "CANVAS_BUILD_RF01": "ON"
       }
     },
     {
@@ -283,6 +298,7 @@
     }
   ],
   "buildPresets": [
+    { "name": "rf01-host-debug", "configurePreset": "rf01-host-debug" },
     { "name": "host-debug", "configurePreset": "host-debug" },
     { "name": "host-asan", "configurePreset": "host-asan" },
     { "name": "web-release", "configurePreset": "web-release" },
@@ -306,6 +322,11 @@
     { "name": "poc05-ios-device-release", "configurePreset": "poc05-ios-device-release" }
   ],
   "testPresets": [
+    {
+      "name": "rf01-host-debug",
+      "configurePreset": "rf01-host-debug",
+      "output": { "outputOnFailure": true }
+    },
     {
       "name": "host-debug",
       "configurePreset": "host-debug",

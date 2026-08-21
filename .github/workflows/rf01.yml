@@ -1,0 +1,53 @@
+name: RF-01 Scene Foundation
+
+on:
+  pull_request:
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "runtime/**"
+      - "pocs/large_scene/rf01/**"
+      - "pocs/large_scene/tests/rf01_scene_source_test.cpp"
+      - "docs/api/canvas_runtime_api_v1.h"
+      - "docs/api/canvas_runtime_api_v1.manifest.json"
+      - "tools/check_runtime_abi_manifest.py"
+      - "tools/check_runtime_boundaries.py"
+      - ".github/workflows/rf01.yml"
+  push:
+    branches: [main, "codex/poc-03-100k-scene"]
+    paths:
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "runtime/**"
+      - "pocs/large_scene/rf01/**"
+      - "pocs/large_scene/tests/rf01_scene_source_test.cpp"
+      - "docs/api/canvas_runtime_api_v1.h"
+      - "docs/api/canvas_runtime_api_v1.manifest.json"
+      - "tools/check_runtime_abi_manifest.py"
+      - "tools/check_runtime_boundaries.py"
+      - ".github/workflows/rf01.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: rf01-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-contract:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Configure dependency-free RF-01 contract
+        run: cmake --preset rf01-host-debug
+      - name: Build C11, C++20, Scene, and Fake participant checks
+        run: cmake --build --preset rf01-host-debug --parallel
+      - name: Run ABI, boundary, and atomicity gates
+        run: ctest --preset rf01-host-debug --output-on-failure
+      - name: Verify patch whitespace
+        run: git diff --check

@@ -1,0 +1,4 @@
+add_library(canvas_runtime_foundation INTERFACE)
+target_include_directories(canvas_runtime_foundation INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_features(canvas_runtime_foundation INTERFACE cxx_std_20)
