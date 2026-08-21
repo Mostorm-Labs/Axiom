@@ -79,7 +79,10 @@ if(CANVAS_POC03_ENABLE_INK_INTEGRATION)
     target_compile_options(canvas_poc03_integrated_benchmark PRIVATE
       -fexceptions)
     target_link_options(canvas_poc03_integrated_benchmark PRIVATE
-      "-fexceptions" "-sDISABLE_EXCEPTION_CATCHING=0")
+      "-fexceptions"
+      "-sDISABLE_EXCEPTION_CATCHING=0"
+      "-sALLOW_MEMORY_GROWTH=1"
+      "-sMAXIMUM_MEMORY=536870912")
   endif()
 endif()
 
