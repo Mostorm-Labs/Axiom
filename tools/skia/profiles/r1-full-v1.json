@@ -1,0 +1,193 @@
+{
+  "schema_version": 2,
+  "format": "canvas-skia-sdk-profile-v2",
+  "profile": "r1-full-v1",
+  "description": "R1 full Ganesh runtime SDK with media, SVG, PDF, Skottie, and RichText modules.",
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "common_gn_args": {
+    "is_component_build": false,
+    "is_official_build": true,
+    "is_debug": false,
+    "skia_enable_fontmgr_custom_embedded": true,
+    "skia_enable_ganesh": true,
+    "skia_enable_graphite": false,
+    "skia_enable_pdf": true,
+    "skia_enable_skottie": true,
+    "skia_enable_skparagraph": true,
+    "skia_enable_skshaper": true,
+    "skia_enable_skunicode": true,
+    "skia_enable_svg": true,
+    "skia_use_dawn": false,
+    "skia_use_dng_sdk": false,
+    "skia_use_expat": true,
+    "skia_use_fontconfig": false,
+    "skia_use_freetype": true,
+    "skia_use_harfbuzz": true,
+    "skia_use_icu": true,
+    "skia_use_libjpeg_turbo_decode": true,
+    "skia_use_libjpeg_turbo_encode": true,
+    "skia_use_libpng_decode": true,
+    "skia_use_libpng_encode": true,
+    "skia_use_libwebp_decode": true,
+    "skia_use_libwebp_encode": true,
+    "skia_use_partition_alloc": false,
+    "skia_use_piex": false,
+    "skia_use_system_freetype2": false,
+    "skia_use_system_harfbuzz": false,
+    "skia_use_system_icu": false,
+    "skia_use_system_libpng": false,
+    "skia_use_system_zlib": false,
+    "skia_use_wuffs": true,
+    "skia_use_zlib": true,
+    "skia_enable_tools": false,
+    "skia_use_perfetto": false,
+    "skia_use_lua": false,
+    "skia_use_xps": false
+  },
+  "variants": {
+    "release": {
+      "is_official_build": true,
+      "is_debug": false,
+      "sanitize": "",
+      "symbols": "none",
+      "consumer_default": true,
+      "gn_args": {"symbol_level": 0},
+      "runtime_validation": "runtime-smoke"
+    },
+    "debug": {
+      "is_official_build": false,
+      "is_debug": true,
+      "sanitize": "",
+      "symbols": "embedded",
+      "consumer_default": false,
+      "gn_args": {"symbol_level": 2},
+      "runtime_validation": "runtime-smoke"
+    },
+    "asan": {
+      "is_official_build": false,
+      "is_debug": true,
+      "sanitize": "ASAN",
+      "symbols": "embedded",
+      "consumer_default": false,
+      "gn_args": {"symbol_level": 2},
+      "runtime_validation": "link-only"
+    }
+  },
+  "capabilities": {
+    "ganesh": true,
+    "pdf": true,
+    "svg": true,
+    "skottie": true,
+    "pathops": true,
+    "richtext": true,
+    "jpeg": true,
+    "webp": true,
+    "png": true,
+    "freetype": true,
+    "harfbuzz": true,
+    "icu": true,
+    "raw_dng": false
+  },
+  "capability_library_prefixes": {
+    "paragraph": ["libskparagraph", "libskshaper", "libskunicode"],
+    "skottie": ["libskottie", "libsksg", "libskresources", "libjsonreader"],
+    "svg": ["libsvg"],
+    "pathops": [],
+    "media": ["libjpeg", "libwebp"]
+  },
+  "unsupported_reasons": {
+    "raw_dng": "Disabled for cross-platform capability consistency"
+  },
+  "build_targets": [
+    "skia",
+    "modules/skparagraph:skparagraph",
+    "modules/skshaper:skshaper",
+    "modules/skunicode:skunicode",
+    "modules/skottie:skottie",
+    "modules/sksg:sksg",
+    "modules/skresources:skresources",
+    "modules/jsonreader:jsonreader",
+    "modules/svg:svg"
+  ],
+  "module_header_dirs": [
+    "modules/skparagraph/include",
+    "modules/skshaper/include",
+    "modules/skunicode/include",
+    "modules/skottie/include",
+    "modules/sksg/include",
+    "modules/skresources/include",
+    "modules/svg/include"
+  ],
+  "module_headers": [
+    "modules/skcms/skcms.h",
+    "modules/skcms/src/skcms_public.h",
+    "src/core/SkUTF.h"
+  ],
+  "licenses": {
+    "HarfBuzz.txt": "third_party/externals/harfbuzz/COPYING",
+    "ICU.txt": "third_party/externals/icu/LICENSE",
+    "Expat.txt": "third_party/externals/expat/COPYING",
+    "libjpeg-turbo.txt": "third_party/externals/libjpeg-turbo/LICENSE.md",
+    "libwebp.txt": "third_party/externals/libwebp/COPYING",
+    "Wuffs.txt": "third_party/externals/wuffs/LICENSE"
+  },
+  "fixture_fonts": {
+    "resources/fonts/NotoSansCJK-VF-subset.otf.ttc": "noto_sans_cjk_subset"
+  },
+  "runtime_files": [
+    {"target": "windows-x64-d3d12", "source": "icudtl.dat", "destination": "runtime/windows/icudtl.dat"}
+  ],
+  "targets": {
+    "windows-x64-d3d12": {
+      "platform": "windows", "arch": "x64", "backend": "d3d12",
+      "output_name": "r1-full-windows-x64",
+      "gn_args": {"skia_use_angle": false, "skia_use_direct3d": true, "skia_use_gl": false, "skia_use_vulkan": false, "target_cpu": "x64", "target_os": "win"},
+      "libraries": "discover",
+      "toolchain": {"llvm": "22.1.8"}
+    },
+    "android-arm64-v8a-gles3": {
+      "platform": "android", "arch": "arm64-v8a", "backend": "gles3",
+      "output_name": "r1-full-android-arm64",
+      "gn_args": {"ndk_api": 26, "skia_use_gl": true, "skia_use_vulkan": false, "target_cpu": "arm64", "target_os": "android"},
+      "libraries": "discover",
+      "toolchain": {"android_ndk": "27.2.12479018", "api_level": 26}
+    },
+    "android-x86_64-gles3": {
+      "platform": "android", "arch": "x86_64", "backend": "gles3",
+      "output_name": "r1-full-android-x64",
+      "gn_args": {"ndk_api": 26, "skia_use_gl": true, "skia_use_vulkan": false, "target_cpu": "x64", "target_os": "android"},
+      "libraries": "discover",
+      "toolchain": {"android_ndk": "27.2.12479018", "api_level": 26}
+    },
+    "macos-arm64-metal": {
+      "platform": "macos", "arch": "arm64", "backend": "metal", "output_name": "r1-full-macos-arm64",
+      "gn_args": {"skia_use_gl": false, "skia_use_metal": true, "skia_use_vulkan": false, "target_cpu": "arm64", "target_os": "mac"},
+      "libraries": "discover",
+      "toolchain": {"sdk": "macosx"}
+    },
+    "macos-x64-metal": {
+      "platform": "macos", "arch": "x64", "backend": "metal", "output_name": "r1-full-macos-x64",
+      "gn_args": {"skia_use_gl": false, "skia_use_metal": true, "skia_use_vulkan": false, "target_cpu": "x64", "target_os": "mac"},
+      "libraries": "discover",
+      "toolchain": {"sdk": "macosx"}
+    },
+    "ios-arm64-metal": {
+      "platform": "ios", "arch": "arm64", "backend": "metal", "output_name": "r1-full-ios-arm64",
+      "gn_args": {"ios_min_target": "17.0", "skia_use_gl": false, "skia_use_metal": true, "skia_use_vulkan": false, "target_cpu": "arm64", "target_os": "ios"},
+      "libraries": "discover",
+      "toolchain": {"deployment_target": "17.0", "sdk": "iphoneos"}
+    },
+    "ios-simulator-arm64-metal": {
+      "platform": "ios-simulator", "arch": "arm64", "backend": "metal", "output_name": "r1-full-ios-simulator-arm64",
+      "gn_args": {"ios_min_target": "17.0", "ios_use_simulator": true, "skia_use_gl": false, "skia_use_metal": true, "skia_use_vulkan": false, "target_cpu": "arm64", "target_os": "ios"},
+      "libraries": "discover",
+      "toolchain": {"deployment_target": "17.0", "sdk": "iphonesimulator"}
+    },
+    "web-wasm-webgl2": {
+      "platform": "web", "arch": "wasm32", "backend": "webgl2", "output_name": "r1-full-web-wasm",
+      "gn_args": {"skia_use_gl": true, "skia_use_vulkan": false, "skia_use_webgl": true, "target_cpu": "wasm", "target_os": "wasm", "skia_use_dng_sdk": false, "skia_use_piex": false},
+      "libraries": "discover",
+      "toolchain": {"emscripten": "6.0.6", "llvm": "22.1.8", "pthread": false}
+    }
+  }
+}

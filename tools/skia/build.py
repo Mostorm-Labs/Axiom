@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shlex
@@ -11,7 +12,7 @@ import subprocess
 
 from sdk import (
     DEFAULT_PROFILE, SKIA_ROOT, actual_gn_args, gn_args_line, load_profile,
-    target_definition,
+    output_name, target_definition,
 )
 
 
@@ -20,9 +21,113 @@ def run(command: list[str], cwd: Path) -> None:
     subprocess.run(command, cwd=cwd, check=True)
 
 
+def gn_label(target: str) -> str:
+    if target.startswith("//"):
+        return target
+    if ":" in target or "/" in target:
+        return f"//{target}"
+    return f"//:{target}"
+
+
+def gn_archive_closure(
+    gn: Path, skia_root: Path, output: Path, platform: str,
+    build_targets: list[str],
+) -> list[Path]:
+    """Resolve static archives from GN's actual transitive dependency graph."""
+    suffix = ".lib" if platform == "windows" else ".a"
+    roots = [target for target in build_targets if target != "skia"]
+    roots.extend(target for target in build_targets if target == "skia")
+    labels: list[str] = [gn_label(target) for target in roots]
+    direct_deps: dict[str, list[str]] = {}
+    visiting: set[str] = set()
+
+    def deps(label: str) -> list[str]:
+        if label in direct_deps:
+            return direct_deps[label]
+        described = subprocess.check_output(
+            [str(gn), "desc", str(output), label, "deps"],
+            cwd=skia_root, text=True,
+        )
+        values = []
+        for line in described.splitlines():
+            value = line.strip().split("(", 1)[0].strip()
+            if value.startswith("//") and value != label:
+                values.append(value)
+        direct_deps[label] = list(dict.fromkeys(values))
+        return direct_deps[label]
+
+    def visit(label: str) -> None:
+        if label in visiting:
+            return
+        visiting.add(label)
+        for dependency in deps(label):
+            if dependency not in labels:
+                labels.append(dependency)
+            visit(dependency)
+        visiting.remove(label)
+
+    for label in list(labels):
+        visit(label)
+    archives: list[Path] = []
+    seen_labels: set[str] = set()
+    seen_paths: set[Path] = set()
+    for label in labels:
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        described = subprocess.check_output(
+            [str(gn), "desc", str(output), label, "outputs"],
+            cwd=skia_root, text=True,
+        )
+        for value in described.splitlines():
+            value = value.strip()
+            if not value.endswith(suffix):
+                continue
+            candidate = Path(value.removeprefix("//"))
+            if candidate.is_absolute():
+                path = candidate
+            elif candidate.parts and candidate.parts[0] == "out":
+                path = skia_root / candidate
+            else:
+                path = output / candidate
+            path = path.resolve()
+            try:
+                path.relative_to(output.resolve())
+            except ValueError as error:
+                raise RuntimeError(
+                    f"GN archive output escapes the selected build directory: {value}"
+                ) from error
+            if not path.is_file():
+                raise RuntimeError(f"GN archive output is missing: {path}")
+            if path not in seen_paths:
+                seen_paths.add(path)
+                archives.append(path)
+    return archives
+
+
+def write_archive_closure(
+    gn: Path, skia_root: Path, output: Path, platform: str,
+    build_targets: list[str],
+) -> Path:
+    """Freeze the GN-derived archive closure so packaging never scans opportunistically."""
+    archives = gn_archive_closure(gn, skia_root, output, platform, build_targets)
+    if not archives:
+        raise RuntimeError("build did not produce any target static libraries")
+    metadata = {
+        "schema_version": 1,
+        "archives": [path.relative_to(output).as_posix() for path in archives],
+    }
+    destination = output / "canvas-skia-archive-closure.json"
+    destination.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8",
+    )
+    return destination
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True)
+    parser.add_argument("--variant", choices=("release", "debug", "asan"), default="release")
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--skia-root", type=Path, default=SKIA_ROOT)
     parser.add_argument("--cc")
@@ -52,6 +157,7 @@ def main() -> int:
 
     values = actual_gn_args(
         profile, args.target, cc=args.cc, cxx=args.cxx, ndk=args.ndk,
+        variant=args.variant,
     )
     gn_args = gn_args_line(values)
     if args.print_args:
@@ -62,13 +168,19 @@ def main() -> int:
     gn = Path(args.gn).resolve() if args.gn else skia_root / "bin" / host_gn
     if not gn.exists():
         raise RuntimeError("missing GN; run bootstrap_deps.py --skia --sync-skia")
-    output = skia_root / "out" / target["output_name"]
+    output = skia_root / "out" / output_name(profile, args.target, args.variant)
     run([str(gn), "gen", str(output), f"--args={gn_args}"], skia_root)
     build_targets = profile.get("build_targets", ["skia"])
     run([args.ninja, "-C", str(output), *build_targets], skia_root)
-    missing = [name for name in target["libraries"] if not (output / name).is_file()]
-    if missing:
-        raise RuntimeError(f"build did not produce required libraries: {missing}")
+    if target["libraries"] == "discover":
+        closure = write_archive_closure(
+            gn, skia_root, output, target["platform"], build_targets,
+        )
+        print(f"wrote target archive closure: {closure}", flush=True)
+    else:
+        missing = [name for name in target["libraries"] if not (output / name).is_file()]
+        if missing:
+            raise RuntimeError(f"build did not produce required libraries: {missing}")
     return 0
 
 

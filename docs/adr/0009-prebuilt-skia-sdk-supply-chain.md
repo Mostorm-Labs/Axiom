@@ -35,6 +35,26 @@ Canvas consumer 只接受提交到仓库的 SDK lock。普通构建下载并严�
   采纳时状态继续为 `Validating`。后续只有聚合审计可在独立证据齐全后改为
   `Accepted`。
 
+## R1 Full 扩展
+
+R1 产品化新增 `canvas-skia-sdk-profile-v2` / `r1-full-v1`，不修改或取代历史 POC
+profile/lock。它用同一个锁定 Skia commit 为 8 个 target 生成 Release、Debug、ASan
+三种 variant：24 个 SDK ZIP，加 16 个 Debug/ASan symbols ZIP。macOS 同时覆盖 arm64
+与 x64；iOS device arm64 同时服务 iPhone/iPad；Android arm64 是产品 ABI，x86_64 是
+emulator/CI ABI。
+
+Full SDK 固定 Ganesh、PDF、SVG、Skottie、PathOps、RichText、PNG/JPEG/WebP 及其
+FreeType/HarfBuzz/ICU/Expat/zlib/Wuffs closure。DNG/PIEX、Graphite、Dawn、Vulkan 和
+非 Runtime 工具全部关闭。PathOps 由 API probe 证明而不是发明 GN 参数。包内
+`archive_closure` 必须从 GN 实际 dependency graph/output 导出，消费者只能链接
+`CanvasSkia::Skia` 或受支持的 Paragraph/Skottie/Svg/PathOps/Media imported target，
+不得手工组合 archive。
+
+Release 是唯一默认 variant。Debug 和 ASan 必须显式选择；ASan consumer 同时插桩并
+遵循 manifest 的平台验证等级，不能把 link-only/instrumented-link 表述为 runtime
+smoke。R1 Full matrix lock 只在不可变 Release 发布后生成，不预造哈希。普通 Canvas
+CI 继续只下载 SDK，不允许源码回退、GN 或 Ninja。
+
 ## Validation
 
 Producer 必须验证 schema、canonical hash、target/toolchain identity、包内容、许可证、

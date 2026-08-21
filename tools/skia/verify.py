@@ -70,6 +70,7 @@ def archive_architectures(data: bytes) -> set[str]:
 def verify_archive(
     archive_path: Path, profile_path: Path, expected_target: str,
     extract_to: Path | None = None, *, enforce_current_recipe: bool = True,
+    expected_variant: str = "release",
 ) -> dict:
     profile = load_profile(profile_path)
     target = target_definition(profile, expected_target)
@@ -94,6 +95,12 @@ def verify_archive(
             profile if enforce_current_recipe else None, expected_target,
             profile_path,
         )
+        identity = manifest["identity"]
+        if identity.get("variant", "release") != expected_variant:
+            raise RuntimeError(
+                f"variant mismatch: expected {expected_variant}, "
+                f"got {identity.get('variant', 'release')}"
+            )
         listed = {entry["path"]: entry for entry in manifest["files"]}
         actual_payload = set(names) - {"manifest.json"}
         if actual_payload != set(listed):
@@ -132,7 +139,12 @@ def verify_archive(
             item["destination"] for item in profile.get("runtime_files", [])
             if item["target"] == expected_target
         )
-        required.update(f"lib/{name}" for name in target["libraries"])
+        if target["libraries"] == "discover":
+            if not any(path.startswith("lib/") and path.endswith((".a", ".lib"))
+                       for path in actual_payload):
+                required.add("lib/<discovered-static-library>")
+        else:
+            required.update(f"lib/{name}" for name in target["libraries"])
         absent = sorted(
             path for path in required
             if path not in actual_payload and not (
@@ -140,11 +152,17 @@ def verify_archive(
                     item.startswith(path.removesuffix("<header>"))
                     for item in actual_payload
                 )
+                or path == "lib/<discovered-static-library>" and any(
+                    item.startswith("lib/") and item.endswith((".a", ".lib"))
+                    for item in actual_payload
+                )
             )
         )
         if absent:
             raise RuntimeError(f"SDK is incomplete: {absent}")
-        if archive.read("args.gn").decode("utf-8") != normalized_args_text(profile, expected_target):
+        if archive.read("args.gn").decode("utf-8") != normalized_args_text(
+            profile, expected_target, expected_variant,
+        ):
             raise RuntimeError("normalized args.gn does not match the profile")
         lock = json.loads((ROOT / "deps.lock.json").read_text(encoding="utf-8"))
         expected_font = lock["dependencies"]["roboto_regular"]["sha256"]
@@ -156,19 +174,29 @@ def verify_archive(
             if hashlib.sha256(archive.read(font_path)).hexdigest() != expected_fixture:
                 raise RuntimeError(f"font fixture checksum mismatch: {font_path}")
         expected_archive_arch = {
-            "windows": "x64", "web": "wasm32", "macos": "arm64",
+            "windows": "x64", "web": "wasm32", "macos": target["arch"],
             "ios": "arm64", "ios-simulator": "arm64",
             "android": target["arch"],
         }[target["platform"]]
-        for library in target["libraries"]:
-            library_data = archive.read(f"lib/{library}")
+        library_paths = (
+            [entry["packaged_path"] for entry in manifest["archive_closure"]]
+            if target["libraries"] == "discover"
+            else [f"lib/{library}" for library in target["libraries"]]
+        )
+        for library_path in library_paths:
+            library_data = archive.read(library_path)
             if not library_data.startswith(b"!<arch>\n"):
-                raise RuntimeError(f"static library has invalid archive magic: {library}")
+                raise RuntimeError(f"static library has invalid archive magic: {library_path}")
             architectures = archive_architectures(library_data)
             if expected_archive_arch not in architectures:
                 raise RuntimeError(
-                    f"static library architecture mismatch for {library}: "
+                    f"static library architecture mismatch for {library_path}: "
                     f"expected {expected_archive_arch}, found {sorted(architectures)}"
+                )
+        if manifest.get("schema_version") == 2:
+            if any(path not in actual_payload for path in library_paths):
+                raise RuntimeError(
+                    "manifest archive closure references a missing packaged library"
                 )
 
         if extract_to is not None:
@@ -190,6 +218,7 @@ def verify_archive(
         "archive_sha256": file_sha256(archive_path),
         "sdk_id": manifest["sdk_id"],
         "target": expected_target,
+        "variant": expected_variant,
     }
     print(json.dumps(summary, sort_keys=True))
     return summary
@@ -200,6 +229,7 @@ def main() -> int:
     parser.add_argument("archive", type=Path)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--expected-target", required=True)
+    parser.add_argument("--variant", choices=("release", "debug", "asan"), default="release")
     parser.add_argument("--extract-to", type=Path)
     args = parser.parse_args()
     if not args.archive.is_file():
@@ -207,6 +237,7 @@ def main() -> int:
     verify_archive(
         args.archive.resolve(), args.profile.resolve(), args.expected_target,
         args.extract_to.resolve() if args.extract_to else None,
+        expected_variant=args.variant,
     )
     return 0
 

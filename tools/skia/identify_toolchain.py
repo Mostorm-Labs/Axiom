@@ -22,6 +22,14 @@ def require_contains(actual: str, expected: str, label: str) -> None:
         raise RuntimeError(f"{label} mismatch: expected {expected!r} in {actual!r}")
 
 
+def tool_identity(text: str) -> str:
+    """Keep version identity deterministic without embedding installation paths."""
+    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    if not first:
+        raise RuntimeError("toolchain command returned no version identity")
+    return first.replace("\\", "/")
+
+
 def android_ndk_version(ndk: Path) -> str:
     properties = (ndk / "source.properties").read_text(encoding="utf-8")
     match = re.search(r"^Pkg\.Revision\s*=\s*(.+)$", properties, re.MULTILINE)
@@ -41,6 +49,8 @@ def identify(target_name: str, profile: dict, ndk: str | None) -> dict:
             "emscripten": expected["emscripten"],
             "llvm": expected["llvm"],
             "pthread": False,
+            "clang": tool_identity(version),
+            "linker": tool_identity(version),
         }
     elif platform == "windows":
         version = output("clang-cl", "--version")
@@ -53,6 +63,8 @@ def identify(target_name: str, profile: dict, ndk: str | None) -> dict:
             "llvm": expected["llvm"],
             "msvc_toolset": msvc,
             "windows_sdk": windows_sdk,
+            "clang": tool_identity(version),
+            "linker": tool_identity(output("lld-link", "--version")),
         }
     elif platform in ("macos", "ios", "ios-simulator"):
         sdk = expected["sdk"]
@@ -61,6 +73,8 @@ def identify(target_name: str, profile: dict, ndk: str | None) -> dict:
             "xcode": xcode,
             "sdk": sdk,
             "sdk_version": output("xcrun", "--sdk", sdk, "--show-sdk-version"),
+            "clang": tool_identity(output("xcrun", "--sdk", sdk, "clang", "--version")),
+            "linker": tool_identity(output("xcrun", "--sdk", sdk, "ld", "-v")),
         }
         if "deployment_target" in expected:
             identity["deployment_target"] = expected["deployment_target"]
@@ -71,6 +85,8 @@ def identify(target_name: str, profile: dict, ndk: str | None) -> dict:
         identity = {
             "android_ndk": android_ndk_version(ndk_path),
             "api_level": expected["api_level"],
+            "clang": f"Android NDK {android_ndk_version(ndk_path)}",
+            "linker": f"Android NDK {android_ndk_version(ndk_path)}",
         }
     else:
         raise RuntimeError(f"unsupported target platform: {platform}")

@@ -17,9 +17,11 @@ sys.path.insert(0, str(SKIA_TOOLS))
 from sdk import (  # noqa: E402
     DEFAULT_PROFILE, SDK_FORMAT, SchemaError, canonical_bytes,
     canonical_sha256, load_profile, make_identity, normalized_recipe_bytes,
-    validate_manifest, validate_toolchain,
+    normalized_gn_args, validate_manifest, validate_symbols_manifest,
+    validate_toolchain,
 )
 from package import cmake_config, copy_file, download_locked_file, role  # noqa: E402
+from build import gn_archive_closure, gn_label  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
 
 
@@ -64,6 +66,16 @@ class SdkMetadataTest(unittest.TestCase):
             path = Path(temporary) / "poc01-minimal-v1.json"
             path.write_text(json.dumps(invalid), encoding="utf-8")
             with self.assertRaisesRegex(SchemaError, "unknown fields"):
+                load_profile(path)
+
+    def test_unsafe_license_source_is_rejected(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"
+        profile = load_profile(profile_path)
+        profile["licenses"]["bad.txt"] = "../../outside/LICENSE"
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "r1-full-v1.json"
+            path.write_text(json.dumps(profile), encoding="utf-8")
+            with self.assertRaisesRegex(SchemaError, "unsafe source path"):
                 load_profile(path)
 
     def test_unsafe_or_unlocked_fixture_font_is_rejected(self) -> None:
@@ -255,6 +267,139 @@ class SdkMetadataTest(unittest.TestCase):
 
     def test_private_sdk_header_has_header_role(self) -> None:
         self.assertEqual(role("src/core/SkUTF.h"), "header")
+
+    def test_r1_full_profile_freezes_matrix_variants_and_capabilities(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"
+        profile = load_profile(profile_path)
+        self.assertEqual(profile["format"], "canvas-skia-sdk-profile-v2")
+        self.assertEqual(len(profile["targets"]), 8)
+        self.assertEqual(set(profile["variants"]), {"release", "debug", "asan"})
+        self.assertTrue(profile["capabilities"]["skottie"])
+        self.assertTrue(profile["capabilities"]["pathops"])
+        self.assertFalse(profile["capabilities"]["raw_dng"])
+        self.assertFalse(profile["common_gn_args"]["skia_use_dng_sdk"])
+        self.assertFalse(profile["common_gn_args"]["skia_use_piex"])
+        self.assertFalse(profile["common_gn_args"]["skia_enable_tools"])
+        self.assertEqual(profile["variants"]["release"]["gn_args"]["symbol_level"], 0)
+        self.assertEqual(profile["variants"]["debug"]["gn_args"]["symbol_level"], 2)
+        self.assertEqual(profile["targets"]["macos-x64-metal"]["arch"], "x64")
+        for target in profile["targets"].values():
+            self.assertEqual(target["libraries"], "discover")
+
+        release = normalized_gn_args(profile, "web-wasm-webgl2", "release")
+        debug = normalized_gn_args(profile, "web-wasm-webgl2", "debug")
+        asan = normalized_gn_args(profile, "web-wasm-webgl2", "asan")
+        self.assertEqual((release["is_official_build"], release["is_debug"]), (True, False))
+        self.assertEqual((debug["is_official_build"], debug["is_debug"]), (False, True))
+        self.assertEqual(asan["sanitize"], "ASAN")
+
+    def test_r1_full_profile_rejects_dng_piex_and_illegal_variant(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"
+        profile = load_profile(profile_path)
+        for argument in ("skia_use_dng_sdk", "skia_use_piex"):
+            invalid = copy.deepcopy(profile)
+            invalid["common_gn_args"][argument] = True
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "r1-full-v1.json"
+                path.write_text(json.dumps(invalid), encoding="utf-8")
+                with self.assertRaisesRegex(SchemaError, "DNG and PIEX"):
+                    load_profile(path)
+        invalid = copy.deepcopy(profile)
+        invalid["variants"]["debug"]["is_official_build"] = True
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "r1-full-v1.json"
+            path.write_text(json.dumps(invalid), encoding="utf-8")
+            with self.assertRaisesRegex(SchemaError, "non-official debug"):
+                load_profile(path)
+
+    def test_full_cmake_config_exports_capability_targets(self) -> None:
+        config = cmake_config(["libskia.a"], "macos", full=True)
+        for target in ("Paragraph", "Skottie", "Svg", "PathOps", "Media"):
+            self.assertIn(f"CanvasSkia::{target}", config)
+        self.assertIn("SK_ENABLE_SKOTTIE", config)
+
+    def test_full_manifest_requires_archive_closure_and_symbols_schema(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"
+        profile = load_profile(profile_path)
+        identity = make_identity(
+            profile, "macos-arm64-metal", {"sdk": "macosx"},
+            profile_path=profile_path, variant="debug",
+        )
+        payload = b"archive"
+        manifest = {
+            "schema_version": 2,
+            "format": "canvas-skia-sdk-v2",
+            "sdk_id": canonical_sha256(identity),
+            "identity": identity,
+            "capabilities": profile["capabilities"],
+            "unsupported_reasons": profile["unsupported_reasons"],
+            "archive_closure": [{
+                "source_path": "obj/libskia.a",
+                "packaged_path": "lib/obj__libskia.a",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": len(payload),
+            }],
+            "files": [{
+                "path": "args.gn", "sha256": hashlib.sha256(b"args").hexdigest(),
+                "size": 4, "role": "build-arguments",
+            }, {
+                "path": "lib/obj__libskia.a",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": len(payload), "role": "library",
+            }],
+        }
+        validate_manifest(manifest, profile, "macos-arm64-metal", profile_path)
+        invalid = copy.deepcopy(manifest)
+        invalid["archive_closure"][0]["packaged_path"] = "../escape"
+        with self.assertRaisesRegex(SchemaError, "unsafe packaged_path"):
+            validate_manifest(invalid, profile, "macos-arm64-metal", profile_path)
+        symbols = {
+            "schema_version": 1,
+            "format": "canvas-skia-symbols-v1",
+            "sdk_id": "a" * 64,
+            "target": "macos-arm64-metal",
+            "variant": "asan",
+            "embedded_symbols": True,
+            "files": [{
+                "path": "symbols/libskia.debug",
+                "sha256": "b" * 64,
+                "size": 1,
+            }],
+        }
+        validate_symbols_manifest(symbols, expected_variant="asan")
+
+    def test_gn_labels_cover_root_and_module_targets(self) -> None:
+        self.assertEqual(gn_label("skia"), "//:skia")
+        self.assertEqual(
+            gn_label("modules/skottie:skottie"),
+            "//modules/skottie:skottie",
+        )
+
+    def test_gn_archive_closure_uses_dependency_outputs_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            skia = root / "skia"
+            output = skia / "out/release"
+            output.mkdir(parents=True)
+            (output / "libroot.a").write_bytes(b"root")
+            (output / "libdep.a").write_bytes(b"dep")
+            script = root / "fake-gn"
+            script.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$4\" = deps ]; then\n"
+                "  if [ \"$3\" = //:root ]; then printf '%s\\n' //:root //:dep; else printf '%s\\n' \"$3\"; fi\n"
+                "else\n"
+                "  if [ \"$3\" = //:root ]; then printf '%s\\n' out/release/libroot.a; else printf '%s\\n' out/release/libdep.a; fi\n"
+                "fi\n",
+                encoding="utf-8",
+            )
+            script.chmod(0o755)
+            archives = gn_archive_closure(
+                script, skia, output, "macos", ["root"],
+            )
+            self.assertEqual(
+                [path.name for path in archives], ["libroot.a", "libdep.a"],
+            )
 
 
 if __name__ == "__main__":
