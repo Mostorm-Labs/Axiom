@@ -2020,9 +2020,9 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  AxiomPoc05Fabric: 362ce9fc05da7ca65f1166de881d6c49fbbb59f0
+  AxiomPoc05Fabric: 51a12eb45b70717129b7735b80896538e8092297
   FBLazyVector: e97c19a5a442429d1988f182a1940fb08df514da
-  hermes-engine: 05dcbaaa40cf5396daa98ae60f59f6923d880ef9
+  hermes-engine: 0e6aef88a97dd4b65b680db3e1621733e36e77df
   RCTDeprecation: af44b104091a34482596cd9bd7e8d90c4e9b4bd7
   RCTRequired: bb77b070f75f53398ce43c0aaaa58337cebe2bf6
   RCTSwiftUI: afc0a0a635860da1040a0b894bfd529da06d7810
@@ -2031,7 +2031,7 @@ SPEC CHECKSUMS:
   React: 1ba7d364ade7d883a1ec055bfc3606f35fdee17b
   React-callinvoker: bc2a26f8d84fb01f003fc6de6c9337b64715f95b
   React-Core: bdaa87b276ca31877632a982ecf7c36f8c826414
-  React-Core-prebuilt: 5791ccbe09d6b43cd67a7679bab752f176f3c811
+  React-Core-prebuilt: 002ad304d335b09a8b8cf6dd202176d43e4bad90
   React-CoreModules: b24989f62d56390ae08ca4f65e6f38fe6802de42
   React-cxxreact: 1a2dfcbc18a6b610664dba152adf327f063a0d12
   React-debug: 755200a6e7f5e6e0a40ff8d215493d43cce285fc
@@ -2092,9 +2092,9 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 26bbf1e26768d08dd965a2b5e372e53f67b21fee
   ReactCodegen: 31205a610969000d662436dc54f06243e1ff2c4f
   ReactCommon: 309419492d417c4cbb87af06f67735afa40ecb9d
-  ReactNativeDependencies: 1e6bfa9b80b244e26b7972daf90599212405aaf7
+  ReactNativeDependencies: d3be4fe09c51b7037652e6f217a32d58bac06e2e
   Yoga: c0b3f2c7e8d3e327e450223a2414ca3fa296b9a2
 
 PODFILE CHECKSUM: 87230bb16285d75b74a19226e98b904dc18b8172
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.17.0
