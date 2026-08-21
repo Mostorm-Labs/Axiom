@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import plistlib
 import shutil
 import subprocess
 
@@ -15,6 +16,21 @@ from verify import verify_archive
 
 
 def built_probe(build: Path, platform: str) -> Path:
+    if platform == "ios-simulator":
+        bundles = sorted(
+            path for path in build.rglob("canvas_skia_sdk_probe.app")
+            if path.is_dir()
+        )
+        if len(bundles) != 1:
+            raise RuntimeError(
+                f"expected one runtime probe app bundle, found {len(bundles)}"
+            )
+        info = bundles[0] / "Info.plist"
+        metadata = plistlib.loads(info.read_bytes())
+        executable = bundles[0] / metadata["CFBundleExecutable"]
+        if not executable.is_file():
+            raise RuntimeError(f"runtime probe bundle executable is missing: {executable}")
+        return executable
     suffix = ".exe" if platform == "windows" else ""
     candidates = sorted(
         path for path in build.rglob(f"canvas_skia_sdk_probe{suffix}")
@@ -43,9 +59,28 @@ def canvas_variant_cmake_args(variant: str) -> list[str]:
     return []
 
 
-def run_asan_runtime_smoke(build: Path, platform: str) -> None:
+def windows_variant_cmake_args(variant: str) -> list[str]:
+    """Match the CMake consumer to Skia's static-CRT STL contract on Windows."""
+    args = ["-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"]
+    if variant in ("debug", "asan"):
+        args += [
+            "-DCMAKE_C_FLAGS=/D_ITERATOR_DEBUG_LEVEL=0 /D_HAS_ITERATOR_DEBUGGING=0",
+            "-DCMAKE_CXX_FLAGS=/D_ITERATOR_DEBUG_LEVEL=0 /D_HAS_ITERATOR_DEBUGGING=0",
+        ]
+    return args
+
+
+def run_asan_runtime_smoke(build: Path, platform: str, sdk_root: Path) -> None:
     probe = built_probe(build, platform)
-    if platform in ("windows", "macos"):
+    if platform == "windows":
+        runtime = sdk_root / "runtime/windows/clang_rt.asan_dynamic-x86_64.dll"
+        if not runtime.is_file():
+            raise RuntimeError(f"Windows ASan runtime is missing from SDK: {runtime}")
+        environment = dict(os.environ)
+        environment["PATH"] = f"{runtime.parent}{os.pathsep}{environment.get('PATH', '')}"
+        subprocess.run([str(probe)], check=True, env=environment)
+        return
+    if platform == "macos":
         subprocess.run([str(probe)], check=True)
         return
     if platform != "ios-simulator":
@@ -68,11 +103,28 @@ def run_asan_runtime_smoke(build: Path, platform: str) -> None:
         subprocess.run(
             ["xcrun", "simctl", "bootstatus", device["udid"], "-b"], check=True,
         )
+    bundle = probe.parent
+    metadata = plistlib.loads((bundle / "Info.plist").read_bytes())
+    bundle_id = metadata.get("CFBundleIdentifier")
+    if not bundle_id:
+        raise RuntimeError(f"runtime probe bundle identifier is missing: {bundle}")
     try:
         subprocess.run(
-            ["xcrun", "simctl", "spawn", device["udid"], str(probe)], check=True,
+            ["xcrun", "simctl", "install", device["udid"], str(bundle)],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "xcrun", "simctl", "launch", "--console",
+                "--terminate-running-process", device["udid"], bundle_id,
+            ],
+            check=True,
         )
     finally:
+        subprocess.run(
+            ["xcrun", "simctl", "uninstall", device["udid"], bundle_id],
+            check=False,
+        )
         if booted_here:
             subprocess.run(
                 ["xcrun", "simctl", "shutdown", device["udid"]], check=False,
@@ -142,6 +194,9 @@ def main() -> int:
     elif platform == "windows":
         configure += ["-G", "Ninja", "-DCANVAS_POC01_WINDOWS=ON"]
         probe_configure += ["-G", "Ninja"]
+        windows_args = windows_variant_cmake_args(args.variant)
+        configure += windows_args
+        probe_configure += windows_args
         if args.cc:
             configure.append(f"-DCMAKE_C_COMPILER={Path(args.cc).resolve()}")
             probe_configure.append(f"-DCMAKE_C_COMPILER={Path(args.cc).resolve()}")
@@ -210,7 +265,7 @@ def main() -> int:
         if args.variant == "asan" and platform in (
             "windows", "macos", "ios-simulator",
         ):
-            run_asan_runtime_smoke(probe_build, platform)
+            run_asan_runtime_smoke(probe_build, platform, sdk_root)
     finally:
         if source_was_hidden:
             hidden_source.rename(SKIA_ROOT)

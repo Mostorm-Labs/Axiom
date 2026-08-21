@@ -381,7 +381,10 @@ def variant_metadata(
         "android": "instrumented-link",
     }.get(platform, "runtime-smoke")
     metadata["runtime_validation"] = validation
-    metadata["sanitizer_runtime"] = "compiler-provided"
+    metadata["sanitizer_runtime"] = (
+        "sdk-bundled-clang-dynamic" if platform == "windows"
+        else "compiler-provided"
+    )
     metadata["instrumentation"] = "address"
     toolchain = toolchain or {}
     compiler = toolchain.get("clang") or toolchain.get("emscripten") or toolchain.get("llvm")
@@ -389,8 +392,12 @@ def variant_metadata(
     metadata["compiler_identity"] = compiler or "unspecified"
     metadata["linker_identity"] = linker or "unspecified"
     metadata["frame_pointer"] = True
-    metadata["compile_flags"] = ["-fsanitize=address", "-fno-omit-frame-pointer"]
-    metadata["link_flags"] = ["-fsanitize=address"]
+    if platform == "windows":
+        metadata["compile_flags"] = ["/fsanitize=address", "/Oy-"]
+        metadata["link_flags"] = ["/fsanitize=address", "/INCREMENTAL:NO"]
+    else:
+        metadata["compile_flags"] = ["-fsanitize=address", "-fno-omit-frame-pointer"]
+        metadata["link_flags"] = ["-fsanitize=address"]
     metadata["requires_instrumented_consumer"] = True
     return metadata
 
@@ -422,12 +429,20 @@ def normalized_gn_args(profile: dict[str, Any], target: str, variant: str = "rel
 
 def actual_gn_args(
     profile: dict[str, Any], target: str, *, cc: str | None = None,
-    cxx: str | None = None, ndk: str | None = None, variant: str = "release",
+    cxx: str | None = None, ndk: str | None = None,
+    clang_win: str | None = None, variant: str = "release",
 ) -> dict[str, Any]:
     result = normalized_gn_args(profile, target, variant)
     if target == "windows-x64-d3d12":
         result["cc"] = cc or "clang-cl"
         result["cxx"] = cxx or "clang-cl"
+        if variant == "asan":
+            if not clang_win:
+                raise RuntimeError("Windows ASan SDK build requires --clang-win")
+            root = Path(clang_win).resolve()
+            if not root.is_dir():
+                raise RuntimeError(f"Windows LLVM root is missing: {root}")
+            result["clang_win"] = str(root)
     elif target == "web-wasm-webgl2":
         result["cc"] = cc or "emcc"
         result["cxx"] = cxx or "em++"
@@ -624,6 +639,14 @@ def validate_manifest(
             ):
                 raise SchemaError(
                     "manifest archive_closure does not match the packaged library files"
+                )
+        if identity["platform"] == "windows" and identity["variant"] == "asan":
+            runtime = file_by_path.get(
+                "runtime/windows/clang_rt.asan_dynamic-x86_64.dll"
+            )
+            if runtime is None or runtime["role"] != "runtime":
+                raise SchemaError(
+                    "Windows ASan manifest must contain its dynamic runtime"
                 )
     return result
 

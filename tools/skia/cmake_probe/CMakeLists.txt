@@ -23,9 +23,12 @@ function(canvas_add_skia_probe name source imported_target)
       set_property(TARGET "${name}" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
       target_compile_options("${name}" PRIVATE /fsanitize=address)
       target_link_options("${name}" PRIVATE /fsanitize=address /INCREMENTAL:NO)
+    elseif(CanvasSkia_VARIANT STREQUAL "debug")
+      # Skia's GN debug archive uses the static release CRT and disables MSVC
+      # iterator debugging even though Skia assertions/debug symbols remain on.
+      set_property(TARGET "${name}" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
     else()
-      set_property(TARGET "${name}" PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+      set_property(TARGET "${name}" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
     endif()
   elseif(CanvasSkia_VARIANT STREQUAL "asan")
     target_compile_options("${name}" PRIVATE -fsanitize=address -fno-omit-frame-pointer)

@@ -137,6 +137,7 @@ def main() -> int:
     parser.add_argument("--skia-root", type=Path, default=SKIA_ROOT)
     parser.add_argument("--cc")
     parser.add_argument("--cxx")
+    parser.add_argument("--clang-win")
     parser.add_argument("--ndk", default=os.environ.get("ANDROID_NDK_ROOT"))
     parser.add_argument("--gn")
     parser.add_argument("--ninja", default=os.environ.get("NINJA", "ninja"))
@@ -162,7 +163,7 @@ def main() -> int:
 
     values = actual_gn_args(
         profile, args.target, cc=args.cc, cxx=args.cxx, ndk=args.ndk,
-        variant=args.variant,
+        clang_win=args.clang_win, variant=args.variant,
     )
     gn_args = gn_args_line(values)
     if args.print_args:

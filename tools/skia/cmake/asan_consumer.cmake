@@ -19,10 +19,11 @@ if(MSVC)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "Full Skia SDK ASan validation requires clang-cl")
   endif()
-  # Reuse the established clang-cl/static-CRT path in the repository root.
-  # The dedicated Full SDK switch remains the public entry point; this bridge
-  # is internal to source-free producer validation.
-  set(CANVAS_POC01_ENABLE_SANITIZERS ON CACHE BOOL "" FORCE)
+  # Match Skia's Windows GN ASan configuration: clang-cl links the dynamic
+  # sanitizer runtime and the SDK supplies its matching DLL. The historical
+  # POC-01 static-runtime sanitizer path remains separate and unchanged.
+  add_compile_options(/fsanitize=address /Oy-)
+  add_link_options(/fsanitize=address /INCREMENTAL:NO)
 else()
   add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address)

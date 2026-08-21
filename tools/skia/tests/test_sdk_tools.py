@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+import plistlib
 import sys
 import tempfile
 import unittest
@@ -15,9 +16,10 @@ SKIA_TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKIA_TOOLS))
 
 from sdk import (  # noqa: E402
-    DEFAULT_PROFILE, SDK_FORMAT, SchemaError, canonical_bytes,
-    canonical_sha256, load_profile, make_identity, normalized_recipe_bytes,
-    normalized_gn_args, validate_manifest, validate_symbols_manifest,
+    DEFAULT_PROFILE, ROOT, SDK_FORMAT, SchemaError, canonical_bytes,
+    actual_gn_args, canonical_sha256, load_profile, make_identity,
+    normalized_recipe_bytes, normalized_gn_args, validate_manifest,
+    validate_symbols_manifest, variant_metadata,
     validate_toolchain,
 )
 from package import (  # noqa: E402
@@ -26,7 +28,10 @@ from package import (  # noqa: E402
 )
 from build import gn_archive_closure, gn_label  # noqa: E402
 from verify import archive_architectures, verify_archive  # noqa: E402
-from smoke_consumer import canvas_variant_cmake_args, cmake_apple_arch  # noqa: E402
+from smoke_consumer import (  # noqa: E402
+    built_probe, canvas_variant_cmake_args, cmake_apple_arch,
+    windows_variant_cmake_args,
+)
 
 
 class SdkMetadataTest(unittest.TestCase):
@@ -380,6 +385,108 @@ class SdkMetadataTest(unittest.TestCase):
             self.assertIn(f"CanvasSkia::{target}", config)
         self.assertIn("SK_ENABLE_SKOTTIE", config)
 
+    def test_windows_full_cmake_config_exports_stl_debug_contract(self) -> None:
+        config = cmake_config(["skia.lib"], "windows", full=True, variant="debug")
+        self.assertIn("_ITERATOR_DEBUG_LEVEL=0", config)
+        self.assertIn("_HAS_ITERATOR_DEBUGGING=0", config)
+        asan = cmake_config(["skia.lib"], "windows", full=True, variant="asan")
+        self.assertIn("CanvasSkia_ASAN_RUNTIME_PATH", asan)
+
+    def test_windows_debug_consumer_matches_static_runtime_and_stl_contract(self) -> None:
+        args = windows_variant_cmake_args("debug")
+        self.assertIn("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded", args)
+        self.assertTrue(any("_ITERATOR_DEBUG_LEVEL=0" in value for value in args))
+        probe = (SKIA_TOOLS / "cmake_probe/CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('CanvasSkia_VARIANT STREQUAL "debug"', probe)
+        root = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("DEFINED CANVAS_SKIA_SDK_VARIANT", root)
+        self.assertIn(
+            'CANVAS_SKIA_SDK_VARIANT MATCHES "^(release|debug|asan)$"', root,
+        )
+        self.assertIn("add_compile_definitions(", root)
+        self.assertIn("_ITERATOR_DEBUG_LEVEL=0", root)
+
+    def test_windows_asan_gn_args_require_explicit_llvm_root(self) -> None:
+        profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")
+        with self.assertRaisesRegex(RuntimeError, "--clang-win"):
+            actual_gn_args(
+                profile, "windows-x64-d3d12", cc="clang-cl", cxx="clang-cl",
+                variant="asan",
+            )
+        with tempfile.TemporaryDirectory() as temporary:
+            args = actual_gn_args(
+                profile, "windows-x64-d3d12", cc="clang-cl", cxx="clang-cl",
+                clang_win=temporary, variant="asan",
+            )
+            self.assertEqual(args["clang_win"], str(Path(temporary).resolve()))
+
+    def test_windows_asan_metadata_describes_bundled_dynamic_runtime(self) -> None:
+        profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")
+        metadata = variant_metadata(
+            profile, "windows-x64-d3d12", "asan", {"llvm": "22.1.8"},
+        )
+        self.assertEqual(metadata["sanitizer_runtime"], "sdk-bundled-clang-dynamic")
+        self.assertIn("/fsanitize=address", metadata["compile_flags"])
+
+    def test_windows_asan_manifest_requires_bundled_dynamic_runtime(self) -> None:
+        profile_path = SKIA_TOOLS / "profiles/r1-full-v1.json"
+        profile = load_profile(profile_path)
+        identity = make_identity(
+            profile, "windows-x64-d3d12", {"llvm": "22.1.8"},
+            profile_path=profile_path, variant="asan",
+        )
+        payload = b"archive"
+        manifest = {
+            "schema_version": 2,
+            "format": "canvas-skia-sdk-v2",
+            "sdk_id": canonical_sha256(identity),
+            "identity": identity,
+            "capabilities": profile["capabilities"],
+            "unsupported_reasons": profile["unsupported_reasons"],
+            "archive_closure": [{
+                "source_path": "obj/skia.lib",
+                "packaged_path": "lib/obj__skia.lib",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": len(payload),
+            }],
+            "files": [{
+                "path": "args.gn", "sha256": hashlib.sha256(b"args").hexdigest(),
+                "size": 4, "role": "build-arguments",
+            }, {
+                "path": "lib/obj__skia.lib",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": len(payload), "role": "library",
+            }],
+        }
+        with self.assertRaisesRegex(SchemaError, "dynamic runtime"):
+            validate_manifest(
+                manifest, profile, "windows-x64-d3d12", profile_path,
+            )
+        manifest["files"].append({
+            "path": "runtime/windows/clang_rt.asan_dynamic-x86_64.dll",
+            "sha256": hashlib.sha256(b"runtime").hexdigest(),
+            "size": len(b"runtime"), "role": "runtime",
+        })
+        validate_manifest(
+            manifest, profile, "windows-x64-d3d12", profile_path,
+        )
+
+    def test_ios_simulator_probe_uses_bundle_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "Debug-iphonesimulator/canvas_skia_sdk_probe.app"
+            bundle.mkdir(parents=True)
+            (bundle / "Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleExecutable": "canvas_skia_sdk_probe",
+            }))
+            executable = bundle / "canvas_skia_sdk_probe"
+            executable.write_bytes(b"probe")
+            (root / "CMakeFiles/canvas_skia_sdk_probe").mkdir(parents=True)
+            (root / "CMakeFiles/canvas_skia_sdk_probe/Info.plist").write_bytes(b"noise")
+            self.assertEqual(built_probe(root, "ios-simulator"), executable)
+
     def test_pathops_probe_uses_current_skpath_factory_api(self) -> None:
         probe = (SKIA_TOOLS / "cmake_probe/probe_pathops.cpp").read_text(
             encoding="utf-8"
@@ -404,7 +511,8 @@ class SdkMetadataTest(unittest.TestCase):
         injector = (SKIA_TOOLS / "cmake/asan_consumer.cmake").read_text(
             encoding="utf-8"
         )
-        self.assertIn("set(CANVAS_POC01_ENABLE_SANITIZERS ON", injector)
+        self.assertNotIn("set(CANVAS_POC01_ENABLE_SANITIZERS ON", injector)
+        self.assertIn("add_link_options(/fsanitize=address /INCREMENTAL:NO)", injector)
         self.assertIn("add_link_options(-fsanitize=address)", injector)
 
     def test_only_r1_full_producer_tracks_shared_skia_tooling(self) -> None:
