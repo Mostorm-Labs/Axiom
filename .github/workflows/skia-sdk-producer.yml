@@ -1,11 +1,6 @@
 name: Skia SDK Producer
 
 on:
-  pull_request:
-    paths:
-      - "deps.lock.json"
-      - "tools/skia/**"
-      - ".github/workflows/skia-sdk-producer.yml"
   workflow_dispatch:
 
 permissions:

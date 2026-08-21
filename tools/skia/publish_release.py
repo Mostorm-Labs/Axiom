@@ -27,6 +27,10 @@ def main() -> int:
     parser.add_argument("--target-commit", required=True)
     args = parser.parse_args()
     directory = args.directory.resolve()
+    if not (directory / "release.json").is_file() or \
+       not (directory / "skia-sdk-index.json").is_file() or \
+       not (directory / "SHA256SUMS").is_file():
+        raise RuntimeError("release directory is missing aggregate metadata")
     release = json.loads((directory / "release.json").read_text(encoding="utf-8"))
     index = json.loads((directory / "skia-sdk-index.json").read_text(encoding="utf-8"))
     tag = release["tag"]
@@ -35,8 +39,23 @@ def main() -> int:
         directory / "skia-sdk-index.json",
         directory / "SHA256SUMS",
     ], key=lambda path: path.name)
-    if len(list(directory.glob("skia-sdk-*.zip"))) != len(index["targets"]):
+    expected_archives = (
+        len(index["targets"]) * 5 if index["schema_version"] == 2
+        else len(index["targets"])
+    )
+    if len(list(directory.glob("skia-sdk-*.zip"))) != expected_archives:
         raise RuntimeError("release archive count must match the profile target set")
+    if index["schema_version"] == 2:
+        expected_symbols = {
+            f"skia-sdk-{index['profile']}-{target}-{variant}-symbols.zip"
+            for target in index["targets"]
+            for variant in ("debug", "asan")
+        }
+        actual_symbols = {
+            path.name for path in directory.glob("*-symbols.zip")
+        }
+        if actual_symbols != expected_symbols:
+            raise RuntimeError("release symbols archive set must contain every debug/ASan target")
 
     exists = subprocess.run(
         ["gh", "release", "view", tag, "--repo", args.repository],

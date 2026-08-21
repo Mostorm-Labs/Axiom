@@ -5,10 +5,11 @@ on:
     paths:
       - "deps.lock.json"
       - "pocs/rich_text/**"
-      - "tools/skia/**"
-      - ".github/workflows/poc04.yml"
   push:
     branches: [main]
+    paths:
+      - "deps.lock.json"
+      - "pocs/rich_text/**"
   workflow_dispatch:
 
 concurrency:

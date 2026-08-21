@@ -17,7 +17,12 @@ elseif(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(CANVAS_POC01_SDK_TARGET "ios-arm64-metal")
   endif()
 elseif(APPLE)
-  set(CANVAS_POC01_SDK_TARGET "macos-arm64-metal")
+  if(CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR
+     CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(CANVAS_POC01_SDK_TARGET "macos-x64-metal")
+  else()
+    set(CANVAS_POC01_SDK_TARGET "macos-arm64-metal")
+  endif()
 else()
   message(FATAL_ERROR "POC-01 Skia SDK platform is unsupported on this host")
 endif()
@@ -25,7 +30,34 @@ endif()
 set(CANVAS_SKIA_SDK_ROOT
     "${PROJECT_SOURCE_DIR}/.deps/skia-sdk/${CANVAS_POC01_SDK_TARGET}" CACHE PATH
     "Verified Canvas Skia SDK root; run tools/skia/fetch.py when missing")
+set(CANVAS_SKIA_SDK_VARIANT "release" CACHE STRING
+    "Explicit Skia SDK variant: release, debug, or asan")
+set_property(CACHE CANVAS_SKIA_SDK_VARIANT PROPERTY STRINGS release debug asan)
+if(NOT CANVAS_SKIA_SDK_VARIANT MATCHES "^(release|debug|asan)$")
+  message(FATAL_ERROR "CANVAS_SKIA_SDK_VARIANT must be release, debug, or asan")
+endif()
+if(CANVAS_SKIA_SDK_VARIANT STREQUAL "asan" AND
+   NOT CANVAS_SKIA_SDK_ASAN_CONSUMER)
+  message(FATAL_ERROR
+    "The ASan Skia SDK requires -DCANVAS_SKIA_SDK_ASAN_CONSUMER=ON so the "
+    "consumer and final binary link the matching sanitizer runtime")
+endif()
+if(CANVAS_SKIA_SDK_ASAN_CONSUMER AND
+   NOT CANVAS_SKIA_SDK_VARIANT STREQUAL "asan")
+  message(FATAL_ERROR
+    "CANVAS_SKIA_SDK_ASAN_CONSUMER may only be used with the asan SDK variant")
+endif()
+set(CANVAS_SKIA_SDK_LOCK "" CACHE FILEPATH
+    "Consumer lock for the selected Skia SDK profile")
 
+if(NOT CANVAS_SKIA_SDK_ROOT OR
+   NOT EXISTS "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
+  if(EXISTS "${CANVAS_SKIA_SDK_ROOT}/${CANVAS_SKIA_SDK_VARIANT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
+    set(CANVAS_SKIA_SDK_ROOT
+        "${CANVAS_SKIA_SDK_ROOT}/${CANVAS_SKIA_SDK_VARIANT}" CACHE PATH
+        "Verified Canvas Skia SDK root" FORCE)
+  endif()
+endif()
 if(NOT CANVAS_SKIA_SDK_ROOT OR
    NOT EXISTS "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
   message(FATAL_ERROR
@@ -42,22 +74,49 @@ string(JSON _canvas_skia_manifest_id ERROR_VARIABLE _canvas_skia_manifest_error
   GET "${_canvas_skia_manifest_json}" sdk_id)
 string(JSON _canvas_skia_manifest_target ERROR_VARIABLE _canvas_skia_target_error
   GET "${_canvas_skia_manifest_json}" identity target)
+string(JSON _canvas_skia_manifest_profile ERROR_VARIABLE _canvas_skia_profile_error
+  GET "${_canvas_skia_manifest_json}" identity profile)
+string(JSON _canvas_skia_manifest_variant ERROR_VARIABLE _canvas_skia_variant_error
+  GET "${_canvas_skia_manifest_json}" identity variant)
+if(NOT CANVAS_SKIA_SDK_LOCK)
+  if(NOT _canvas_skia_profile_error AND
+     _canvas_skia_manifest_profile STREQUAL "r1-full-v1" AND
+     EXISTS "${PROJECT_SOURCE_DIR}/r1-full-skia-sdk.lock.json")
+    set(CANVAS_SKIA_SDK_LOCK "${PROJECT_SOURCE_DIR}/r1-full-skia-sdk.lock.json"
+        CACHE FILEPATH "Consumer lock for the selected Skia SDK profile" FORCE)
+  else()
+    set(CANVAS_SKIA_SDK_LOCK "${PROJECT_SOURCE_DIR}/skia-sdk.lock.json"
+        CACHE FILEPATH "Consumer lock for the selected Skia SDK profile" FORCE)
+  endif()
+endif()
 set(CANVAS_SKIA_SDK_EXPECTED_ID "" CACHE STRING
     "Producer-only expected SDK ID; normal consumers must leave this empty")
 if(NOT CANVAS_SKIA_SDK_EXPECTED_ID)
-  set(_canvas_skia_lock "${PROJECT_SOURCE_DIR}/skia-sdk.lock.json")
+  set(_canvas_skia_lock "${CANVAS_SKIA_SDK_LOCK}")
   if(NOT EXISTS "${_canvas_skia_lock}")
     message(FATAL_ERROR "Missing skia-sdk.lock.json; run the fetch command above")
   endif()
   file(READ "${_canvas_skia_lock}" _canvas_skia_lock_json)
   string(JSON CANVAS_SKIA_SDK_EXPECTED_ID ERROR_VARIABLE _canvas_skia_lock_error
-    GET "${_canvas_skia_lock_json}" targets "${CANVAS_POC01_SDK_TARGET}" sdk_id)
+    GET "${_canvas_skia_lock_json}" targets "${CANVAS_POC01_SDK_TARGET}"
+    variants "${CANVAS_SKIA_SDK_VARIANT}" sdk_id)
   if(_canvas_skia_lock_error)
-    message(FATAL_ERROR
-      "skia-sdk.lock.json does not contain ${CANVAS_POC01_SDK_TARGET}")
+    if(NOT CANVAS_SKIA_SDK_VARIANT STREQUAL "release")
+      message(FATAL_ERROR
+        "the selected Skia lock does not contain ${CANVAS_POC01_SDK_TARGET}/"
+        "${CANVAS_SKIA_SDK_VARIANT}")
+    endif()
+    string(JSON CANVAS_SKIA_SDK_EXPECTED_ID ERROR_VARIABLE _canvas_skia_lock_error
+      GET "${_canvas_skia_lock_json}" targets "${CANVAS_POC01_SDK_TARGET}" sdk_id)
+    if(_canvas_skia_lock_error)
+      message(FATAL_ERROR
+        "the selected Skia lock does not contain ${CANVAS_POC01_SDK_TARGET}")
+    endif()
   endif()
 endif()
 if(_canvas_skia_manifest_error OR _canvas_skia_target_error OR
+   (NOT _canvas_skia_variant_error AND
+    NOT _canvas_skia_manifest_variant STREQUAL CANVAS_SKIA_SDK_VARIANT) OR
    NOT _canvas_skia_manifest_target STREQUAL CANVAS_POC01_SDK_TARGET OR
    NOT _canvas_skia_manifest_id STREQUAL CANVAS_SKIA_SDK_EXPECTED_ID)
   message(FATAL_ERROR

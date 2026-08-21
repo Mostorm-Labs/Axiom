@@ -68,7 +68,19 @@ if(MSVC)
       /INCREMENTAL:NO
       "/wholearchive:${CANVAS_POC01_ASAN_RUNTIME}"
     )
+  elseif(DEFINED CANVAS_SKIA_SDK_VARIANT AND
+         CANVAS_SKIA_SDK_VARIANT MATCHES "^(release|debug|asan)$")
+    # R1 Full SDK archives use Skia's static release CRT contract for every
+    # variant. Debug and ASan retain assertions, instrumentation, and symbols,
+    # but must not switch their consumers to /MTd.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    add_compile_definitions(
+      _ITERATOR_DEBUG_LEVEL=0
+      _HAS_ITERATOR_DEBUGGING=0
+    )
   else()
+    # Historical POC consumers do not select an SDK variant. Preserve their
+    # established Debug CRT behavior so their locked reports stay reproducible.
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
   endif()
 endif()

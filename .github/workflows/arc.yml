@@ -3,14 +3,17 @@ name: Arc / POC-06
 on:
   pull_request:
     paths:
-      - "CMakeLists.txt"
       - "arc/**"
       - "pocs/fastink/**"
       - "pocs/ink_engine/include/**"
       - "pocs/ink_engine/src/**"
-      - ".github/workflows/arc.yml"
   push:
-    branches: [main, "codex/poc-06-arc-fastink"]
+    branches: [main]
+    paths:
+      - "arc/**"
+      - "pocs/fastink/**"
+      - "pocs/ink_engine/include/**"
+      - "pocs/ink_engine/src/**"
   workflow_dispatch:
 
 concurrency:

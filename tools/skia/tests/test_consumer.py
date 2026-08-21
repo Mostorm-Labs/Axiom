@@ -15,7 +15,9 @@ SKIA_TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKIA_TOOLS))
 
 import fetch  # noqa: E402
-from consumer import POC01_EXPECTED_TARGETS, validate_lock  # noqa: E402
+from consumer import (
+    FULL_EXPECTED_TARGETS, POC01_EXPECTED_TARGETS, validate_index, validate_lock,
+)  # noqa: E402
 from sdk import (  # noqa: E402
     canonical_sha256, file_sha256, load_profile, make_identity,
     normalized_args_text, profile_hash,
@@ -111,6 +113,57 @@ class ConsumerTest(unittest.TestCase):
         invalid["targets"] = {}
         with self.assertRaisesRegex(RuntimeError, "at least one target"):
             validate_lock(invalid)
+
+    def test_full_index_requires_eight_targets_three_variants_and_asan_contract(self) -> None:
+        targets = {}
+        identity_set = {}
+        for target in sorted(FULL_EXPECTED_TARGETS):
+            variants = {}
+            identity_set[target] = {}
+            for variant in ("release", "debug", "asan"):
+                sdk_id = hashlib.sha256(f"{target}/{variant}".encode()).hexdigest()
+                identity_set[target][variant] = sdk_id
+                symbol = None if variant == "release" else {
+                    "asset": f"skia-sdk-r1-full-v1-{target}-{variant}-symbols.zip",
+                    "sha256": "b" * 64,
+                    "size": 2,
+                }
+                variants[variant] = {
+                    "asset": f"skia-sdk-r1-full-v1-{target}-{variant}.zip",
+                    "sdk_id": sdk_id,
+                    "sha256": "a" * 64,
+                    "size": 1,
+                    "toolchain": {},
+                    "capabilities": {"raw_dng": False},
+                    "variant_metadata": {
+                        "is_official_build": variant == "release",
+                        "is_debug": variant != "release",
+                        "sanitize": "ASAN" if variant == "asan" else "",
+                        "consumer_default": variant == "release",
+                        "requires_instrumented_consumer": variant == "asan",
+                    },
+                    "symbols_asset": symbol["asset"] if symbol else None,
+                    "symbols_sha256": symbol["sha256"] if symbol else None,
+                    "symbols_size": symbol["size"] if symbol else None,
+                }
+            targets[target] = {"variants": variants}
+        index = {
+            "schema_version": 2,
+            "format": "canvas-skia-sdk-set-v2",
+            "set_id": canonical_sha256(identity_set),
+            "profile": "r1-full-v1",
+            "profile_hash": "c" * 64,
+            "skia_commit": "d" * 40,
+            "source_repository": "Mostorm-Labs/Axiom",
+            "source_commit": "e" * 40,
+            "targets": targets,
+        }
+        validate_index(index)
+        invalid = json.loads(json.dumps(index))
+        invalid["targets"]["macos-arm64-metal"]["variants"]["release"][
+            "variant_metadata"]["sanitize"] = "ASAN"
+        with self.assertRaisesRegex(RuntimeError, "sanitizer metadata mismatch"):
+            validate_index(invalid)
 
     def test_existing_install_is_fully_verified_before_reuse(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

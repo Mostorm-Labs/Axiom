@@ -18,6 +18,12 @@ Canvas v2 的正式定义是 **Visual Document Runtime**。它不是一个单纯
 
 ## 1. 产品定义
 
+Skia 供应链也分为不可变 profile：POC-01/POC-04 的历史 lock 保持原样；R1 使用
+`r1-full-v1`，按 8 个 target × `release`/`debug`/`asan` 生成 Full SDK。普通 Canvas
+consumer 只下载并校验 Release asset，Debug/ASan 必须显式选择，且不能回退到 Skia
+源码、GN 或 Ninja。完整 profile、capability targets、archive closure 和 symbols
+资产契约见 [Skia SDK Supply Chain](architecture/SKIA_SDK_SUPPLY_CHAIN.md)。
+
 Canvas v2 为 Web、Windows、macOS、iOS、iPadOS、Android 和复用 Web target 的 ChromiumOS 环境提供同一套文档与画布语义。V1 支持责任分为四级：Web/Windows/Android 是正式 Product Tier A；macOS/iOS/iPadOS 是持续验证共享 Runtime 的 Portability Tier B；ChromiumOS 是 Web Reuse Target；Headless 是测试/reference Utility Target。Apple 产品 Shell 和 Headless 公共产品 API 另行 ADR。平台 UI 可以替换，核心数据与行为不能分叉。
 
 长期能力边界包括：

@@ -10,14 +10,15 @@ import subprocess
 import tempfile
 
 from consumer import LOCK_PATH, lock_from_index
-from sdk import file_sha256
+from sdk import ROOT, file_sha256, load_profile, profile_hash
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True)
     parser.add_argument("--repository", default="Mostorm-Labs/Axiom")
-    parser.add_argument("--output", type=Path, default=LOCK_PATH)
+    parser.add_argument("--profile", type=Path)
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
     metadata = json.loads(subprocess.check_output([
@@ -37,6 +38,11 @@ def main() -> int:
         index_path = root / "skia-sdk-index.json"
         sums_path = root / "SHA256SUMS"
         index = json.loads(index_path.read_text(encoding="utf-8"))
+        if args.profile:
+            selected_profile = load_profile(args.profile.resolve())
+            if selected_profile["profile"] != index["profile"] or \
+               profile_hash(selected_profile) != index["profile_hash"]:
+                raise RuntimeError("release index does not match the selected profile")
         sums = {}
         for line in sums_path.read_text(encoding="utf-8").splitlines():
             digest, name = line.split("  ", 1)
@@ -51,15 +57,28 @@ def main() -> int:
         if lock["source_commit"] != metadata["targetCommitish"]:
             raise RuntimeError("release target commit does not match SDK index")
         expected_assets = {"SHA256SUMS", "skia-sdk-index.json"}
+        release_entries = []
         for target in lock["targets"].values():
-            expected_assets.add(target["asset"])
-            if sums.get(target["asset"]) != target["sha256"]:
-                raise RuntimeError(f"SHA256SUMS mismatch: {target['asset']}")
-            digest = assets.get(target["asset"], {}).get("digest")
-            if digest and digest != f"sha256:{target['sha256']}":
-                raise RuntimeError(f"GitHub asset digest mismatch: {target['asset']}")
+            if "variants" in target:
+                for variant in target["variants"].values():
+                    release_entries.append(
+                        (variant["asset"], variant["sha256"])
+                    )
+                    if variant["symbols_asset"] is not None:
+                        release_entries.append(
+                            (variant["symbols_asset"], variant["symbols_sha256"])
+                        )
+            else:
+                release_entries.append((target["asset"], target["sha256"]))
+        for name, sha256 in release_entries:
+            expected_assets.add(name)
+            if sums.get(name) != sha256:
+                raise RuntimeError(f"SHA256SUMS mismatch: {name}")
+            digest = assets.get(name, {}).get("digest")
+            if digest and digest != f"sha256:{sha256}":
+                raise RuntimeError(f"GitHub asset digest mismatch: {name}")
         if set(sums) != expected_assets - {"SHA256SUMS"}:
-            raise RuntimeError("SHA256SUMS asset set does not match index and SDK targets")
+            raise RuntimeError("SHA256SUMS asset set does not match index and SDK assets")
         index_digest = assets.get("skia-sdk-index.json", {}).get("digest")
         if index_digest and index_digest != f"sha256:{file_sha256(index_path)}":
             raise RuntimeError("GitHub index asset digest mismatch")
@@ -67,8 +86,14 @@ def main() -> int:
         if sums_digest and sums_digest != f"sha256:{file_sha256(sums_path)}":
             raise RuntimeError("GitHub SHA256SUMS asset digest mismatch")
         if set(assets) != expected_assets:
-            raise RuntimeError("release asset set is not exactly index, sums, and SDK targets")
-    output = args.output.resolve()
+            raise RuntimeError("release asset set is not exactly index, sums, and SDK assets")
+    if args.output:
+        output = args.output.resolve()
+    elif index["profile"] == "r1-full-v1":
+        output = ROOT / "r1-full-skia-sdk.lock.json"
+    else:
+        output = LOCK_PATH
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"lock": str(output), "set_id": lock["set_id"], "tag": args.tag}, sort_keys=True))
     return 0

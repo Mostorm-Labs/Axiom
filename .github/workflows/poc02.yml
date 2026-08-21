@@ -3,16 +3,17 @@ name: POC-02 Ink Engine
 on:
   pull_request:
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
-      - "deps.lock.json"
       - "skia-sdk.lock.json"
       - "pocs/ink_engine/**"
       - "arc/**"
       - "pocs/fastink/**"
-      - ".github/workflows/poc02.yml"
   push:
-    branches: [main, "codex/poc-02-ink-engine", "codex/poc-03-100k-scene"]
+    branches: [main]
+    paths:
+      - "skia-sdk.lock.json"
+      - "pocs/ink_engine/**"
+      - "arc/**"
+      - "pocs/fastink/**"
   workflow_dispatch:
 
 concurrency:

@@ -66,6 +66,11 @@ code should bypass their documented exit gates.
 - [POC-03 100K Scene implementation](pocs/large_scene/README.md)
 - [Prebuilt Skia SDK supply chain](docs/architecture/SKIA_SDK_SUPPLY_CHAIN.md)
 
+The immutable POC profiles remain reproducible. R1 productization adds the
+`r1-full-v1` Skia profile with eight targets and explicit `release`, `debug`,
+and `asan` variants; it is produced and published separately, so ordinary
+Canvas CI downloads SDK assets and never runs Skia GN/Ninja.
+
 ## Current sequence
 
 The accepted `POC-01 Shared Engine` has unlocked parallel Ink, Scene, and
