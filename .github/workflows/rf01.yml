@@ -3,8 +3,6 @@ name: RF-01 Scene Foundation
 on:
   pull_request:
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
       - "runtime/**"
       - "pocs/large_scene/rf01/**"
       - "pocs/large_scene/tests/rf01_scene_source_test.cpp"
@@ -12,12 +10,9 @@ on:
       - "docs/api/canvas_runtime_api_v1.manifest.json"
       - "tools/check_runtime_abi_manifest.py"
       - "tools/check_runtime_boundaries.py"
-      - ".github/workflows/rf01.yml"
   push:
     branches: [main, "codex/poc-03-100k-scene"]
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
       - "runtime/**"
       - "pocs/large_scene/rf01/**"
       - "pocs/large_scene/tests/rf01_scene_source_test.cpp"
@@ -25,7 +20,6 @@ on:
       - "docs/api/canvas_runtime_api_v1.manifest.json"
       - "tools/check_runtime_abi_manifest.py"
       - "tools/check_runtime_boundaries.py"
-      - ".github/workflows/rf01.yml"
   workflow_dispatch:
 
 concurrency:

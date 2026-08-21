@@ -170,7 +170,7 @@ def main() -> int:
         f"-DCMAKE_BUILD_TYPE={configuration}",
         f"-DCanvasSkia_DIR={sdk_root / 'lib/cmake/CanvasSkia'}",
     ]
-    if args.variant == "asan":
+    if args.variant == "asan" and target["platform"] != "windows":
         probe_configure += [
             "-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer",
             "-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer",

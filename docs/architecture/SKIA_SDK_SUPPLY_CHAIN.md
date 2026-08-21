@@ -40,15 +40,24 @@ flowchart LR
 
 `r1-full-v1` 构建 8 个 target：Windows x64/D3D12、Web WASM/WebGL2、macOS
 arm64/x64 Metal、iOS/iPadOS device arm64 Metal、Apple Silicon iOS simulator arm64
-Metal，以及 Android arm64-v8a/x86_64 GLES3。每个 target 在同一已同步的 Skia source
-checkout 内使用三个独立 GN output directory：
+Metal，以及 Android arm64-v8a/x86_64 GLES3。Producer 将 `target × variant` 展开为
+24 个独立 job；每个 job 只拥有一个 GN output directory：
 
 - `release`：`is_official_build=true`、`is_debug=false`、无 sanitizer、无独立 symbols
   asset，是唯一默认 consumer variant。
 - `debug`：`is_official_build=false`、`is_debug=true`、保留完整调试信息，并发布
   symbols asset。
 - `asan`：`is_official_build=false`、`is_debug=true`、`sanitize="ASAN"`、保留 frame
-  pointer。consumer 必须显式选择并同时插桩，不能由 Release/Debug 构建隐式消费。
+pointer。consumer 必须显式选择并同时插桩，不能由 Release/Debug 构建隐式消费。
+
+同一次 workflow run 可用 **Rerun failed jobs** 只重跑失败组合，成功组合的 artifact
+保持可用。新 run 在安装目标工具链并记录 identity 后，会查询保留期内的旧 Full Producer
+artifact；只有 profile/hash、Skia commit、target/variant、规范化 GN args、toolchain、
+recipe hash、SDK ID、GitHub artifact digest、manifest 与全部文件 hash 完全一致时才复用。
+复用包仍执行 source-free consumer smoke 并重新上传为本次 run 的独立 artifact；任何不匹配
+都进入正常源码构建。Actions cache 只恢复编译输出，不能替代 package、verify、smoke 或
+aggregate。不可变 prerelease 发布后，普通 Canvas consumer 只下载 Release asset，不再运行
+Producer。
 
 ASan 验证等级写入 identity：macOS、Windows 和 iOS simulator 目标为
 `runtime-smoke`；Android arm64/x86_64 和 iOS device 初始为 `instrumented-link`，Web
@@ -111,7 +120,10 @@ Manifest 对所有 payload 文件记录角色、大小和 SHA-256。ZIP 使用�
 
 Full v2 包另外包含 SkParagraph、Skottie、SkSG、SkResources、JSON reader、SVG 等
 module headers、Noto CJK fixture、所有实际启用依赖的 notice，以及
-`archive_closure`。闭包由 GN 根模块的传递 dependency graph 与 `outputs` 生成，保留根到
+`archive_closure`。Windows ASan 包另外携带锁定 LLVM 的动态 runtime DLL、import library
+与 runtime thunk library；imported target 负责显式链接，不能把 clang-cl driver 的
+`/fsanitize=address` 错传给 `lld-link`。闭包由 GN 根模块的传递 dependency graph 与
+`outputs` 生成，保留根到
 依赖的确定性链接顺序和原始 build-relative path；打包器不得盲扫 output tree 或引入
 host-tool archive。Debug/ASan symbols ZIP 使用独立 `canvas-skia-symbols-v1` manifest，
 逐文件记录大小与 SHA-256；即使平台没有产生 PDB/dSYM/map，静态库内嵌调试信息仍由

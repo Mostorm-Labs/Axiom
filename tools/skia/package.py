@@ -97,11 +97,19 @@ def cmake_config(
                 "\"_ITERATOR_DEBUG_LEVEL=0;_HAS_ITERATOR_DEBUGGING=0\")"
             )
             if variant == "asan":
-                lines.append(
+                lines.extend([
                     "set(CanvasSkia_ASAN_RUNTIME_PATH "
                     "\"${_CANVAS_SKIA_PREFIX}/runtime/windows/"
-                    "clang_rt.asan_dynamic-x86_64.dll\")"
-                )
+                    "clang_rt.asan_dynamic-x86_64.dll\")",
+                    "set_property(TARGET CanvasSkia::Skia APPEND PROPERTY "
+                    "INTERFACE_LINK_LIBRARIES "
+                    "\"${_CANVAS_SKIA_PREFIX}/runtime/windows/"
+                    "clang_rt.asan_dynamic-x86_64.lib\")",
+                    "set_property(TARGET CanvasSkia::Skia APPEND PROPERTY "
+                    "INTERFACE_LINK_OPTIONS "
+                    "\"/WHOLEARCHIVE:${_CANVAS_SKIA_PREFIX}/runtime/windows/"
+                    "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib\")",
+                ])
         definitions = {
             "Paragraph": "SK_ENABLE_PARAGRAPH",
             "Skottie": "SK_ENABLE_SKOTTIE;SK_ENABLE_SKOTTIE_SKSLEFFECT",
@@ -351,9 +359,14 @@ def package(
             if item["target"] == target_name
         }
         if full and target["platform"] == "windows" and variant == "asan":
-            destination = "runtime/windows/clang_rt.asan_dynamic-x86_64.dll"
-            copy_file(build_dir / Path(destination).name, stage / destination)
-            runtime_destinations.add(destination)
+            for name in (
+                "clang_rt.asan_dynamic-x86_64.dll",
+                "clang_rt.asan_dynamic-x86_64.lib",
+                "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",
+            ):
+                destination = f"runtime/windows/{name}"
+                copy_file(build_dir / name, stage / destination)
+                runtime_destinations.add(destination)
         libraries = target["libraries"]
         library_sources: list[tuple[Path, str]] = []
         if libraries == "discover":

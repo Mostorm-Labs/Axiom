@@ -32,6 +32,7 @@ from smoke_consumer import (  # noqa: E402
     built_probe, canvas_variant_cmake_args, cmake_apple_arch,
     windows_variant_cmake_args,
 )
+from reuse_artifact import trusted_run  # noqa: E402
 
 
 class SdkMetadataTest(unittest.TestCase):
@@ -391,6 +392,13 @@ class SdkMetadataTest(unittest.TestCase):
         self.assertIn("_HAS_ITERATOR_DEBUGGING=0", config)
         asan = cmake_config(["skia.lib"], "windows", full=True, variant="asan")
         self.assertIn("CanvasSkia_ASAN_RUNTIME_PATH", asan)
+        self.assertIn("clang_rt.asan_dynamic-x86_64.lib", asan)
+        self.assertIn(
+            "/WHOLEARCHIVE:${_CANVAS_SKIA_PREFIX}/runtime/windows/"
+            "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",
+            asan,
+        )
+        self.assertNotIn('INTERFACE_LINK_OPTIONS "/fsanitize=address', asan)
 
     def test_windows_debug_consumer_matches_static_runtime_and_stl_contract(self) -> None:
         args = windows_variant_cmake_args("debug")
@@ -469,6 +477,16 @@ class SdkMetadataTest(unittest.TestCase):
             "sha256": hashlib.sha256(b"runtime").hexdigest(),
             "size": len(b"runtime"), "role": "runtime",
         })
+        for name in (
+            "clang_rt.asan_dynamic-x86_64.lib",
+            "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",
+        ):
+            manifest["files"].append({
+                "path": f"runtime/windows/{name}",
+                "sha256": hashlib.sha256(b"runtime").hexdigest(),
+                "size": len(b"runtime"), "role": "runtime",
+            })
+        manifest["files"].sort(key=lambda entry: entry["path"])
         validate_manifest(
             manifest, profile, "windows-x64-d3d12", profile_path,
         )
@@ -486,6 +504,11 @@ class SdkMetadataTest(unittest.TestCase):
             (root / "CMakeFiles/canvas_skia_sdk_probe").mkdir(parents=True)
             (root / "CMakeFiles/canvas_skia_sdk_probe/Info.plist").write_bytes(b"noise")
             self.assertEqual(built_probe(root, "ios-simulator"), executable)
+        cmake_probe = (SKIA_TOOLS / "cmake_probe/CMakeLists.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("MACOSX_BUNDLE_GUI_IDENTIFIER", cmake_probe)
+        self.assertIn("XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER", cmake_probe)
 
     def test_pathops_probe_uses_current_skpath_factory_api(self) -> None:
         probe = (SKIA_TOOLS / "cmake_probe/probe_pathops.cpp").read_text(
@@ -512,7 +535,8 @@ class SdkMetadataTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertNotIn("set(CANVAS_POC01_ENABLE_SANITIZERS ON", injector)
-        self.assertIn("add_link_options(/fsanitize=address /INCREMENTAL:NO)", injector)
+        self.assertNotIn("add_link_options(/fsanitize=address", injector)
+        self.assertIn("add_link_options(/INCREMENTAL:NO)", injector)
         self.assertIn("add_link_options(-fsanitize=address)", injector)
 
     def test_only_r1_full_producer_tracks_shared_skia_tooling(self) -> None:
@@ -538,6 +562,48 @@ class SdkMetadataTest(unittest.TestCase):
             )[0]
             self.assertNotIn('"tools/skia/**"', trigger)
             self.assertNotIn('"tools/**"', trigger)
+
+    def test_full_producer_is_target_variant_matrix(self) -> None:
+        workflow = (
+            SKIA_TOOLS.parents[1]
+            / ".github/workflows/skia-sdk-r1-full-producer.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("variant: [release, debug, asan]", workflow)
+        self.assertIn("name: ${{ matrix.target }}-${{ matrix.variant }}", workflow)
+        self.assertNotIn("for variant in release debug asan", workflow)
+        self.assertNotIn("foreach ($variant in @('release', 'debug', 'asan'))", workflow)
+        self.assertIn("tools/skia/reuse_artifact.py", workflow)
+
+    def test_cross_run_reuse_accepts_only_trusted_completed_runs(self) -> None:
+        base = {
+            "id": 41, "status": "completed", "head_sha": "a" * 40,
+            "head_branch": "feature",
+        }
+        trusted = {"feature", "main"}
+        self.assertTrue(trusted_run(base, "42", "a" * 40, trusted))
+        from_main = dict(base, head_sha="b" * 40, head_branch="main")
+        self.assertTrue(trusted_run(from_main, "42", "a" * 40, trusted))
+        self.assertFalse(trusted_run(base, "41", "a" * 40, trusted))
+        self.assertFalse(trusted_run(
+            dict(base, status="in_progress"), "42", "a" * 40, trusted
+        ))
+        self.assertFalse(trusted_run(
+            dict(base, head_sha="b" * 40, head_branch="untrusted"),
+            "42", "a" * 40, trusted
+        ))
+
+    def test_legacy_workflows_do_not_track_full_sdk_changes(self) -> None:
+        workflows = SKIA_TOOLS.parents[1] / ".github/workflows"
+        for name in (
+            "poc01.yml", "poc02.yml", "poc03.yml", "poc04.yml",
+            "poc05.yml", "rf01.yml", "arc.yml",
+        ):
+            trigger = (workflows / name).read_text(encoding="utf-8").split(
+                "concurrency:", maxsplit=1
+            )[0]
+            self.assertNotIn('"CMakeLists.txt"', trigger)
+            self.assertNotIn('"tools/skia/**"', trigger)
+            self.assertNotIn(f'".github/workflows/{name}"', trigger)
 
     def test_r1_full_profile_requires_bundled_dependencies(self) -> None:
         profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")

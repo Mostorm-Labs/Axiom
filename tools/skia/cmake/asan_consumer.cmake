@@ -23,7 +23,11 @@ if(MSVC)
   # sanitizer runtime and the SDK supplies its matching DLL. The historical
   # POC-01 static-runtime sanitizer path remains separate and unchanged.
   add_compile_options(/fsanitize=address /Oy-)
-  add_link_options(/fsanitize=address /INCREMENTAL:NO)
+  # CMake invokes lld-link directly for the MSVC ABI. /fsanitize=address is a
+  # clang-cl driver option and must never be forwarded to lld-link; the SDK's
+  # imported target supplies the dynamic import library and whole-archive
+  # runtime thunk instead.
+  add_link_options(/INCREMENTAL:NO)
 else()
   add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address)

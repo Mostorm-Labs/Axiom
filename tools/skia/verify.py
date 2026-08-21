@@ -141,7 +141,11 @@ def verify_archive(
         )
         if manifest.get("schema_version") == 2 and \
            target["platform"] == "windows" and expected_variant == "asan":
-            required.add("runtime/windows/clang_rt.asan_dynamic-x86_64.dll")
+            required.update({
+                "runtime/windows/clang_rt.asan_dynamic-x86_64.dll",
+                "runtime/windows/clang_rt.asan_dynamic-x86_64.lib",
+                "runtime/windows/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",
+            })
         if target["libraries"] == "discover":
             if not any(path.startswith("lib/") and path.endswith((".a", ".lib"))
                        for path in actual_payload):

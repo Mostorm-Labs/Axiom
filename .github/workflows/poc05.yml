@@ -3,24 +3,18 @@ name: POC-05 Hybrid Surface
 on:
   pull_request:
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
       - "skia-sdk.lock.json"
       - "docs/api/**"
       - "docs/architecture/RF01_SCENE_RENDERING_FOUNDATION.md"
       - "pocs/large_scene/**"
       - "pocs/hybrid_surface/**"
-      - ".github/workflows/poc05.yml"
   push:
     branches: [main]
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
       - "skia-sdk.lock.json"
       - "docs/api/**"
       - "pocs/large_scene/**"
       - "pocs/hybrid_surface/**"
-      - ".github/workflows/poc05.yml"
   workflow_dispatch:
 
 concurrency:

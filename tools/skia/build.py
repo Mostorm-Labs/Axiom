@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 
 from sdk import (
@@ -129,6 +130,25 @@ def write_archive_closure(
     return destination
 
 
+def stage_windows_asan_runtime(clang_root: Path, output: Path) -> None:
+    """Copy the pinned dynamic ASan runtime closure beside the GN outputs."""
+    runtime_names = (
+        "clang_rt.asan_dynamic-x86_64.dll",
+        "clang_rt.asan_dynamic-x86_64.lib",
+        "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",
+    )
+    runtime_roots = sorted((clang_root / "lib/clang").glob("*/lib/windows"))
+    if len(runtime_roots) != 1:
+        raise RuntimeError(
+            "Windows LLVM must expose exactly one compiler-rt runtime directory"
+        )
+    for name in runtime_names:
+        source = runtime_roots[0] / name
+        if not source.is_file():
+            raise RuntimeError(f"Windows ASan runtime is missing: {source}")
+        shutil.copyfile(source, output / name)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True)
@@ -178,6 +198,8 @@ def main() -> int:
     run([str(gn), "gen", str(output), f"--args={gn_args}"], skia_root)
     build_targets = profile.get("build_targets", ["skia"])
     run([args.ninja, "-C", str(output), *build_targets], skia_root)
+    if target["platform"] == "windows" and args.variant == "asan":
+        stage_windows_asan_runtime(Path(args.clang_win).resolve(), output)
     if target["libraries"] == "discover":
         closure = write_archive_closure(
             gn, skia_root, output, target["platform"], build_targets,

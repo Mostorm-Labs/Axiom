@@ -3,9 +3,6 @@ name: POC-03 100K Scene
 on:
   pull_request:
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
-      - "deps.lock.json"
       - "skia-sdk.lock.json"
       - "pocs/large_scene/**"
       - "pocs/ink_engine/**"
@@ -15,13 +12,9 @@ on:
       - "tools/check_runtime_abi_manifest.py"
       - "tools/check_runtime_boundaries.py"
       - "tools/bootstrap_deps.py"
-      - ".github/workflows/poc03.yml"
   push:
     branches: [main, "codex/poc-03-100k-scene"]
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
-      - "deps.lock.json"
       - "skia-sdk.lock.json"
       - "pocs/large_scene/**"
       - "pocs/ink_engine/**"
@@ -31,7 +24,6 @@ on:
       - "tools/check_runtime_abi_manifest.py"
       - "tools/check_runtime_boundaries.py"
       - "tools/bootstrap_deps.py"
-      - ".github/workflows/poc03.yml"
   workflow_dispatch:
 
 concurrency:

@@ -3,23 +3,29 @@ name: POC-01 Shared Engine
 on:
   pull_request:
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
-      - "deps.lock.json"
       - "skia-sdk.lock.json"
-      - "cmake/**"
-      - "pocs/shared_engine/**"
-      - ".github/workflows/poc01.yml"
+      - "pocs/shared_engine/include/**"
+      - "pocs/shared_engine/src/**"
+      - "pocs/shared_engine/tests/**"
+      - "pocs/shared_engine/fixtures/**"
+      - "pocs/shared_engine/platform/skia/**"
+      - "pocs/shared_engine/platform/web/**"
+      - "pocs/shared_engine/platform/windows/**"
+      - "pocs/shared_engine/platform/apple/**"
+      - "pocs/shared_engine/platform/android/**"
   push:
     branches: [main]
     paths:
-      - "CMakeLists.txt"
-      - "CMakePresets.json"
-      - "deps.lock.json"
       - "skia-sdk.lock.json"
-      - "cmake/**"
-      - "pocs/shared_engine/**"
-      - ".github/workflows/poc01.yml"
+      - "pocs/shared_engine/include/**"
+      - "pocs/shared_engine/src/**"
+      - "pocs/shared_engine/tests/**"
+      - "pocs/shared_engine/fixtures/**"
+      - "pocs/shared_engine/platform/skia/**"
+      - "pocs/shared_engine/platform/web/**"
+      - "pocs/shared_engine/platform/windows/**"
+      - "pocs/shared_engine/platform/apple/**"
+      - "pocs/shared_engine/platform/android/**"
   workflow_dispatch:
 
 concurrency:

@@ -43,6 +43,11 @@ profile/lock。它用同一个锁定 Skia commit 为 8 个 target 生成 Release
 与 x64；iOS device arm64 同时服务 iPhone/iPad；Android arm64 是产品 ABI，x86_64 是
 emulator/CI ABI。
 
+24 个 `target × variant` 组合是独立 Producer job 和独立 artifact。单个 ASan 失败不会
+阻止同 target 的 Release/Debug 上传，同一次 run 可只重跑失败 job。跨 run 只复用经过
+当前 profile、recipe、toolchain identity、SDK ID、GitHub digest 和文件级 hash 全量验证的
+历史 artifact，并仍重新执行 source-free consumer smoke；验证失败或身份变化时必须重建。
+
 Full SDK 固定 Ganesh、PDF、SVG、Skottie、PathOps、RichText、PNG/JPEG/WebP 及其
 FreeType/HarfBuzz/ICU/Expat/zlib/Wuffs closure。DNG/PIEX、Graphite、Dawn、Vulkan 和
 非 Runtime 工具全部关闭。PathOps 由 API probe 证明而不是发明 GN 参数。包内

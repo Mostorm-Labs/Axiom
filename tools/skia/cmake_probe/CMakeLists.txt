@@ -22,7 +22,7 @@ function(canvas_add_skia_probe name source imported_target)
     if(CanvasSkia_VARIANT STREQUAL "asan")
       set_property(TARGET "${name}" PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
       target_compile_options("${name}" PRIVATE /fsanitize=address)
-      target_link_options("${name}" PRIVATE /fsanitize=address /INCREMENTAL:NO)
+      target_link_options("${name}" PRIVATE /INCREMENTAL:NO)
     elseif(CanvasSkia_VARIANT STREQUAL "debug")
       # Skia's GN debug archive uses the static release CRT and disables MSVC
       # iterator debugging even though Skia assertions/debug symbols remain on.
@@ -36,6 +36,8 @@ function(canvas_add_skia_probe name source imported_target)
   endif()
   if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set_target_properties("${name}" PROPERTIES
+      MACOSX_BUNDLE TRUE
+      MACOSX_BUNDLE_GUI_IDENTIFIER "dev.mostorm.canvas.${name}"
       XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
       XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "dev.mostorm.canvas.${name}"
     )

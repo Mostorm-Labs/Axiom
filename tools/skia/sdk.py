@@ -641,13 +641,16 @@ def validate_manifest(
                     "manifest archive_closure does not match the packaged library files"
                 )
         if identity["platform"] == "windows" and identity["variant"] == "asan":
-            runtime = file_by_path.get(
-                "runtime/windows/clang_rt.asan_dynamic-x86_64.dll"
-            )
-            if runtime is None or runtime["role"] != "runtime":
-                raise SchemaError(
-                    "Windows ASan manifest must contain its dynamic runtime"
-                )
+            for name in (
+                "clang_rt.asan_dynamic-x86_64.dll",
+                "clang_rt.asan_dynamic-x86_64.lib",
+                "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib",
+            ):
+                runtime = file_by_path.get(f"runtime/windows/{name}")
+                if runtime is None or runtime["role"] != "runtime":
+                    raise SchemaError(
+                        "Windows ASan manifest must contain its dynamic runtime closure"
+                    )
     return result
 
 

@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -40,17 +41,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Release, Debug, and ASan are deliberately separate jobs.  They use
+        # independent GN output directories, so there is no build dependency
+        # between variants and a failed diagnostic build must not discard
+        # already verified product artifacts.
+        variant: [release, debug, asan]
+        target:
+          - windows-x64-d3d12
+          - web-wasm-webgl2
+          - macos-arm64-metal
+          - macos-x64-metal
+          - ios-arm64-metal
+          - ios-simulator-arm64-metal
+          - android-arm64-v8a-gles3
+          - android-x86_64-gles3
         include:
-          - { target: windows-x64-d3d12, os: windows-2025, family: windows }
-          - { target: web-wasm-webgl2, os: ubuntu-24.04, family: web }
-          - { target: macos-arm64-metal, os: macos-15, family: apple }
-          - { target: macos-x64-metal, os: macos-15, family: apple }
-          - { target: ios-arm64-metal, os: macos-15, family: apple }
-          - { target: ios-simulator-arm64-metal, os: macos-15, family: apple }
-          - { target: android-arm64-v8a-gles3, os: ubuntu-24.04, family: android }
-          - { target: android-x86_64-gles3, os: ubuntu-24.04, family: android }
+          - { target: windows-x64-d3d12, os: windows-2025, family: windows, toolchain: windows-2025-llvm-22.1.8 }
+          - { target: web-wasm-webgl2, os: ubuntu-24.04, family: web, toolchain: ubuntu-24.04-emscripten-6.0.6 }
+          - { target: macos-arm64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
+          - { target: macos-x64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
+          - { target: ios-arm64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
+          - { target: ios-simulator-arm64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
+          - { target: android-arm64-v8a-gles3, os: ubuntu-24.04, family: android, toolchain: ubuntu-24.04-ndk-27.2.12479018 }
+          - { target: android-x86_64-gles3, os: ubuntu-24.04, family: android, toolchain: ubuntu-24.04-ndk-27.2.12479018 }
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.target }}
+    name: ${{ matrix.target }}-${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -76,8 +91,6 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.5" "ndk;27.2.12479018" || [[ "${PIPESTATUS[1]}" -eq 0 ]]
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-      - name: Fetch source once for all variants
-        run: python tools/bootstrap_deps.py --core --skia --sync-skia --font-only
       - name: Identify toolchain
         if: matrix.family != 'windows'
         shell: bash
@@ -90,81 +103,101 @@ jobs:
         shell: pwsh
         run: |
           python tools/skia/identify_toolchain.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --output out/skia-sdk/toolchain.json
-      - name: Cache Release Skia output
+      - name: Reuse verified artifact from an earlier run
+        id: reuse
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python tools/skia/reuse_artifact.py
+          --repository "${{ github.repository }}"
+          --current-run "${{ github.run_id }}"
+          --trusted-head "${{ github.event.pull_request.head.sha || github.sha }}"
+          --trusted-branch "${{ github.head_ref || github.ref_name }}"
+          --trusted-branch "${{ github.event.repository.default_branch }}"
+          --target "${{ matrix.target }}"
+          --variant "${{ matrix.variant }}"
+          --profile "$PROFILE"
+          --toolchain-json out/skia-sdk/toolchain.json
+          --output out/skia-sdk/package-a
+      - name: Fetch locked Skia source for a cache miss
+        if: steps.reuse.outputs.hit != 'true'
+        run: python tools/bootstrap_deps.py --core --skia --sync-skia --font-only
+      - name: Cache selected Skia output
+        if: steps.reuse.outputs.hit != 'true'
         uses: actions/cache@v4
         with:
-          path: .deps/skia/out/r1-full-*-release
+          path: .deps/skia/out/r1-full-*-${{ matrix.variant }}
           key: >-
-            r1-full-release-${{ runner.os }}-${{ matrix.target }}-
+            r1-full-${{ matrix.variant }}-${{ runner.os }}-${{ matrix.target }}-${{ matrix.toolchain }}-
             ${{ hashFiles('deps.lock.json', 'tools/skia/profiles/r1-full-v1.json',
             'tools/skia/sdk.py', 'tools/skia/build.py', 'tools/skia/identify_toolchain.py',
             'tools/skia/package.py', 'tools/skia/verify.py', 'out/skia-sdk/toolchain.json') }}
           restore-keys: |
-            r1-full-release-${{ runner.os }}-${{ matrix.target }}-
-      - name: Cache Debug Skia output
-        uses: actions/cache@v4
-        with:
-          path: .deps/skia/out/r1-full-*-debug
-          key: >-
-            r1-full-debug-${{ runner.os }}-${{ matrix.target }}-
-            ${{ hashFiles('deps.lock.json', 'tools/skia/profiles/r1-full-v1.json',
-            'tools/skia/sdk.py', 'tools/skia/build.py', 'tools/skia/identify_toolchain.py',
-            'tools/skia/package.py', 'tools/skia/verify.py', 'out/skia-sdk/toolchain.json') }}
-          restore-keys: |
-            r1-full-debug-${{ runner.os }}-${{ matrix.target }}-
-      - name: Cache ASan Skia output
-        uses: actions/cache@v4
-        with:
-          path: .deps/skia/out/r1-full-*-asan
-          key: >-
-            r1-full-asan-${{ runner.os }}-${{ matrix.target }}-
-            ${{ hashFiles('deps.lock.json', 'tools/skia/profiles/r1-full-v1.json',
-            'tools/skia/sdk.py', 'tools/skia/build.py', 'tools/skia/identify_toolchain.py',
-            'tools/skia/package.py', 'tools/skia/verify.py', 'out/skia-sdk/toolchain.json') }}
-          restore-keys: |
-            r1-full-asan-${{ runner.os }}-${{ matrix.target }}-
-      - name: Build and package Release, Debug, and ASan
-        if: matrix.family != 'windows'
+            r1-full-${{ matrix.variant }}-${{ runner.os }}-${{ matrix.target }}-${{ matrix.toolchain }}-
+            r1-full-${{ matrix.variant }}-${{ runner.os }}-${{ matrix.target }}-
+      - name: Build and package selected variant
+        if: matrix.family != 'windows' && steps.reuse.outputs.hit != 'true'
         shell: bash
         run: |
           if [[ "${{ matrix.family }}" == web ]]; then source .deps/emsdk/emsdk_env.sh; fi
           extra=()
           if [[ "${{ matrix.family }}" == android ]]; then extra=(--ndk "$ANDROID_NDK_ROOT"); fi
-          for variant in release debug asan; do
-            python tools/skia/build.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" "${extra[@]}"
-            python tools/skia/package.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-a
-            python tools/skia/package.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-b
-            cmp "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip" "out/skia-sdk/package-b/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
-            python tools/skia/verify.py --profile "$PROFILE" --expected-target "${{ matrix.target }}" --variant "$variant" "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
-            python tools/skia/smoke_consumer.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" --archive "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip" "${extra[@]}"
-          done
-      - name: Build and package Release, Debug, and ASan on Windows
-        if: matrix.family == 'windows'
+          variant="${{ matrix.variant }}"
+          python tools/skia/build.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" "${extra[@]}"
+          python tools/skia/package.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-a
+          python tools/skia/package.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-b
+          cmp "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip" "out/skia-sdk/package-b/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
+          python tools/skia/verify.py --profile "$PROFILE" --expected-target "${{ matrix.target }}" --variant "$variant" "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
+          python tools/skia/smoke_consumer.py --profile "$PROFILE" --target "${{ matrix.target }}" --variant "$variant" --archive "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip" "${extra[@]}"
+      - name: Build and package selected variant on Windows
+        if: matrix.family == 'windows' && steps.reuse.outputs.hit != 'true'
         shell: pwsh
         run: |
           $extra = @('--cc', "$PWD/.deps/llvm/bin/clang-cl.exe", '--cxx', "$PWD/.deps/llvm/bin/clang-cl.exe")
-          foreach ($variant in @('release', 'debug', 'asan')) {
-            $buildExtra = @()
-            if ($variant -eq 'asan') { $buildExtra = @('--clang-win', "$PWD/.deps/llvm") }
-            python tools/skia/build.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant @extra @buildExtra
-            if ($LASTEXITCODE -ne 0) { throw "Skia build failed: $variant" }
-            python tools/skia/package.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-a
-            if ($LASTEXITCODE -ne 0) { throw "SDK package-a failed: $variant" }
-            python tools/skia/package.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-b
-            if ($LASTEXITCODE -ne 0) { throw "SDK package-b failed: $variant" }
-            $asset = "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
-            $duplicate = "out/skia-sdk/package-b/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
-            if ((Get-FileHash $asset -Algorithm SHA256).Hash -ne (Get-FileHash $duplicate -Algorithm SHA256).Hash) {
-              throw "SDK archive is not deterministic: $variant"
-            }
-            python tools/skia/verify.py --profile "$env:PROFILE" --expected-target "${{ matrix.target }}" --variant $variant $asset
-            if ($LASTEXITCODE -ne 0) { throw "SDK verification failed: $variant" }
-            python tools/skia/smoke_consumer.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant --archive $asset @extra
-            if ($LASTEXITCODE -ne 0) { throw "Source-free smoke failed: $variant" }
+          $variant = "${{ matrix.variant }}"
+          $buildExtra = @()
+          if ($variant -eq 'asan') { $buildExtra = @('--clang-win', "$PWD/.deps/llvm") }
+          python tools/skia/build.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant @extra @buildExtra
+          if ($LASTEXITCODE -ne 0) { throw "Skia build failed: $variant" }
+          python tools/skia/package.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-a
+          if ($LASTEXITCODE -ne 0) { throw "SDK package-a failed: $variant" }
+          python tools/skia/package.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant --toolchain-json out/skia-sdk/toolchain.json --output out/skia-sdk/package-b
+          if ($LASTEXITCODE -ne 0) { throw "SDK package-b failed: $variant" }
+          $asset = "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
+          $duplicate = "out/skia-sdk/package-b/skia-sdk-r1-full-v1-${{ matrix.target }}-$variant.zip"
+          if ((Get-FileHash $asset -Algorithm SHA256).Hash -ne (Get-FileHash $duplicate -Algorithm SHA256).Hash) {
+            throw "SDK archive is not deterministic: $variant"
           }
+          python tools/skia/verify.py --profile "$env:PROFILE" --expected-target "${{ matrix.target }}" --variant $variant $asset
+          if ($LASTEXITCODE -ne 0) { throw "SDK verification failed: $variant" }
+          python tools/skia/smoke_consumer.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant $variant --archive $asset @extra
+          if ($LASTEXITCODE -ne 0) { throw "Source-free smoke failed: $variant" }
+      - name: Revalidate reused artifact without Skia source
+        if: steps.reuse.outputs.hit == 'true' && matrix.family != 'windows'
+        shell: bash
+        run: |
+          python tools/bootstrap_deps.py --core --font-only
+          if [[ "${{ matrix.family }}" == web ]]; then source .deps/emsdk/emsdk_env.sh; fi
+          extra=()
+          if [[ "${{ matrix.family }}" == android ]]; then extra=(--ndk "$ANDROID_NDK_ROOT"); fi
+          python tools/skia/smoke_consumer.py \
+            --profile "$PROFILE" --target "${{ matrix.target }}" \
+            --variant "${{ matrix.variant }}" \
+            --archive "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-${{ matrix.variant }}.zip" \
+            "${extra[@]}"
+      - name: Revalidate reused artifact without Skia source on Windows
+        if: steps.reuse.outputs.hit == 'true' && matrix.family == 'windows'
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --core --font-only
+          $extra = @('--cc', "$PWD/.deps/llvm/bin/clang-cl.exe", '--cxx', "$PWD/.deps/llvm/bin/clang-cl.exe")
+          $asset = "out/skia-sdk/package-a/skia-sdk-r1-full-v1-${{ matrix.target }}-${{ matrix.variant }}.zip"
+          python tools/skia/smoke_consumer.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant "${{ matrix.variant }}" --archive $asset @extra
+          if ($LASTEXITCODE -ne 0) { throw "Reused source-free smoke failed" }
       - uses: actions/upload-artifact@v4
         with:
-          name: r1-full-skia-${{ matrix.target }}
+          name: r1-full-skia-${{ matrix.target }}-${{ matrix.variant }}
           path: out/skia-sdk/package-a/*.zip
           if-no-files-found: error
           retention-days: 7
