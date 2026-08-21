@@ -379,6 +379,13 @@ class SdkMetadataTest(unittest.TestCase):
             self.assertIn(f"CanvasSkia::{target}", config)
         self.assertIn("SK_ENABLE_SKOTTIE", config)
 
+    def test_pathops_probe_uses_current_skpath_factory_api(self) -> None:
+        probe = (SKIA_TOOLS / "cmake_probe/probe_pathops.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("SkPath::Rect", probe)
+        self.assertNotIn("left.addRect", probe)
+
     def test_r1_full_profile_requires_bundled_dependencies(self) -> None:
         profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")
         for argument in (
