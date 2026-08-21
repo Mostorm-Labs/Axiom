@@ -1,8 +1,8 @@
 # POC-04 Apple physical-device report — 2026-08-20
 
 Status: **Passed for the Apple UIKit bring-up and controlled semantic-result
-gate.** This report does not change the single unified POC-04 from `Validating`
-to `Accepted`.
+gate.** The unified POC-04 acceptance decision is recorded by the aggregate
+CI job after the macOS AppKit evidence is included.
 
 ## Scope
 
@@ -84,8 +84,7 @@ device identity, v2 SDK identity, and build hashes. They pass
 ## Remaining gates
 
 - Keep the real browser composition and Windows IMM evidence gates separate.
-- Run aggregate review only after all required platform evidence is present;
-  do not enable cross-platform acceptance or mark POC-04 `Accepted` here.
+- The aggregate acceptance job owns the final POC-04 decision.
 
 The local raw JSON artifacts are intentionally kept under ignored `out/` and
 are not committed as user text or device logs.

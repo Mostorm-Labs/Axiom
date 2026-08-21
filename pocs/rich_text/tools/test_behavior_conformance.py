@@ -64,6 +64,19 @@ class BehaviorConformanceTest(unittest.TestCase):
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_accepts_equivalent_json_number_spelling(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        records[0]["layout"]["height"] = 20
+        records[0]["layout"]["selection"][0][0] = 0
+        result = self.run_records(records)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_real_layout_difference_without_tolerance(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        records[2]["layout"]["height"] = 20.000001
+        result = self.run_records(records)
+        self.assertNotEqual(result.returncode, 0)
+
     def test_rejects_false_behavior_or_incomplete_geometry(self) -> None:
         records = [self.record("web"), self.record("windows"), self.record("android")]
         records[1]["behavior"]["undo"] = False
@@ -85,6 +98,32 @@ class BehaviorConformanceTest(unittest.TestCase):
         records = [self.record("web"), self.record("windows"), self.record("android")]
         for record in records:
             record["layout"]["diagnostics"] = ["unresolved-glyphs"]
+        result = self.run_records(records)
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_android_emulator_timing_is_observational(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        records[2]["performance"].update({
+            "input_caret_p50_ms": 20.0,
+            "input_caret_p95_ms": 40.0,
+            "input_caret_p99_ms": 50.0,
+            "input_caret_max_ms": 60.0,
+            "full_layout_p50_ms": 40.0,
+            "full_layout_p95_ms": 80.0,
+            "full_layout_p99_ms": 90.0,
+            "full_layout_max_ms": 100.0,
+        })
+        result = self.run_records(records)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_non_android_latency_regression(self) -> None:
+        records = [self.record("web"), self.record("windows"), self.record("android")]
+        records[0]["performance"].update({
+            "full_layout_p50_ms": 40.0,
+            "full_layout_p95_ms": 80.0,
+            "full_layout_p99_ms": 90.0,
+            "full_layout_max_ms": 100.0,
+        })
         result = self.run_records(records)
         self.assertNotEqual(result.returncode, 0)
 

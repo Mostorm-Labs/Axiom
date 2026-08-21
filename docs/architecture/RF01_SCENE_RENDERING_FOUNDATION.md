@@ -1,6 +1,6 @@
 # RF-01 Scene Rendering Foundation 接口与迁移方案
 
-> Status: **Design Baseline / Ready for implementation**
+> Status: **Implementation Baseline / RF01-5 Validating**
 > Date: 2026-08-19
 > Scope: RF-01；后续由 RF-02 动态空间索引、RF-03 Tile/LOD/Raster 调度继续实现
 > Depends on: [ADR-0003](../adr/0003-semantic-document-runtime-scene.md)、
@@ -99,7 +99,10 @@ src/
 │   ├── scene_compiler.hpp
 │   ├── scene_delta.hpp
 │   ├── scene_query.hpp
+│   ├── scene_frame.hpp
+│   ├── scene_view.hpp
 │   ├── render_scene.hpp
+│   ├── shadow_render_scene.hpp
 │   ├── spatial_index.hpp
 │   └── damage_tracker.hpp
 ├── scene/
@@ -355,6 +358,9 @@ public:
     Result<SceneQueryResult> query(const SceneQuery& query) const;
     Result<HitTestResult> hitTest(const HitTestRequest& request) const;
     Result<SceneDrawList> buildDrawList(const SceneQueryResult& visible) const;
+    Result<SceneFrameInput> buildFrame(
+        const SceneQuery& query,
+        SceneRevision afterExclusive) const;
 
     [[nodiscard]] DamageSet collectDamage(
         SceneRevision afterExclusive,
@@ -688,6 +694,23 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 建立 FakeRenderScene/FakeSpatialIndex，验证 prepare failure 和 no-fail commit。
 - C++ API 全部符合 Canvas style；不改 POC behavior。
 
+当前 RF01-0 host baseline 已落在 `runtime/foundation` 与 `runtime/scene`：
+
+- `canvas_runtime_foundation` 只提供强类型 `ObjectId`、revision、order key、result 和 world
+  geometry；不链接第三方或平台库。
+- `canvas_runtime_scene` 提供 `SceneRecord`、snapshot/delta、`IRenderScene`、`ISpatialIndex`、
+  `DamageTracker` 与 `Scene` 的内部接口骨架；Fake participant 位于独立 testing target。
+- `Scene::replace/apply` 统一执行 validate → prepare record/render/spatial/damage → commit，
+  并将 Scene revision 作为最后发布步骤；失败路径不触碰旧 record、participant、damage 或
+  revision。
+- `tools/check_runtime_boundaries.py` 检查 RF-01 contract include 和 CMake 依赖，拒绝 Skia、
+  Windows、Apple、JNI、Emscripten、网络/存储/线程及 public C ABI 反向依赖。
+- `docs/api/canvas_runtime_api_v1.manifest.json` 与 `tools/check_runtime_abi_manifest.py` 固定
+  当前 54 个导出函数、49 个 struct 声明和 163 个 enum 常量；RF01-0 不修改规范性 C header。
+
+RF01-0 明确不包含 SceneCompiler/SceneBinding 的 Document adapter、真实 Direct/SkSG renderer、
+动态空间索引、Tile/LOD、平台 surface 或 POC-03 行为迁移；这些在 RF01-1 及之后的批次实现。
+
 退出：C11/C++20 public ABI manifest 不变，Document/Bridge/Shell 无 Skia include。
 
 ### RF01-1：SceneRecordStore 与 full rebuild
@@ -695,6 +718,26 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 实现 SceneRecordStore、Scene::replace、DirectRenderScene 和 UniformGridSpatialIndex adapter。
 - 实现 `Poc03SceneSource`，将固定 fixture 编译为 `CompiledSceneSnapshot`。
 - 对比旧 RuntimeScene 与新 Scene 的 digest、bounds、draw order、query 和 RGBA。
+
+当前 RF01-1 实现基线：
+
+- `SceneRecordStore` 按 `orderKey + objectId` 保存确定性 record 顺序，并维护独立 ObjectId
+  索引；`prepareReplace()` 完成数值、kind、generation、重复 ID 校验，`commit()` 只交换已准备
+  的 owning state。
+- `DirectRenderScene` 保存 Canvas-owned render projection，`UniformGridSpatialIndex` 保存 full
+  snapshot 的负坐标安全 grid projection；两者不依赖 Skia、平台 surface 或 POC 类型。
+- `Scene::replace()` 以 record → render → spatial → damage → revision 顺序提交；任何 participant
+  prepare 失败都保留旧 Scene。Direct/Grid 的 delta 入口在本批次明确返回
+  `kRequiresFullRebuild`，不伪装增量能力。
+- `Poc03SceneSource` 只存在于 POC compatibility target，将 POC-03 `Document` 映射成产品
+  `CompiledSceneSnapshot`。payload slot 与旧 `RuntimeScene` 保持零基；slot 0 合法，只有
+  generation 0 无效。
+- Host oracle 覆盖 1K/10K/50K/100K 的 revision、record、digest、content bounds、visible
+  query、draw order 和 deterministic CPU reference RGBA。CPU reference 是无 Skia 的语义像素
+  等价门禁，不冒充 Skia/GPU readback；实际 Skia visual/golden 仍由 POC-03 平台门禁承担。
+- RF01 独立测试覆盖 Store validation/index、Direct draw-list/bounds hit、Grid 负坐标/去重/
+  brute-force 等价、退化 bounds、stale query、replace participant failure 原子性，以及
+  Direct/Grid delta capability 声明。
 
 退出：1K/10K/50K/100K full compile 逐项等价；replace 失败保持旧 Scene。
 
@@ -704,6 +747,27 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 覆盖 create/update/remove/reorder/resource/Stroke commit。
 - 注入 record/render/index prepare failure 和 stale/malformed hints。
 
+当前 RF01-2 correctness baseline：
+
+- 新增无 Document 类型依赖的 `ICompiledSceneSource` 与 `SceneBinding`。Binding 只接收 owning
+  `CompiledSceneSnapshot/Delta`；POC-03 `Document/ChangeSet` 只由 compatibility adapter 感知。
+- `SceneBinding::synchronize()` 优先编译并应用 delta；source 或 participant 明确返回
+  `kRequiresFullRebuild` 时，从同一 source 编译 full snapshot。receipt 区分
+  `kAppliedIncremental/kRebuiltFull` 并保留触发 fallback 的结构化错误。
+- `DirectRenderScene` 与 `UniformGridSpatialIndex` 已实现 create/update/remove/reorder 的
+  prepare→commit 路径；Store、Render、Spatial、Damage 全部 prepare 成功后才依次无失败提交，
+  Scene revision 仍最后发布。
+- `Poc03SceneSource` 保留稳定 payload slot，不因 order 改变重编号；ChangeSet 必须连续、结构
+  合法且 after image 与当前 Document 一致，否则请求安全 full rebuild。
+- 自动语料覆盖真实 create/update/reorder/delete、400 次确定性混合操作、损坏 ChangeSet full
+  fallback、stale source、full compile 失败传播，以及 full/delta participant failure 后旧 Scene
+  保持不变。每一步均与旧 POC-03 full compiler 的 digest 对比。
+
+RF01-2 尚未宣称性能退出：当前 Direct/Grid oracle 在 prepare delta 时仍会复制并重建其内部
+状态。`recordsTouched` 只代表语义 mutation 数，不能冒充实际工作量。把 participant 改为真正
+局部、工作量可诊断且有界的容器结构，仍是 RF01-2 从 `Validating` 退出前的剩余工作；不得把
+这一限制推迟后伪称单节点更新已与场景规模无关。
+
 退出：任何失败都不改变 record/render/index/damage/revision；incremental/full oracle 等价。
 
 ### RF01-3：Damage journal 与 Frame 接入
@@ -711,6 +775,29 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 实现 revisioned DamageTracker、journal collapse、multi-view collect/compact。
 - FrameBuilder 改用 `SceneDrawList + DamageSet`，但仍走 direct renderer。
 - Ink visible acknowledgement 继续绑定成功呈现的 Scene revision。
+
+当前 RF01-3 correctness baseline：
+
+- `DamageTracker` 以 `(afterExclusive, throughInclusive]` 保存 world-space damage，默认限制为
+  256 条 journal、4096 个 rect 和 1 MiB 估算内存。任一限制超出时，prepare 阶段把现有记录
+  保守折叠为单个 `fullScene` marker；commit 前旧 journal、frontier 和 diagnostics 均不改变。
+- authoritative damage 始终来自 mutation 的 old/new bounds。`InvalidationHints` 必须携带与 delta
+  一致的 before/after revision、有限有序且完整覆盖 authoritative bounds，才允许 union/扩大并
+  映射 order/resource/layout reason；缺失 hint 不影响正确性，过期、NaN、未知 flag 或缩小 hint
+  被拒绝并计入 diagnostics。
+- `compactThrough()` 只前移 compact frontier，并删除所有已被全部 live View 呈现的记录；若某
+  View 请求的起始 revision 早于 frontier，`collect()` 返回 `fullScene`，不会静默漏 damage。
+- `SceneViewRegistry` 为每个非零 View ID 独立维护单调 presented revision，并提供所有 live View
+  的最小 revision。duplicate attach、missing View 和 revision 倒退均返回结构化错误。
+- `Scene::buildFrame()` 从同一 Scene revision 生成 `SceneQueryResult`、`SceneDrawList` 和
+  `DamageSet`；新增 `SceneFrameInput` 只包含 owning frame 数据，不暴露 participant 或 Skia 类型。
+- RF01 独立测试覆盖 entry/rect/byte collapse、stale collect、hint 扩大/过期/非法、View attach/
+  present/detach 与 frame revision 一致性；新增 public headers 继续参加 self-contained compile。
+
+RF01-3 仍为 `Validating`：当前仅建立 direct renderer 的 frame input contract。把
+`SceneViewRegistry::minimumPresentedRevision()` 接入平台 present/visible acknowledgement，以及
+10,000 revisions 的双 View 速率差语料，仍需在后续 Frame/Shell integration 中完成；不得把
+registry 单元测试写成已完成真机多 View 调度。
 
 退出：两个 View 不互相消费 damage；journal 有界；Preview/Canonical 不空白、不重复加深。
 
@@ -720,6 +807,22 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 覆盖负坐标、退化 bounds、fill/stroke/text/image、locked/hidden 和 tolerance。
 - Selection/drag harness 只通过 Scene::hitTest，不访问 SpatialIndex internals。
 
+当前 RF01-4 correctness baseline：
+
+- `HitTestRequest` 以 world point、非负 tolerance、kind mask、locked policy 和有界
+  `maximumResults` 组成；Scene 先以 `point ± (tolerance + epsilon)` 做 coarse query，再过滤
+  hidden、non-hit-testable、locked 和 kind，最后按 `SceneOrderKey + ObjectId` 从 front-to-back
+  调用 `IRenderScene::preciseHitTest()`。
+- candidate 返回顺序不具有语义。Scene 自己去重并排序，命中数量限制只在 precise hit 之后应用；
+  index 顺序变化不会改变结果。Direct 当前以保守 bounds distance 作为 POC precise geometry，
+  后续 SkSG/geometry provider 才替换为真实 fill/stroke/text/image 精确算法。
+- 非 finite point/tolerance、负 tolerance、zero maximum、未知 kind flag 和 coarse bounds 溢出
+  整体拒绝；不会部分返回命中结果。locked/hidden/non-hit-testable 语料、tolerance、负坐标和
+  1,000 次候选顺序扰动已加入 RF01 测试。
+
+RF01-4 仍为 `Validating`：本轮建立 two-stage contract 和 Direct baseline；退化 path、真实
+ stroke/text/image geometry、Selection/Eraser/Snap policy integration 仍是后续验证项。
+
 退出：与 brute-force precise oracle 逐字节一致；index 返回顺序扰动不改变结果。
 
 ### RF01-5：SkSG shadow adapter
@@ -727,6 +830,26 @@ POC namespace、历史 evidence 和 physical harness 保留；不能把 `canvas:
 - 增加私有 `SkSgRenderScene` target；只有该 target include SkSG。
 - Direct/SkSG 同时消费 snapshot/delta，输出独立 diagnostics 和 reference readback。
 - 在所有跨平台 correctness/golden 门禁通过前，默认仍为 Direct。
+
+当前 RF01-5 baseline：
+
+- `ShadowRenderScene` 已实现通用双 participant orchestration：同一 snapshot/delta 必须在
+  primary 与 shadow 两侧都 prepare 成功后才生成一个可提交 update；commit 依次消费两侧已准备
+  状态，不允许单侧发布。draw-list 与 precise-hit 的可观察结果不一致时返回结构化
+  `kParticipantRejected` 并累计 mismatch diagnostics。
+- 当前锁定的 `poc01-minimal-v1` Skia SDK 只包含 Ganesh core 静态库和 public core headers；
+  manifest/归档中没有 `modules/sksg` headers 或独立 SkSG target。因此本提交不伪造
+  `SkSgRenderScene`，也不从 Skia source tree 或 GN/Ninja 隐式回退。真实 adapter 需要新的
+  producer profile/SDK ID（包含 SkSG headers、实现库和 license）后才能在 private target 中接入。
+- RF-01 不建立或冻结专属 Skia/SkSG SDK profile，也不把 producer 构建纳入本阶段门禁。真实
+  adapter 所需的 headers、实现库、license、工具链身份和消费方式由后续产品构建流程统一设计；
+  在该流程落地前，RF-01 只验证 Canvas-owned Scene contract 和无 Skia 的 Direct/Fake 路径。
+- Direct renderer 继续是默认 oracle；`ShadowRenderScene` 的双 participant contract 可先被
+  Fake/Direct 组合验证，不把这项 contract 测试写成 SkSG visual/golden 已通过。
+
+RF01-5 状态为 `Validating`：双 participant 原子性和 observable comparison 已通过 host/ASan
+语料；产品级 Skia 供应链、真实 SkSG node/bounds/invalidation/readback、跨平台 shadow golden 和
+无 SkSG 类型泄漏门禁仍 Pending。
 
 退出：node/bounds/draw-list/hit/damage/revision 等价；RGBA 达到既有视觉门禁；无 SkSG 泄漏。
 

@@ -8,6 +8,8 @@ on:
       - "deps.lock.json"
       - "skia-sdk.lock.json"
       - "pocs/ink_engine/**"
+      - "arc/**"
+      - "pocs/fastink/**"
       - ".github/workflows/poc02.yml"
   push:
     branches: [main, "codex/poc-02-ink-engine", "codex/poc-03-100k-scene"]

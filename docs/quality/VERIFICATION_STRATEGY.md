@@ -15,7 +15,7 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
 7. Collaboration Presence 的丢失不影响 Document convergence。
 8. 性能结论必须绑定设备、场景、构建和采样方法。
 9. RuntimeScene 的共享内容与各 View/Frame 查询结果独立；同一 Scene 上不同 Viewport 不得互相污染 visible set 或 screen damage。
-10. FastInk backend 只消费共享 Preview Model；Default/FastInk sink 不得形成不同的 Stroke 算法。
+10. Arc/FastInk backend 只消费共享 Preview Model；Default/Arc sink 不得形成不同的 Stroke 算法。
 11. Platform surface/context/device 丢失不得泄漏 native handle 到 Runtime Core，也不得改变 Document。
 12. 所有跨模块 geometry 声明 Node Local/Page-World/View Logical/Device Pixel/Platform Screen 空间；viewport revision 和 DPR 变化不能重解释历史输入。
 13. ResourceId 只经 versioned ResourceManifest 绑定不可变 ContentHash；manifest 改变影响 Document digest，资源暂时 missing 不改变语义。
@@ -37,6 +37,12 @@ Canvas v2 的首要风险不是“Skia 能不能画”，而是 Document、Ink�
     domain、struct prefix、enum numeric value、ownership 和 callback 时序跨平台一致。
 23. Control Path 可以跨语言，PointerSampleBatch/VSync/IME/Preview/render Native Hot Path 不得
     逐 sample 经 RN JS、QML/React state 或 JSON；Persistence/Sync/Resource port 不进入 Core。
+24. Arc Preview target 与 Axiom Canonical target 不共享 presentable backbuffer ownership；
+    Arc presentation failure 不得成为 Canonical/Document failure。
+25. Arc 的实现矩阵覆盖 Web、Windows、Android、macOS、iOS/iPadOS、ChromiumOS 与
+    Headless；支持 Tier 只决定物理设备/性能门禁强度，不能省略 backend。
+26. Arc handoff 只有在 Stroke/Document revision/HandoffToken/target generation 匹配后才
+    retire Preview；duplicate/reordered/stale acknowledgement 不得误清其他 Stroke。
 
 ## 2. 结果 Oracle
 
@@ -116,6 +122,9 @@ checkpoint。未证明 Snapshot 可读取/可验证前，旧 Operation prefix �
 - confirmed-input backlog 不得随书写时长增长；成功路径 sample 100% 完整，过载路径必须
   明确 InputOverrun/cancel 且无部分 Document。Predicted/Preview/frame 合并分别统计。
 - 若具备光电设备，device FastInk 额外记录 raw input→scanout；不得与软件 timestamp 混为同一指标。
+- Arc presentation receipt 必须标记 evidence level：render complete、GPU submit、present
+  accepted、compositor visible 或 photometric。较弱证据不得命名为 `visible` 或用来代替真机
+  input-to-photon 门禁。
 
 ### 2.10 Human Performance Gate
 
@@ -205,6 +214,8 @@ tests/
 - C ABI stale/wrong-domain handle、short/extended struct、unknown enum/capability、buffer sizing、
   NaN/Infinity、callback lifetime/reentrancy、single-owner thread 和 exported exception conversion。
 - PreviewStrokeUpdate revision、confirmed/predicted replacement、buffer ownership 和 Default/FastInk sink 等价性。
+- Arc per-Stroke begin/seal/commit/visible/retire 状态机、HandoffToken、duplicate/stale ack、
+  独立 target ownership、presentation failure 隔离和 Default/Null fallback。
 - operation envelope、去重和 Presence expiry。
 
 ### 4.3 属性测试
@@ -256,7 +267,7 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 - Save → restart → recovery → digest。
 - Empty Document → Operations → A；A → DocumentSnapshot → B；Snapshot@F + continuation →
   C/D，比较 identity/revision/frontier/digest 并验证 RuntimeScene 从恢复后 Document 重建。
-- FastInk Preview → Canonical visible → Preview cleanup。
+- Arc Preview → Canonical visible → Preview cleanup。
 - Confirmed input burst → bounded queue/batch merge → Preview coalescing → frame invalidation/
   VSync → visible ack；过载取消路径无部分 Document。
 - RuntimeScene + 两个 Viewport → 两个独立 FrameState/FrameGraph，无跨 view 污染。
@@ -279,6 +290,7 @@ Oracle 不只是“不崩溃”：还要求有限资源使用、明确错误、t
 | POC-04 | 三平台 text digest/行为/font resource/fallback 一致 | 10K 字符输入/layout p95 ≤16.7/33.3 ms | missing/corrupt font；100 次 focus/composition lifecycle |
 | POC-05 | **Accepted** 非 V1 risk proof；Web、Windows RNW、Android RN、Apple RN/Fabric 的 ExternalSurfaceId/registry placement 误差与 z-order contract 通过 | 各平台 overlay 同步、lifecycle、focus/failure 语料通过；平台原始报告记录内存与帧数据 | surface/focus/load failure fallback；不进入 V1 schema；POC-only scene bridge 不得进入产品 ABI |
 | POC-06 | FastInk/Canonical 最终 digest 一致；Default/FastInk sink 消费同一 Preview revision | Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age；handoff ≤2 帧 | backend/device/surface/旧 generation failure 不丢 Stroke |
+| POC-06 | Arc/FastInk/Canonical 最终 digest 一致；Default/Arc sink 消费同一 Preview revision；所有 Axiom target 均有实现 | Tier A Preview absolute p95/p99 ≤16.7/33.3 ms，并报告 refresh/frame-count/queue-age/evidence；handoff ≤2 帧 | backend/device/surface/旧 generation failure 不丢 Stroke；Tier B/Reuse/Headless 完成对应 conformance/fallback |
 
 POC 报告必须同时附原始结果、环境和复现命令；只给结论截图不算通过。
 POC-03 的 Windows Integrated D3D12 结果已连续两次未达到既有 p95/p99 门禁，因此当前状态

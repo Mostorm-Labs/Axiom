@@ -26,6 +26,10 @@ target_include_directories(canvas_poc03_core
 )
 target_link_libraries(canvas_poc03_core PRIVATE canvas_poc03_xxhash)
 set_target_properties(canvas_poc03_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+if(TARGET canvas_runtime_scene)
+  add_subdirectory(rf01)
+endif()
 if(EMSCRIPTEN)
   target_compile_options(canvas_poc03_core PRIVATE -fexceptions)
 endif()
@@ -75,7 +79,10 @@ if(CANVAS_POC03_ENABLE_INK_INTEGRATION)
     target_compile_options(canvas_poc03_integrated_benchmark PRIVATE
       -fexceptions)
     target_link_options(canvas_poc03_integrated_benchmark PRIVATE
-      "-fexceptions" "-sDISABLE_EXCEPTION_CATCHING=0")
+      "-fexceptions"
+      "-sDISABLE_EXCEPTION_CATCHING=0"
+      "-sALLOW_MEMORY_GROWTH=1"
+      "-sMAXIMUM_MEMORY=536870912")
   endif()
 endif()
 
