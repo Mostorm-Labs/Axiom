@@ -1,0 +1,11 @@
+{
+  "name": "@axiom/arc-web-poc",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

@@ -429,54 +429,66 @@ macOS、iOS 和 iPadOS 上完成统一的真实 IME 编辑闭环。POC-04 只有
 - [x] 产品架构接受“受控 Overlay、不任意穿插”的限制。
 - [x] POC 结果只冻结未来扩展边界，没有把 ExternalSurface 加入 V1 schema、R3 产品 target 或发布门禁。
 
-## POC-06 — FastInk
+## POC-06 — FastInk / Arc
 
 ### 目标
 
-证明 Canonical Renderer 与 Preview Renderer 可共享 Stroke 语义并独立演进；普通应用路线必须可用，设备级 Direct Plane 作为条件式预研。
+证明 Arc 可以作为可抽取的 input-to-display 模块，在所有 Axiom target 上通过独立 Preview
+Presentation Target 消费同一 Stroke 语义，并与 Canonical Renderer 独立演进。普通应用路线
+必须可用，设备级 Direct Plane 作为条件式预研。
 
 ### 设计
 
-- 冻结 `FastInkBridge/FastInkBackend.begin/push(PreviewStrokeUpdate)/end/cancel`、buffer ownership 和幂等语义。
-- 保持 POC-02 Preview Model 不变，将 `DefaultPreviewSink` 替换为 Web/Windows/Android 平台 FastInk sink；backend 只负责低延迟显示，不重新实现 smooth/prediction/brush。
-- 保持版本化 BrushDescriptor、ViewId/viewport revision 和 PreviewStrokeUpdate 坐标语义不变；平台 sink 只做 presentation transform。
-- 定义 Preview buffer/pass、Canonical 首帧确认、handoff 和失败 fallback。
-- 定义 Web WASM Preview、Windows native preview、Android Native CanvasView preview 的平台能力。
-- 定义 backend 不可用、surface 重建、cancel、app background 和 device loss 行为。
-- 设备分轨定义 RawInputSource、FastInk Service、PreviewStrokeRenderer、ScanoutBuffer、DisplayPlane 边界。
+- 接受 ADR-0024，冻结 `Arc::Protocol`、`Arc::Core`、Platform Host composition root 与可独立抽取的 target/namespace 边界。
+- 冻结 Canonical 与 Preview 各自独占 presentable target ownership；允许经 Host capability 共享 device/queue，但禁止共享 backbuffer ownership。
+- 将 POC-02 共享 Preview Model 适配为版本化 C/POD 协议；固定宽度类型、`struct_size + abi_version/schema_version`、坐标空间、viewport transform/revision、DPR、target generation 和调用期 buffer lifetime。
+- 冻结可靠控制面 `begin/push/sealInput/canonicalCommitted/canonicalVisible/cancel`，以及 matching HandoffToken 后 retire 的多 Stroke 状态机；duplicate 幂等、stale/reordered ack 不得误清 Preview。
+- 保持 POC-02 Preview Model 不变；Arc backend 只负责低延迟显示，不重新实现 smooth/prediction/brush。Preview 数据面可有界合并，lifecycle/handoff 控制面不可丢弃。
+- 冻结错误域：Arc presentation failure 只降级 Default/Null Preview 并请求 Canonical redraw，不能取消 confirmed input、阻断 Document commit 或改变最终 digest。
+- 为 Web、Windows、Android、macOS、iOS/iPadOS、ChromiumOS 和 Headless 定义 Arc 实现；分级只影响验收强度，不省略 target。设备分轨定义可选 RawInputSource、Arc Service、PreviewStrokeRenderer、ScanoutBuffer、DisplayPlane 边界。
+- 定义 presentation receipt 的证据等级，区分 render complete、GPU submit、present accepted、compositor visible 和光电 input-to-photon；不得用前者冒充后者。
 
 ### 验证
 
-- 三平台使用相同 Pointer/Stroke 语料验证 begin/push/end/cancel 顺序和 Stroke ID。
-- 普通应用基准设备上 Preview absolute p95 ≤ 16.7 ms、p99 ≤ 33.3 ms，同时记录 refresh
-  rate、sample-to-visible frame count、missed presentation 和 queue age。
-- Canonical 接管不超过 2 帧，无空白、双重加深或位置跳变超过 1 device pixel。
-- backend 故障、设备丢失、surface resize 和 app background 后自动降级到 Canonical，不丢最终 Stroke。
-- FastInk 与 Canonical 的最终 Document/Stroke digest 完全相同。
+- 所有 target 使用相同 Pointer/Stroke 语料验证 lifecycle、Stroke ID、Preview revision、HandoffToken、generation 和最终 digest；Headless 是确定性协议 oracle。
+- Default 与 Arc sink 消费相同 replay 后的控制事件和 confirmed/predicted revision 序列一致；backend 没有第二套 Stroke 算法。
+- Tier A 基准设备上 Preview absolute p95 ≤ 16.7 ms、p99 ≤ 33.3 ms，同时记录 refresh rate、sample-to-visible frame count、missed presentation、queue age 和 evidence level。
+- Canonical 接管不超过 2 帧，无空白、双重加深、残影或位置跳变超过 1 device pixel。
+- 覆盖 duplicate/reordered/stale ack、慢 consumer、queue overrun、多指交错、快速连续笔、cancel、resize、app background、surface/device loss 和 generation replacement；只允许 Arc 降级，不丢最终 Stroke。
+- Web A/B 验证 normal WebGL2 与 `desynchronized`，高频输入走薄 JS adapter、`pointerrawupdate`/fallback 与 coalesced batch，不进入 React state，不强制 Worker/SAB。
+- Windows 使用 WM_POINTER/history 与独立 D3D/DXGI/DirectComposition Preview target；Android 使用 MotionEvent/history→Native CanvasView→JNI 与 low-latency target，证明不经过 RN JS。
+- macOS、iOS/iPadOS 分别完成 Native/coalesced input、Metal Preview target、生命周期和代表设备 conformance；Apple prediction 只能作为 InkEngine hint，不能由 backend 直接产生另一套 Preview。
+- ChromiumOS 通过 Web reuse conformance 与 optional system capability fallback；Headless 完成 state-machine/replay/fuzz/null-backend。
 - 若具备自有设备/BSP，额外测量 raw input → scanout 光电延迟、plane 生命周期和系统回退；结果不作为普通应用 R1 阻断项。
 
 ### 实现
 
-- 实现通用 FastInkBridge 和 null/fallback backend。
-- Web 使用 WASM Skia preview；Windows/Android 实现消费同一 `PreviewStrokeUpdate` 的 native low-latency preview POC。
-- 实现 handoff fence/ack、preview cleanup、错误诊断和 backend capability query。
+- 在顶层 `arc/` 实现可 standalone configure/build/install 的 `Arc::Protocol`、`Arc::Core`、Null/fallback、诊断和 external-consumer smoke；在 `pocs/fastink/` 实现 POC-06 harness 与报告。
+- 实现 per-Stroke 幂等状态机、可靠控制面、有界可合并数据面、HandoffToken、presentation receipt、错误隔离和 backend capability query。
+- 实现 Web、Windows、Android、macOS/iOS/iPadOS、ChromiumOS reuse 与 Headless backend。Web/Android 可以与 Host 聚合成单 WASM/`.so`，不强制动态库边界。
+- 为 POC-02 Preview Model 实现 protocol adapter；presentation error 由 Arc Bridge 吸收，不能反向成为 Ink/Document error。
+- 实现 Canonical/Preview 独立 target ownership 与 lifecycle trace；平台公共头之外不得泄漏 native/GPU 类型。
 - 条件式设备 POC 使用 `Raw Input → service → Skia Raster/GPU → DMA-BUF/GBM → DRM atomic overlay`，不把设备类型泄漏到 Runtime。
 
 ### 交付物
 
-- FastInk API、时序图、capability 与 fallback 规范。
-- 三平台 latency/handoff/failure 报告。
+- Arc Protocol/API、依赖图、presentation ownership、时序图、capability、receipt 与 fallback 规范。
+- 可独立消费的 Arc targets、全平台 backend/harness 和 dependency-boundary 检查。
+- Tier A latency/handoff/failure 真机报告；Tier B Apple 代表设备 conformance/lifecycle 报告；Reuse/Headless 自动化报告。
 - 普通应用 backend demo；条件满足时附设备级研究报告与原型。
-- R3 产品级 preview backend 的输入契约。
+- R3 产品级 Arc preview backend 的输入契约。
 
 ### 退出条件
 
-- [ ] 普通应用三平台 Preview 延迟达到 16.7/33.3 ms 门禁。
-- [ ] 三平台延迟报告同时包含毫秒、刷新率、frame count、missed presentation 和 queue age；高刷体验通过 Human Ink Gate。
+- [ ] Web、Windows、Android Preview 延迟达到 16.7/33.3 ms 门禁。
+- [ ] Tier A 延迟报告同时包含毫秒、刷新率、frame count、missed presentation、queue age 和 evidence level；高刷体验通过 Human Ink Gate。
 - [ ] handoff ≤ 2 帧且视觉/位置门禁通过。
 - [ ] 所有 fallback 语料保留 Canonical Stroke。
-- [ ] FastInk 平台依赖没有进入通用 Document/Scene/Renderer。
+- [ ] Web、Windows、Android、macOS、iOS/iPadOS、ChromiumOS 和 Headless 均有可构建 Arc 实现；Apple 代表设备 conformance/lifecycle 报告完成。
+- [ ] Arc 可独立 configure/build/test，external consumer 只链接 namespaced target；平台依赖没有进入通用 Document/Scene/Renderer。
+- [ ] Canonical 与 Preview 不共享 presentable backbuffer ownership，presentation failure 不能传播为 Canonical failure。
 - [ ] Default 与 FastInk sink 消费同一 Preview replay 后的 confirmed/predicted revision 序列一致，平台没有第二套 Stroke 算法。
+- [ ] 多 Stroke handoff、乱序/重复/旧 generation ack、快速连续笔和多指语料均无误清、卡死、丢线或部分 Document。
 - [ ] 设备级研究的完成与否不阻断进入 R1。
 
 # 第二层：产品化

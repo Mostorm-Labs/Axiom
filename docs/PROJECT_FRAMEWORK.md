@@ -322,15 +322,21 @@ Confirmed samples 不得静默删除、重复或重排；兼容 batch 可以合�
 诊断；资源不足时明确 `InputOverrun` 并原子取消 Stroke，不提交部分笔迹。Platform Adapter
 报告 pen/touch/hover/eraser/palm capability，InputRouter 统一产品级 arbitration。
 
-### 7.2 FastInk
+### 7.2 FastInk / Arc
 
 `StrokeSession` 统一完成 resample、smooth、pressure mapping、prediction 和 rollback，并输出版本化 `PreviewStrokeUpdate`。它至少表达 Stroke ID、update revision、brush descriptor、transform/坐标空间、confirmed representation、predicted tail 和 replace/truncate 语义；具体 vector segment/dab batch 编码由 POC-02 冻结。
 
-`FastInkBridge/FastInkBackend` 固定提供 `begin`、`push(PreviewStrokeUpdate)`、`end`、`cancel`。平台 backend 只负责快速显示和 surface/presentation，不得从 raw pointer sample 重新实现另一套平滑、预测或笔刷语义。核心不知道 DirectComposition、SurfaceControl、DRM、HWC 或硬件 plane。
+POC-06 将该能力落在可独立抽取的 `Arc` 模块中：`Arc::Protocol` 提供版本化 POD/C ABI，`Arc::Core` 提供有界队列、可靠控制面、handoff 状态机、诊断和 fallback，平台 target 提供输入与独立 Preview Presentation Target。Platform Host 是唯一 composition root；Axiom Runtime 与 Arc 只共同依赖协议，不能互相 include 内部头。Arc 不拥有 Canonical RenderTarget，也不得与 Axiom 并发 present 同一个 backbuffer。
 
-- Web：使用正常 WASM Skia Preview。
-- Windows/Android：实现应用级 native low-latency preview。
-- 自有设备：条件式评估 Raw Input、FastInk Service、DMA-BUF/GBM 与 DRM atomic overlay，不阻塞普通应用产品路线。
+Arc 的控制面不是把 `end` 当作立即清屏，而是 `begin → push* → sealInput → canonicalCommitted → canonicalVisible → retire`；只有匹配 Stroke/Document revision/HandoffToken/target generation 的 visible acknowledgement 才能清理 Preview。Arc presentation 失败只关闭 Preview 或切换 Default/Null backend，不能取消已确认输入或阻断 Canonical Stroke。
+
+Arc 平台实现覆盖 Web、Windows、Android、macOS、iOS/iPadOS、ChromiumOS、Headless 和条件式自有设备；平台分级只决定验证门禁，不决定是否创建实现。平台 backend 只负责快速显示和 surface/presentation，不得从 raw pointer sample 重新实现另一套平滑、预测或笔刷语义。核心不知道 DirectComposition、SurfaceControl、DRM、HWC 或硬件 plane。
+
+- Web：薄 JS pointer adapter + WASM/WebGL Preview target；高频路径绕过 React，A/B 验证 normal 与 `desynchronized` WebGL。
+- Windows/Android：实现应用级 native low-latency preview；输入分别使用 native history 和 JNI/native CanvasView 数据面。
+- macOS/iOS/iPadOS：实现 Native/Metal Preview target，作为 Tier B conformance 与代表设备验证，不改变产品 Shell 分级。
+- ChromiumOS：复用 Web Arc backend，系统 capability 可选且失败回退；Headless 提供 deterministic Null/trace backend。
+- 自有设备：条件式评估 Raw Input、Arc Service、DMA-BUF/GBM 与 DRM atomic overlay，不阻塞普通应用产品路线。
 
 Runtime 只通过 FrameInvalidationSink 发布带 View/revision/generation 的 frame invalidation。PlatformFrameScheduler 拥有
 rAF、Choreographer、DisplayLink、DXGI 或 Headless pump，合并请求并在 VSync callback 中
@@ -433,13 +439,24 @@ canvas/
 │   ├── persistence/
 │   ├── collaboration/
 │   └── bridge/
+├── arc/
+│   ├── include/arc/protocol/v0/
+│   ├── core/
+│   ├── platform/
+│   │   ├── web/
+│   │   ├── windows/
+│   │   ├── android/
+│   │   ├── apple/
+│   │   ├── headless/
+│   │   └── device/
+│   └── tests/
 ├── platform/
 │   ├── web/
 │   ├── windows/
 │   ├── android/
 │   ├── apple/
 │   ├── surfaces/
-│   └── fastink/
+│   └── fastink/                 # legacy/platform composition adapters only
 ├── shells/
 │   ├── web/
 │   ├── windows/
@@ -450,14 +467,16 @@ canvas/
 │   ├── scene_100k/
 │   ├── text_ime/
 │   ├── hybrid_surface/
-│   └── fastink/
+│   └── fastink/                 # POC-06 demos, benchmarks, fault probes, reports
 ├── tests/
 ├── benchmarks/
 ├── tools/
 └── docs/
 ```
 
-这些目录只在对应 POC 或产品阶段开始时创建；当前文档阶段不创建空代码骨架。
+`arc/` 是 POC-06 的正式模块边界，必须可独立 configure/build/test；`pocs/fastink/` 只保存实验
+消费者和证据。平台分级不允许省略 Web、Windows、Android、macOS、iOS/iPadOS、ChromiumOS
+或 Headless 的对应实现。其余产品目录在对应 POC 或产品阶段开始时创建。
 
 ## 10. 两级路线图
 
@@ -471,6 +490,7 @@ canvas/
 | POC-04 | RichText / IME | Web/Windows/Android 文本编辑语义成立 |
 | POC-05 | Hybrid Surface | **Accepted** 非 V1 future-capability risk proof：Web、Windows RNW、Android RN、Apple RN/Fabric 的受控 Overlay 与 z-order 边界可行 |
 | POC-06 | FastInk | 应用级低延迟预览与 Canonical 交接可行 |
+| POC-06 | FastInk / Arc | 全平台实现、独立 Preview target、错误隔离、分阶段 handoff 与 Canonical 交接可行 |
 
 技术依赖采用 DAG，而不是无条件串行：
 
