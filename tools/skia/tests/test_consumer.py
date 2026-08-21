@@ -251,6 +251,19 @@ class ConsumerTest(unittest.TestCase):
             self.assertFalse((install_root / self.target).exists())
             self.assertEqual(list(install_root.iterdir()), [])
 
+    def test_first_install_creates_nested_target_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock_path = self.write_lock(root)
+            install_root = root / "install"
+            with mock.patch.object(fetch, "download", self.download([])), \
+                 mock.patch.object(fetch, "verify_archive", self.extract):
+                result = fetch.install(
+                    self.target, lock_path, install_root=install_root,
+                )
+            self.assertEqual(result["source"], "https://github.com/Mostorm-Labs/Axiom/releases/download/skia-sdk-test/skia-sdk-macos-arm64-metal.zip")
+            self.assertTrue((install_root / self.target / "manifest.json").is_file())
+
     def test_failed_atomic_swap_restores_previous_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
