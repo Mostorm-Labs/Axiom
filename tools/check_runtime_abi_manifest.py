@@ -28,7 +28,11 @@ def main() -> int:
     manifest_path = root / "docs/api/canvas_runtime_api_v1.manifest.json"
 
     header_bytes = header.read_bytes()
-    header_text = header_bytes.decode("utf-8")
+    # Git may materialize the same tracked header with CRLF on Windows. The
+    # ABI manifest describes the normalized source contract, not checkout
+    # policy, so hash canonical LF bytes on every host.
+    normalized_header_bytes = header_bytes.replace(b"\r\n", b"\n")
+    header_text = normalized_header_bytes.decode("utf-8")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     abi_match = ABI_VERSION_PATTERN.search(header_text)
@@ -39,7 +43,7 @@ def main() -> int:
     actual = {
         "schema_version": 1,
         "abi_version": int(abi_match.group(1)),
-        "header_sha256": hashlib.sha256(header_bytes).hexdigest(),
+        "header_sha256": hashlib.sha256(normalized_header_bytes).hexdigest(),
         "exported_function_count": len(FUNCTION_PATTERN.findall(header_text)),
         "struct_declaration_count": len(STRUCT_PATTERN.findall(header_text)),
         "enum_constant_count": len(ENUM_PATTERN.findall(header_text)),
