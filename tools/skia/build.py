@@ -75,6 +75,12 @@ def gn_archive_closure(
         if label in seen_labels:
             continue
         seen_labels.add(label)
+        target_type = subprocess.check_output(
+            [str(gn), "desc", str(output), label, "type"],
+            cwd=skia_root, text=True,
+        ).strip()
+        if target_type != "static_library":
+            continue
         described = subprocess.check_output(
             [str(gn), "desc", str(output), label, "outputs"],
             cwd=skia_root, text=True,

@@ -54,7 +54,7 @@
       "sanitize": "",
       "symbols": "none",
       "consumer_default": true,
-      "gn_args": {"symbol_level": 0},
+      "gn_args": {},
       "runtime_validation": "runtime-smoke"
     },
     "debug": {
@@ -63,7 +63,7 @@
       "sanitize": "",
       "symbols": "embedded",
       "consumer_default": false,
-      "gn_args": {"symbol_level": 2},
+      "gn_args": {},
       "runtime_validation": "runtime-smoke"
     },
     "asan": {
@@ -72,7 +72,7 @@
       "sanitize": "ASAN",
       "symbols": "embedded",
       "consumer_default": false,
-      "gn_args": {"symbol_level": 2},
+      "gn_args": {},
       "runtime_validation": "link-only"
     }
   },

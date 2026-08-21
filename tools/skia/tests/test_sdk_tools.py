@@ -291,8 +291,8 @@ class SdkMetadataTest(unittest.TestCase):
             "skia_use_system_zlib",
         ):
             self.assertFalse(profile["common_gn_args"][argument])
-        self.assertEqual(profile["variants"]["release"]["gn_args"]["symbol_level"], 0)
-        self.assertEqual(profile["variants"]["debug"]["gn_args"]["symbol_level"], 2)
+        self.assertNotIn("symbol_level", profile["variants"]["release"]["gn_args"])
+        self.assertNotIn("symbol_level", profile["variants"]["debug"]["gn_args"])
         self.assertEqual(profile["targets"]["macos-x64-metal"]["arch"], "x64")
         for target in profile["targets"].values():
             self.assertEqual(target["libraries"], "discover")
@@ -413,9 +413,15 @@ class SdkMetadataTest(unittest.TestCase):
             script.write_text(
                 "#!/bin/sh\n"
                 "if [ \"$4\" = deps ]; then\n"
-                "  if [ \"$3\" = //:root ]; then printf '%s\\n' //:root //:dep; else printf '%s\\n' \"$3\"; fi\n"
-                "else\n"
-                "  if [ \"$3\" = //:root ]; then printf '%s\\n' out/release/libroot.a; else printf '%s\\n' out/release/libdep.a; fi\n"
+                "  if [ \"$3\" = //:root ]; then printf '%s\\n' //:root //:group; "
+                "elif [ \"$3\" = //:group ]; then printf '%s\\n' //:group //:dep; "
+                "else printf '%s\\n' \"$3\"; fi\n"
+                "elif [ \"$4\" = type ]; then\n"
+                "  if [ \"$3\" = //:group ]; then printf '%s\\n' group; else printf '%s\\n' static_library; fi\n"
+                "elif [ \"$3\" = //:group ]; then\n"
+                "  echo 'group outputs must not be queried' >&2; exit 91\n"
+                "elif [ \"$3\" = //:root ]; then printf '%s\\n' out/release/libroot.a\n"
+                "else printf '%s\\n' out/release/libdep.a\n"
                 "fi\n",
                 encoding="utf-8",
             )
