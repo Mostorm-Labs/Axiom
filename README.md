@@ -52,6 +52,7 @@ code should bypass their documented exit gates.
 
 ## Documents
 
+- [Axiom architecture review workspace (Draft)](docs/architecture/review/README.md)
 - [Project framework](docs/PROJECT_FRAMEWORK.md)
 - [System architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
 - [RF-01 Scene rendering foundation](docs/architecture/RF01_SCENE_RENDERING_FOUNDATION.md)
