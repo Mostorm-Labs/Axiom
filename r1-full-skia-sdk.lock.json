@@ -1,0 +1,1086 @@
+{
+  "format": "canvas-skia-sdk-lock-v2",
+  "profile": "r1-full-v1",
+  "profile_hash": "8708f3a6413f3e5231d568b077baaaccf67f22bfa144d9d89e760d3085070aa5",
+  "repository": "Mostorm-Labs/Axiom",
+  "schema_version": 2,
+  "set_id": "54c1999dc79d094d3e65a73f0c6262195c42a381ea5519a58a94be0d8b85c5ac",
+  "skia_commit": "b6d106297ff9ef2ff8094033695d045e87775581",
+  "source_commit": "095b274070f5d8589e8e617942ecad5965ed56bd",
+  "tag": "skia-sdk-r1-full-v1-54c1999dc79d094d",
+  "targets": {
+    "android-arm64-v8a-gles3": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-android-arm64-v8a-gles3-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "36747a942d982e90ea36534c8587700bc5162dee658316b1ce28f623b1d81d78",
+          "sha256": "0286f2f77cca13132b520bdf566585c8de638c57d0957d56751b9721a6277986",
+          "size": 222877322,
+          "symbols_asset": "skia-sdk-r1-full-v1-android-arm64-v8a-gles3-asan-symbols.zip",
+          "symbols_sha256": "c4696f2f6badd881494bd647ac903c26e0b488ebbf6332504b6e7de4b5136c10",
+          "symbols_size": 300,
+          "toolchain": {
+            "android_ndk": "27.2.12479018",
+            "api_level": 26,
+            "clang": "Android NDK 27.2.12479018",
+            "linker": "Android NDK 27.2.12479018"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "Android NDK 27.2.12479018",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "Android NDK 27.2.12479018",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "instrumented-link",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-android-arm64-v8a-gles3-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "e46f619a1fb9851ce6ef41d45f26dc23c1f95a4c116fb3da7639f528893597ac",
+          "sha256": "f0ccb1ab3f3d616364684e5f7121d1ebf8ee2f9a70dd0008fce5a1920eefb69b",
+          "size": 123597567,
+          "symbols_asset": "skia-sdk-r1-full-v1-android-arm64-v8a-gles3-debug-symbols.zip",
+          "symbols_sha256": "9ba7e33ba18c44643eccdd4cbcbd6393cd6ccff64343ff3e28baa45bcbf1ec09",
+          "symbols_size": 302,
+          "toolchain": {
+            "android_ndk": "27.2.12479018",
+            "api_level": 26,
+            "clang": "Android NDK 27.2.12479018",
+            "linker": "Android NDK 27.2.12479018"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-android-arm64-v8a-gles3-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "c40e929f4b373aca10afcd7469617e28f5ec1011d4904dabac25871d33dad409",
+          "sha256": "f57c3f1e347ac0bd2f3f206814035fe63519e70f91a1fa15e6f5780330eaa341",
+          "size": 38958729,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "android_ndk": "27.2.12479018",
+            "api_level": 26,
+            "clang": "Android NDK 27.2.12479018",
+            "linker": "Android NDK 27.2.12479018"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "android-x86_64-gles3": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-android-x86_64-gles3-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "f6d41e36bf07dcc08ee3eb69becbf75f30f53e933393d221560fd4b76f37a0c0",
+          "sha256": "9ed1e0c2f3a78648b55de0522056effbe9dc3acfaca333a30b8392cc43b9dd32",
+          "size": 216396236,
+          "symbols_asset": "skia-sdk-r1-full-v1-android-x86_64-gles3-asan-symbols.zip",
+          "symbols_sha256": "0fd0e74a414fe8e713845da8e69af4ce2d382ce34249f6f0999e9fb9665e6840",
+          "symbols_size": 297,
+          "toolchain": {
+            "android_ndk": "27.2.12479018",
+            "api_level": 26,
+            "clang": "Android NDK 27.2.12479018",
+            "linker": "Android NDK 27.2.12479018"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "Android NDK 27.2.12479018",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "Android NDK 27.2.12479018",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "instrumented-link",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-android-x86_64-gles3-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "e27d9fcdf2b4ca5435b2bcde0c43afe1a893b47ea18f3fba1943f6b648ad7472",
+          "sha256": "20f5aeadf92ed57c1bd2eb52f78054846abb20d5f3da33d5c56c3ec457fc6c9a",
+          "size": 119058308,
+          "symbols_asset": "skia-sdk-r1-full-v1-android-x86_64-gles3-debug-symbols.zip",
+          "symbols_sha256": "1d35ec63388c8e7c91a30f3bec7323f1531e2cca89c82e80bd30c583611f758d",
+          "symbols_size": 298,
+          "toolchain": {
+            "android_ndk": "27.2.12479018",
+            "api_level": 26,
+            "clang": "Android NDK 27.2.12479018",
+            "linker": "Android NDK 27.2.12479018"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-android-x86_64-gles3-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "d48e11b716ae3afd94b10f0d061b7335b8126a0f6645335c70b00c72798371b4",
+          "sha256": "683beba0051622276947d3f7e2cd673bb283747f1d43af3beb5b30b9163905d7",
+          "size": 38857656,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "android_ndk": "27.2.12479018",
+            "api_level": 26,
+            "clang": "Android NDK 27.2.12479018",
+            "linker": "Android NDK 27.2.12479018"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "ios-arm64-metal": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-ios-arm64-metal-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "e86a1bfe4b0508772f33a18963b65e23e83f2fcfdeb1c221aac7249fba965c64",
+          "sha256": "96f71b8d3f30982b2be105a18835295e961ac6eabd30c80879f22218413ee9ea",
+          "size": 648400812,
+          "symbols_asset": "skia-sdk-r1-full-v1-ios-arm64-metal-asan-symbols.zip",
+          "symbols_sha256": "bbe5dd6ca1dcb50b1945c587006c61b1474644bcf503402e9c13195ee70c997f",
+          "symbols_size": 294,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "deployment_target": "17.0",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "iphoneos",
+            "sdk_version": "18.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "instrumented-link",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-ios-arm64-metal-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "5b79fbf2cbe351dc90c3aa907b6aef930f91010f1881631f55306e1f8890d468",
+          "sha256": "36bc0282be81702cf58a239284ebe28dc0d4e18257d6d038ae4c487d21b35dcc",
+          "size": 441644752,
+          "symbols_asset": "skia-sdk-r1-full-v1-ios-arm64-metal-debug-symbols.zip",
+          "symbols_sha256": "cc80435789949fb2fa9776b9a3b201e7aee82531bfdb1e67408219fa578b503d",
+          "symbols_size": 296,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "deployment_target": "17.0",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "iphoneos",
+            "sdk_version": "18.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-ios-arm64-metal-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "7443be3f21a2342d87d003207953c845c5e08903610148ec3e2a4f03b55f29a7",
+          "sha256": "475286542c0b962d528a31d6b722989c63828cfeba64b3524c234da0089940ea",
+          "size": 31670723,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "deployment_target": "17.0",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "iphoneos",
+            "sdk_version": "18.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "ios-simulator-arm64-metal": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-ios-simulator-arm64-metal-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "29424b50b495263c985e32bf0bfef1967f471cb353fcea18b2b8b388043d1d19",
+          "sha256": "f85718d2917f7f7006fc70b106d92accda27b1717579f3c8fc064e8913b2cd5e",
+          "size": 648279266,
+          "symbols_asset": "skia-sdk-r1-full-v1-ios-simulator-arm64-metal-asan-symbols.zip",
+          "symbols_sha256": "0e2151d97705f2f412c6877c8acda1d9c7d1ff4f6a80950770a4492c05c91002",
+          "symbols_size": 303,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "deployment_target": "17.0",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "iphonesimulator",
+            "sdk_version": "18.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-ios-simulator-arm64-metal-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "2293f8930b91a7e18f968dd2099e4d74d3d08044e13dd96e59749a048df5cffe",
+          "sha256": "cc49542c4d6103e77557951a93634c670d5dc85f77fadfb042c324e0872088b4",
+          "size": 441622112,
+          "symbols_asset": "skia-sdk-r1-full-v1-ios-simulator-arm64-metal-debug-symbols.zip",
+          "symbols_sha256": "4aea3c56db7c3ec7d0e9913fd0ba37bafed32908bd2937408bcbb4a3452eb827",
+          "symbols_size": 303,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "deployment_target": "17.0",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "iphonesimulator",
+            "sdk_version": "18.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-ios-simulator-arm64-metal-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "166f4544ab0d3a689e139f63528f45eff6861e5b6e971513562043b814b43e66",
+          "sha256": "a4b456bf98c0df454fd742b8f45984e5e035a3ed4e401a8a15bcbc798e10a641",
+          "size": 31759982,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "deployment_target": "17.0",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "iphonesimulator",
+            "sdk_version": "18.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "macos-arm64-metal": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-macos-arm64-metal-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "35cdfdb995dec98e47c2facebed1e17855ceea382f289342543c1de1e120d517",
+          "sha256": "d9d0ff1ae4f66fbb01e23b8b27119e1779a1146771020584baf65dc2b5c15057",
+          "size": 653829396,
+          "symbols_asset": "skia-sdk-r1-full-v1-macos-arm64-metal-asan-symbols.zip",
+          "symbols_sha256": "7b671055cff520d82f51f63fc577df20a65235a2253b721e418028522ca3efc0",
+          "symbols_size": 295,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "macosx",
+            "sdk_version": "15.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-macos-arm64-metal-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "998e52f2d6fdd7ebc1b72da6b68d58d0bb7f5f3396f1047fd7fd595db42f6451",
+          "sha256": "c152798f9580030da19994bb9cbe701d7b29c9115ebdb58873e785b276689005",
+          "size": 446646189,
+          "symbols_asset": "skia-sdk-r1-full-v1-macos-arm64-metal-debug-symbols.zip",
+          "symbols_sha256": "59ea6716b1bcf3d5fc93cafb4f6a82de180a5ca1970725781389c7d229d07de8",
+          "symbols_size": 296,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "macosx",
+            "sdk_version": "15.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-macos-arm64-metal-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "c80d17c76fb2ea4f7f5b3e3c859173c44399cf1e76bb573dbe086dff49c80731",
+          "sha256": "42bdc110c17239a4133c8d6e7d0da61c0215bd09a91cff3a770db995daea118f",
+          "size": 36334501,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "macosx",
+            "sdk_version": "15.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "macos-x64-metal": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-macos-x64-metal-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "290982636772dde5d4f0de12b1cbf6a62f584a3b649b6c90d00e4a6d2d5b372b",
+          "sha256": "8f6db8148511b8afbcf44f36cff5497e67130470cf76c1d9c735ef11dc7617ec",
+          "size": 629317519,
+          "symbols_asset": "skia-sdk-r1-full-v1-macos-x64-metal-asan-symbols.zip",
+          "symbols_sha256": "6c63b75489b6e850f1526799c4487ead9bbbb029f64e3191519eef10b9d1173a",
+          "symbols_size": 295,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "macosx",
+            "sdk_version": "15.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-macos-x64-metal-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "333627a1ba4ff15c73ffe8be433a950e0b1c63b444d6423c73d72ba2fe1d7361",
+          "sha256": "efc3e696bb4f79a7d0d605449b000765d71aa14258a5bde2494ea3df832aaf73",
+          "size": 454600476,
+          "symbols_asset": "skia-sdk-r1-full-v1-macos-x64-metal-debug-symbols.zip",
+          "symbols_sha256": "610c05b80a53512b48c397f9af2ad45ede62996aa0d35e1c339600583a289588",
+          "symbols_size": 294,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "macosx",
+            "sdk_version": "15.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-macos-x64-metal-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "62efb87afa1977308958b8e6b8f16562e20e964e6d5a7ed423cae8ff1040c823",
+          "sha256": "d3820ce989c8c9333138d0b0a1d5d379b026514987a9dde4ea0d04c56173ec59",
+          "size": 38361771,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "clang": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+            "linker": "@(#)PROGRAM:ld PROJECT:ld-1167.5",
+            "sdk": "macosx",
+            "sdk_version": "15.5",
+            "xcode": "Xcode 16.4; Build version 16F6"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "web-wasm-webgl2": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-web-wasm-webgl2-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "0f6a773d1e88e7438a3edd161013e82c060bf4dbeab21657861798525c806c1f",
+          "sha256": "78227b2890d1ea60e96f4df9136e96184ad7c3fd15f326d3f0996db839dac074",
+          "size": 605573839,
+          "symbols_asset": "skia-sdk-r1-full-v1-web-wasm-webgl2-asan-symbols.zip",
+          "symbols_sha256": "7e61881004569cb0b3c8bf442b165abdf14d632f1a1172b1df116c4567ffcba0",
+          "symbols_size": 296,
+          "toolchain": {
+            "clang": "shared:INFO: (Emscripten: Running sanity checks)",
+            "emscripten": "6.0.6",
+            "linker": "shared:INFO: (Emscripten: Running sanity checks)",
+            "llvm": "22.1.8",
+            "pthread": false
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "-fsanitize=address",
+              "-fno-omit-frame-pointer"
+            ],
+            "compiler_identity": "shared:INFO: (Emscripten: Running sanity checks)",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "-fsanitize=address"
+            ],
+            "linker_identity": "shared:INFO: (Emscripten: Running sanity checks)",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "link-only",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "compiler-provided",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-web-wasm-webgl2-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "75da4c46db4e959a9817bde4d7657d55d1f6d09663ffc67120b7d6f4ca5e0413",
+          "sha256": "01ca672cce3253c2bcfd5b5c81e9fd89dd9433c0e9c2bae99e0079fe479974f1",
+          "size": 331731571,
+          "symbols_asset": "skia-sdk-r1-full-v1-web-wasm-webgl2-debug-symbols.zip",
+          "symbols_sha256": "eccba7ec23788018c203eb79e0dadb364bbd541f75b8e06c6cc16280e94aa12f",
+          "symbols_size": 296,
+          "toolchain": {
+            "clang": "shared:INFO: (Emscripten: Running sanity checks)",
+            "emscripten": "6.0.6",
+            "linker": "shared:INFO: (Emscripten: Running sanity checks)",
+            "llvm": "22.1.8",
+            "pthread": false
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-web-wasm-webgl2-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "8c5326038b9082ec2171a03ade3c953390fa7557dc7fd1f79196693a70fcda16",
+          "sha256": "be577648c98cdacaf4f7b21cc4bc1fab780b63228d5d0e641c32e11a88282663",
+          "size": 24042502,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "clang": "shared:INFO: (Emscripten: Running sanity checks)",
+            "emscripten": "6.0.6",
+            "linker": "shared:INFO: (Emscripten: Running sanity checks)",
+            "llvm": "22.1.8",
+            "pthread": false
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    },
+    "windows-x64-d3d12": {
+      "variants": {
+        "asan": {
+          "asset": "skia-sdk-r1-full-v1-windows-x64-d3d12-asan.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "fdbbc2944bfc4cd227b9152a7fda8a4b1f0fd7c0713230e922c4070c13a0d732",
+          "sha256": "c9f742ba9c47528bd16734fad89f7eedcc0fe314b7fe1c25340ba1a1c5cdaf16",
+          "size": 498208630,
+          "symbols_asset": "skia-sdk-r1-full-v1-windows-x64-d3d12-asan-symbols.zip",
+          "symbols_sha256": "1937cae3229d31e0f9929824b425d474a1b5655ed6f36c8b8e7f58754f35a7b2",
+          "symbols_size": 299,
+          "toolchain": {
+            "clang": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "linker": "LLD 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "llvm": "22.1.8",
+            "msvc_toolset": "14.51.36231",
+            "windows_sdk": "10.0.26100.0"
+          },
+          "variant_metadata": {
+            "compile_flags": [
+              "/fsanitize=address",
+              "/Oy-"
+            ],
+            "compiler_identity": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "consumer_default": false,
+            "frame_pointer": true,
+            "instrumentation": "address",
+            "is_debug": true,
+            "is_official_build": false,
+            "link_flags": [
+              "/fsanitize=address",
+              "/INCREMENTAL:NO"
+            ],
+            "linker_identity": "LLD 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "requires_instrumented_consumer": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "ASAN",
+            "sanitizer_runtime": "sdk-bundled-clang-dynamic",
+            "symbols": "embedded"
+          }
+        },
+        "debug": {
+          "asset": "skia-sdk-r1-full-v1-windows-x64-d3d12-debug.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "065506cfd74cdd69659f7048bcf731efb8aaa6b29ee8b8005ce1b27822b0a1e9",
+          "sha256": "ab8e2849e21af7025218419be6f382429e7f61c1655911edd5c03b86ffe605af",
+          "size": 598219916,
+          "symbols_asset": "skia-sdk-r1-full-v1-windows-x64-d3d12-debug-symbols.zip",
+          "symbols_sha256": "1efadcf2b184661060876b41dc9161d36b83d88228e1d1138ef766f7885c0b46",
+          "symbols_size": 304,
+          "toolchain": {
+            "clang": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "linker": "LLD 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "llvm": "22.1.8",
+            "msvc_toolset": "14.51.36231",
+            "windows_sdk": "10.0.26100.0"
+          },
+          "variant_metadata": {
+            "consumer_default": false,
+            "is_debug": true,
+            "is_official_build": false,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "embedded"
+          }
+        },
+        "release": {
+          "asset": "skia-sdk-r1-full-v1-windows-x64-d3d12-release.zip",
+          "capabilities": {
+            "freetype": true,
+            "ganesh": true,
+            "harfbuzz": true,
+            "icu": true,
+            "jpeg": true,
+            "pathops": true,
+            "pdf": true,
+            "png": true,
+            "raw_dng": false,
+            "richtext": true,
+            "skottie": true,
+            "svg": true,
+            "webp": true
+          },
+          "sdk_id": "29ebc4ef2655e182c7da5996c2a0b23cb07214f1efcacc2bf149dd7c841c99fa",
+          "sha256": "1fae3cdc8bda27615cd406013913ff7e6daedaebe555b88e7e896c2680a396b5",
+          "size": 62542343,
+          "symbols_asset": null,
+          "symbols_sha256": null,
+          "symbols_size": null,
+          "toolchain": {
+            "clang": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "linker": "LLD 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+            "llvm": "22.1.8",
+            "msvc_toolset": "14.51.36231",
+            "windows_sdk": "10.0.26100.0"
+          },
+          "variant_metadata": {
+            "consumer_default": true,
+            "is_debug": false,
+            "is_official_build": true,
+            "runtime_validation": "runtime-smoke",
+            "sanitize": "",
+            "symbols": "none"
+          }
+        }
+      }
+    }
+  }
+}
