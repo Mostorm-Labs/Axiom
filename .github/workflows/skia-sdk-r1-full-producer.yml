@@ -1,12 +1,18 @@
 name: R1 Full Skia SDK Producer
 
 on:
-  pull_request:
-    paths:
-      - "deps.lock.json"
-      - "tools/skia/**"
-      - ".github/workflows/skia-sdk-r1-full-producer.yml"
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      targets:
+        description: JSON array of target names to build
+        required: false
+        type: string
+        default: '["windows-x64-d3d12","web-wasm-webgl2","macos-arm64-metal","macos-x64-metal","ios-arm64-metal","ios-simulator-arm64-metal","android-arm64-v8a-gles3","android-x86_64-gles3"]'
+      publish:
+        description: Aggregate and publish an immutable release set
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -22,48 +28,35 @@ env:
 jobs:
   preflight:
     runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Require publication from main and validate contracts
+      - name: Validate producer contracts
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == workflow_dispatch ]]; then
-            test "$GITHUB_REF" = refs/heads/main
-          fi
           python -m unittest discover -s tools/skia/tests -v
           python -c "from pathlib import Path; import sys; sys.path.insert(0, 'tools/skia'); from sdk import load_profile; p=load_profile(Path('$PROFILE')); assert len(p['targets']) == 8 and len(p['variants']) == 3"
           git diff --check
+      - name: Expand the selected target and variant matrix
+        id: matrix
+        shell: bash
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          matrix=$(python tools/skia/classify_r1_changes.py --matrix "$TARGETS")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "selected-matrix=$matrix" >> "$GITHUB_STEP_SUMMARY"
 
   build:
     needs: preflight
     strategy:
       fail-fast: false
-      matrix:
-        # Release, Debug, and ASan are deliberately separate jobs.  They use
-        # independent GN output directories, so there is no build dependency
-        # between variants and a failed diagnostic build must not discard
-        # already verified product artifacts.
-        variant: [release, debug, asan]
-        target:
-          - windows-x64-d3d12
-          - web-wasm-webgl2
-          - macos-arm64-metal
-          - macos-x64-metal
-          - ios-arm64-metal
-          - ios-simulator-arm64-metal
-          - android-arm64-v8a-gles3
-          - android-x86_64-gles3
-        include:
-          - { target: windows-x64-d3d12, os: windows-2025, family: windows, toolchain: windows-2025-llvm-22.1.8 }
-          - { target: web-wasm-webgl2, os: ubuntu-24.04, family: web, toolchain: ubuntu-24.04-emscripten-6.0.6 }
-          - { target: macos-arm64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
-          - { target: macos-x64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
-          - { target: ios-arm64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
-          - { target: ios-simulator-arm64-metal, os: macos-15, family: apple, toolchain: macos-15-xcode }
-          - { target: android-arm64-v8a-gles3, os: ubuntu-24.04, family: android, toolchain: ubuntu-24.04-ndk-27.2.12479018 }
-          - { target: android-x86_64-gles3, os: ubuntu-24.04, family: android, toolchain: ubuntu-24.04-ndk-27.2.12479018 }
+      # Release, Debug, and ASan are independent cells with independent GN
+      # outputs. A platform-scoped PR therefore creates exactly 3 jobs.
+      matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.target }}-${{ matrix.variant }}
     steps:
@@ -203,6 +196,7 @@ jobs:
           retention-days: 7
 
   aggregate:
+    if: inputs.publish
     needs: build
     runs-on: ubuntu-24.04
     steps:
@@ -213,6 +207,15 @@ jobs:
         with:
           pattern: r1-full-skia-*
           path: out/skia-sdk/assets
+      - name: Require the complete matrix for publication
+        shell: bash
+        run: |
+          expected='windows-x64-d3d12 web-wasm-webgl2 macos-arm64-metal macos-x64-metal ios-arm64-metal ios-simulator-arm64-metal android-arm64-v8a-gles3 android-x86_64-gles3'
+          for target in $expected; do
+            for variant in release debug asan; do
+              test -f "out/skia-sdk/assets/r1-full-skia-${target}-${variant}/skia-sdk-r1-full-v1-${target}-${variant}.zip"
+            done
+          done
       - run: python tools/skia/aggregate.py --profile "$PROFILE" --assets out/skia-sdk/assets --output out/skia-sdk/release
       - uses: actions/upload-artifact@v4
         with:
@@ -221,7 +224,7 @@ jobs:
           retention-days: 7
 
   publish:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: inputs.publish && github.ref == 'refs/heads/main'
     needs: aggregate
     runs-on: ubuntu-24.04
     permissions:

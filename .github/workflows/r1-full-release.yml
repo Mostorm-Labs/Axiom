@@ -1,0 +1,25 @@
+name: R1 Full Skia Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: JSON array of all target names to build
+        required: true
+        type: string
+        default: '["windows-x64-d3d12","web-wasm-webgl2","macos-arm64-metal","macos-x64-metal","ios-arm64-metal","ios-simulator-arm64-metal","android-arm64-v8a-gles3","android-x86_64-gles3"]'
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  producer:
+    uses: ./.github/workflows/skia-sdk-r1-full-producer.yml
+    with:
+      targets: ${{ inputs.targets }}
+      publish: true
+    secrets: inherit
