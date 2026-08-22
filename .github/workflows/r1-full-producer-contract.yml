@@ -39,7 +39,7 @@ jobs:
     uses: ./.github/workflows/skia-sdk-r1-full-producer.yml
     with:
       targets: ${{ needs.classify.outputs.targets }}
-      publish: false
+      aggregate: false
     secrets: inherit
 
   consumer:

@@ -8,8 +8,8 @@ on:
         required: false
         type: string
         default: '["windows-x64-d3d12","web-wasm-webgl2","macos-arm64-metal","macos-x64-metal","ios-arm64-metal","ios-simulator-arm64-metal","android-arm64-v8a-gles3","android-x86_64-gles3"]'
-      publish:
-        description: Aggregate and publish an immutable release set
+      aggregate:
+        description: Aggregate a complete immutable release set
         required: false
         type: boolean
         default: false
@@ -196,7 +196,7 @@ jobs:
           retention-days: 7
 
   aggregate:
-    if: inputs.publish
+    if: inputs.aggregate
     needs: build
     runs-on: ubuntu-24.04
     steps:
@@ -222,25 +222,3 @@ jobs:
           name: r1-full-skia-release-set
           path: out/skia-sdk/release
           retention-days: 7
-
-  publish:
-    if: inputs.publish && github.ref == 'refs/heads/main'
-    needs: aggregate
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with: { name: r1-full-skia-release-set, path: out/skia-sdk/release }
-      - uses: actions/attest@v4
-        with:
-          subject-path: |
-            out/skia-sdk/release/skia-sdk-*.zip
-            out/skia-sdk/release/skia-sdk-index.json
-      - name: Publish immutable prerelease
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: python tools/skia/publish_release.py --directory out/skia-sdk/release --repository "${{ github.repository }}" --target-commit "${{ github.sha }}"
