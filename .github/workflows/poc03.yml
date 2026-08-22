@@ -3,7 +3,7 @@ name: POC-03 100K Scene
 on:
   pull_request:
     paths:
-      - "skia-sdk.lock.json"
+      - "r1-full-skia-sdk.lock.json"
       - "pocs/large_scene/**"
       - "pocs/ink_engine/**"
       - "runtime/**"
@@ -15,7 +15,7 @@ on:
   push:
     branches: [main, "codex/poc-03-100k-scene"]
     paths:
-      - "skia-sdk.lock.json"
+      - "r1-full-skia-sdk.lock.json"
       - "pocs/large_scene/**"
       - "pocs/ink_engine/**"
       - "runtime/**"
@@ -92,7 +92,9 @@ jobs:
         run: python3 tools/bootstrap_deps.py --core --web
       - name: Fetch verified Web Skia SDK
         run: >-
-          python3 tools/skia/fetch.py --target web-wasm-webgl2
+          python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json
+          --lock r1-full-skia-sdk.lock.json --target web-wasm-webgl2
+          --variant release
           --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Build WASM/WebGL2 probe without Skia source
         shell: bash
@@ -153,7 +155,9 @@ jobs:
       - name: Fetch verified Windows Skia SDK
         shell: pwsh
         run: >-
-          python tools/skia/fetch.py --target windows-x64-d3d12
+          python tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json
+          --lock r1-full-skia-sdk.lock.json --target windows-x64-d3d12
+          --variant release
           --summary-file "$env:GITHUB_STEP_SUMMARY"
       - name: Build isolated POC-03 and WARP probe
         shell: pwsh
@@ -194,8 +198,8 @@ jobs:
         run: python3 tools/bootstrap_deps.py --core
       - name: Fetch verified Android Skia SDKs
         run: |
-          python3 tools/skia/fetch.py --target android-arm64-v8a-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
-          python3 tools/skia/fetch.py --target android-x86_64-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json --target android-arm64-v8a-gles3 --variant release --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json --target android-x86_64-gles3 --variant release --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Clean-build physical arm64 bundle
         working-directory: pocs/large_scene/platform/android
         run: |

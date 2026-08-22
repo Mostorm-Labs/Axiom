@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Prove a POC-04 RichText SDK can build Canvas without the Skia checkout."""
+"""Historical helper for reproducing a POC-04 RichText SDK source-free build.
+
+Active RichText development consumes the R1 Full SDK through the normal
+CanvasSkia package. This helper remains only so the immutable POC-04 release
+and its acceptance evidence can be reproduced.
+"""
 
 from __future__ import annotations
 

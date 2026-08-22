@@ -26,7 +26,7 @@ android {
                     "-DCANVAS_BUILD_POC02=ON",
                     "-DCANVAS_POC02_BUILD_TESTS=OFF",
                     "-DCANVAS_POC02_ENABLE_SKIA=ON",
-                    "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPocSdkTarget.get()}"
+                    "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPocSdkTarget.get()}/release"
                 )
                 cppFlags += listOf("-std=c++20")
             }

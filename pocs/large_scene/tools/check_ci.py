@@ -41,10 +41,17 @@ def main() -> int:
         "tools/check_runtime_abi_manifest.py",
         "tools/check_runtime_boundaries.py",
         "canvas_poc03_integrated_benchmark",
+        "tools/skia/profiles/r1-full-v1.json",
+        "r1-full-skia-sdk.lock.json",
+        "--variant release",
     ):
         if required not in text:
             raise RuntimeError(f"POC-03 workflow is missing {required}")
-    print("POC-03 workflow is isolated and consumes source-free Skia SDKs")
+    if '"skia-sdk.lock.json"' in text:
+        raise RuntimeError(
+            "POC-03 workflow must not track the historical POC-01 SDK lock"
+        )
+    print("POC-03 workflow is isolated and consumes the R1 Full release Skia SDK")
     return 0
 
 

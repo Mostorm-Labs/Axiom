@@ -23,26 +23,43 @@ else()
 endif()
 
 set(CANVAS_SKIA_SDK_ROOT
-    "${PROJECT_SOURCE_DIR}/.deps/skia-sdk/${CANVAS_POC02_SDK_TARGET}" CACHE PATH
+    "${PROJECT_SOURCE_DIR}/.deps/skia-sdk/${CANVAS_POC02_SDK_TARGET}/release" CACHE PATH
     "Verified Canvas Skia SDK root")
+set(CANVAS_SKIA_SDK_LOCK
+    "${PROJECT_SOURCE_DIR}/r1-full-skia-sdk.lock.json" CACHE FILEPATH
+    "Verified Canvas Skia SDK lock")
 set(_canvas_poc02_skia_config
     "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
 if(NOT EXISTS "${_canvas_poc02_skia_config}")
   message(FATAL_ERROR
     "Missing verified Canvas Skia SDK. Run: python3 tools/skia/fetch.py --target "
-    "${CANVAS_POC02_SDK_TARGET}")
+    "${CANVAS_POC02_SDK_TARGET} --profile tools/skia/profiles/r1-full-v1.json "
+    "--lock r1-full-skia-sdk.lock.json --variant release")
 endif()
 
 file(READ "${CANVAS_SKIA_SDK_ROOT}/manifest.json" _canvas_poc02_manifest)
-file(READ "${PROJECT_SOURCE_DIR}/skia-sdk.lock.json" _canvas_poc02_lock)
+file(READ "${CANVAS_SKIA_SDK_LOCK}" _canvas_poc02_lock)
 string(JSON _canvas_poc02_manifest_id GET "${_canvas_poc02_manifest}" sdk_id)
 string(JSON _canvas_poc02_manifest_target GET "${_canvas_poc02_manifest}" identity target)
-string(JSON _canvas_poc02_locked_id GET "${_canvas_poc02_lock}" targets
-       "${CANVAS_POC02_SDK_TARGET}" sdk_id)
-if(NOT _canvas_poc02_manifest_target STREQUAL CANVAS_POC02_SDK_TARGET OR
+string(JSON _canvas_poc02_lock_schema GET "${_canvas_poc02_lock}" schema_version)
+if(_canvas_poc02_lock_schema EQUAL 2)
+  string(JSON _canvas_poc02_manifest_variant ERROR_VARIABLE
+         _canvas_poc02_manifest_variant_error GET
+         "${_canvas_poc02_manifest}" identity variant)
+  string(JSON _canvas_poc02_locked_id GET "${_canvas_poc02_lock}" targets
+         "${CANVAS_POC02_SDK_TARGET}" variants release sdk_id)
+else()
+  set(_canvas_poc02_manifest_variant "release")
+  set(_canvas_poc02_manifest_variant_error "")
+  string(JSON _canvas_poc02_locked_id GET "${_canvas_poc02_lock}" targets
+         "${CANVAS_POC02_SDK_TARGET}" sdk_id)
+endif()
+if(_canvas_poc02_manifest_variant_error OR
+   NOT _canvas_poc02_manifest_target STREQUAL CANVAS_POC02_SDK_TARGET OR
+   NOT _canvas_poc02_manifest_variant STREQUAL "release" OR
    NOT _canvas_poc02_manifest_id STREQUAL _canvas_poc02_locked_id)
   message(FATAL_ERROR
-    "Canvas Skia SDK identity does not match skia-sdk.lock.json for "
+    "Canvas Skia SDK identity does not match ${CANVAS_SKIA_SDK_LOCK} for "
     "${CANVAS_POC02_SDK_TARGET}")
 endif()
 

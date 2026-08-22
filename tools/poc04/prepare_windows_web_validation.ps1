@@ -6,9 +6,9 @@ $ErrorActionPreference = "Stop"
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 Set-Location $Repo
 
-$Profile = "tools/skia/profiles/poc04-richtext-v2.json"
-$Lock = "pocs/rich_text/skia-sdk.lock.json"
-$Install = ".deps/skia-sdk-poc04"
+$Profile = "tools/skia/profiles/r1-full-v1.json"
+$Lock = "r1-full-skia-sdk.lock.json"
+$Install = ".deps/skia-sdk"
 $WindowsOut = Join-Path $OutRoot "windows"
 $WebOut = Join-Path $OutRoot "web"
 $ChromeOut = Join-Path $OutRoot "chrome-recorder"
@@ -23,8 +23,8 @@ if (-not (Test-Path $Llvm)) {
   Start-Process $Installer -ArgumentList "/S", "/D=$InstallDir" -Wait
 }
 
-python tools/skia/fetch.py --profile $Profile --lock $Lock --install-root $Install --target windows-x64-d3d12
-python tools/skia/fetch.py --profile $Profile --lock $Lock --install-root $Install --target web-wasm-webgl2
+python tools/skia/fetch.py --profile $Profile --lock $Lock --install-root $Install --target windows-x64-d3d12 --variant release
+python tools/skia/fetch.py --profile $Profile --lock $Lock --install-root $Install --target web-wasm-webgl2 --variant release
 
 cmake -S pocs/rich_text -B $WindowsOut -G Ninja `
   -DCMAKE_BUILD_TYPE=Release `

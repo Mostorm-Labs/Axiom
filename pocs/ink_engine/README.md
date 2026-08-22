@@ -96,7 +96,8 @@ ctest --preset poc02-host-asan --output-on-failure
 macOS arm64 Metal/Ganesh validation:
 
 ```bash
-python3 tools/skia/fetch.py --target macos-arm64-metal
+python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json \
+  --lock r1-full-skia-sdk.lock.json --target macos-arm64-metal --variant release
 cmake --preset poc02-macos-release
 cmake --build --preset poc02-macos-release --parallel
 ctest --preset poc02-macos-release --output-on-failure
@@ -106,7 +107,8 @@ Web WASM/WebGL2 playground:
 
 ```bash
 python3 tools/bootstrap_deps.py --core --web
-python3 tools/skia/fetch.py --target web-wasm-webgl2
+python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json \
+  --lock r1-full-skia-sdk.lock.json --target web-wasm-webgl2 --variant release
 source .deps/emsdk/emsdk_env.sh
 cmake --preset poc02-web-release
 cmake --build --preset poc02-web-release --parallel

@@ -111,7 +111,8 @@ runs the x86_64 Native CanvasView on an API 35 emulator.
 
 `.github/workflows/poc02.yml` is independent from the POC-01 workflow and has
 host-arm64, Web, Windows, Android, and cross-platform acceptance jobs. Every GPU
-job downloads a target named in `skia-sdk.lock.json`; ordinary POC-02 CI does
+job downloads the target's locked R1 Full `release` variant named in
+`r1-full-skia-sdk.lock.json`; ordinary POC-02 CI does
 not contain Skia source checkout, GN invocation, Skia Ninja invocation, or a
 `.deps/skia/out` cache.
 

@@ -24,55 +24,79 @@ else()
 endif()
 
 set(CANVAS_POC04_SKIA_SDK_ROOT
-    "${CANVAS_REPOSITORY_ROOT}/.deps/skia-sdk-poc04/${CANVAS_POC04_SDK_TARGET}"
-    CACHE PATH "Verified POC-04 RichText Skia SDK")
-if(CANVAS_POC04_SDK_TARGET MATCHES "^(macos|ios)-")
-  set(_CANVAS_POC04_DEFAULT_SKIA_PROFILE
-      "${CANVAS_REPOSITORY_ROOT}/tools/skia/profiles/poc04-richtext-v2.json")
-else()
-  set(_CANVAS_POC04_DEFAULT_SKIA_PROFILE
-      "${CANVAS_REPOSITORY_ROOT}/tools/skia/profiles/poc04-richtext-v1.json")
-endif()
+    "${CANVAS_REPOSITORY_ROOT}/.deps/skia-sdk/${CANVAS_POC04_SDK_TARGET}/release"
+    CACHE PATH "Verified R1 Full release Skia SDK")
 set(CANVAS_POC04_SKIA_PROFILE
-    "${_CANVAS_POC04_DEFAULT_SKIA_PROFILE}"
-    CACHE FILEPATH "POC-04 RichText SDK profile used for fetch guidance")
-unset(_CANVAS_POC04_DEFAULT_SKIA_PROFILE)
+    "${CANVAS_REPOSITORY_ROOT}/tools/skia/profiles/r1-full-v1.json"
+    CACHE FILEPATH "R1 Full Skia SDK profile used for fetch guidance")
 set(CANVAS_POC04_SKIA_LOCK
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../skia-sdk.lock.json" CACHE FILEPATH
-    "POC-04 RichText SDK lock")
+    "${CANVAS_REPOSITORY_ROOT}/r1-full-skia-sdk.lock.json" CACHE FILEPATH
+    "R1 Full Skia SDK lock")
 set(CANVAS_POC04_SKIA_EXPECTED_ID "" CACHE STRING
     "Producer-only expected SDK ID; consumers must use the committed lock")
 if(NOT CANVAS_POC04_SKIA_EXPECTED_ID AND NOT EXISTS "${CANVAS_POC04_SKIA_LOCK}")
   message(FATAL_ERROR
-    "POC-04 RichText SDK is not published/locked yet. Produce the SDK, then run "
-    "tools/skia/update_lock.py --tag <tag> --output pocs/rich_text/skia-sdk.lock.json")
+    "R1 Full Skia SDK is not published/locked yet")
 endif()
 if(NOT EXISTS "${CANVAS_POC04_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
   message(FATAL_ERROR
     "Missing verified RichText SDK. Run: python3 tools/skia/fetch.py --profile "
-    "${CANVAS_POC04_SKIA_PROFILE} --lock pocs/rich_text/skia-sdk.lock.json "
-    "--install-root .deps/skia-sdk-poc04 --target ${CANVAS_POC04_SDK_TARGET}")
+    "tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json "
+    "--target ${CANVAS_POC04_SDK_TARGET} --variant release")
 endif()
 
 file(READ "${CANVAS_POC04_SKIA_SDK_ROOT}/manifest.json" _poc04_manifest)
 if(NOT CANVAS_POC04_SKIA_EXPECTED_ID)
   file(READ "${CANVAS_POC04_SKIA_LOCK}" _poc04_lock)
-  string(JSON CANVAS_POC04_SKIA_EXPECTED_ID ERROR_VARIABLE _poc04_lock_error GET
-         "${_poc04_lock}" targets "${CANVAS_POC04_SDK_TARGET}" sdk_id)
+  string(JSON _poc04_lock_schema ERROR_VARIABLE _poc04_lock_schema_error GET
+         "${_poc04_lock}" schema_version)
+  if(_poc04_lock_schema EQUAL 2)
+    set(_poc04_requires_release_variant TRUE)
+    string(JSON CANVAS_POC04_SKIA_EXPECTED_ID ERROR_VARIABLE _poc04_lock_error GET
+           "${_poc04_lock}" targets "${CANVAS_POC04_SDK_TARGET}" variants
+           release sdk_id)
+  else()
+    set(_poc04_requires_release_variant FALSE)
+    string(JSON CANVAS_POC04_SKIA_EXPECTED_ID ERROR_VARIABLE _poc04_lock_error GET
+           "${_poc04_lock}" targets "${CANVAS_POC04_SDK_TARGET}" sdk_id)
+  endif()
+else()
+  # Historical source-free reproduction passes the immutable v1 SDK ID
+  # explicitly. Schema-v1 manifests have no variant field.
+  set(_poc04_requires_release_variant FALSE)
+  set(_poc04_lock_schema_error "")
+  set(_poc04_lock_error "")
+endif()
+if(_poc04_requires_release_variant)
+  string(JSON _poc04_actual_variant ERROR_VARIABLE _poc04_variant_error GET
+         "${_poc04_manifest}" identity variant)
+else()
+  set(_poc04_actual_variant "release")
+  set(_poc04_variant_error "")
 endif()
 string(JSON _poc04_actual_id ERROR_VARIABLE _poc04_manifest_error GET
        "${_poc04_manifest}" sdk_id)
-if(_poc04_lock_error OR _poc04_manifest_error OR
+if(_poc04_lock_schema_error OR _poc04_lock_error OR _poc04_variant_error OR
+   _poc04_manifest_error OR
+   NOT _poc04_actual_variant STREQUAL "release" OR
    NOT CANVAS_POC04_SKIA_EXPECTED_ID STREQUAL _poc04_actual_id)
-  message(FATAL_ERROR "POC-04 RichText SDK manifest does not match its lock")
+  message(FATAL_ERROR
+    "RichText SDK manifest does not match the locked R1 Full release SDK")
 endif()
 
 find_package(CanvasSkia CONFIG REQUIRED
   PATHS "${CANVAS_POC04_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia"
   NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+if(NOT TARGET CanvasSkia::Paragraph)
+  # Historical schema-v1 POC-04 packages predate capability aliases. Preserve
+  # explicit reproductions while the active R1 Full package uses Paragraph.
+  add_library(CanvasSkia::Paragraph INTERFACE IMPORTED)
+  set_target_properties(CanvasSkia::Paragraph PROPERTIES
+    INTERFACE_LINK_LIBRARIES "CanvasSkia::Skia")
+endif()
 add_library(canvas_poc04_skparagraph STATIC skparagraph_layout.cpp)
 target_link_libraries(canvas_poc04_skparagraph PUBLIC
-  canvas_poc04_core CanvasSkia::Skia)
+  canvas_poc04_core CanvasSkia::Paragraph)
 target_include_directories(canvas_poc04_skparagraph PUBLIC .)
 target_compile_definitions(canvas_poc04_skparagraph PRIVATE SK_ENABLE_PARAGRAPH)
 add_library(canvas_poc04_canonical_behavior_fixture STATIC

@@ -11,7 +11,6 @@ CORE = [
     POC / "include" / "canvas" / "poc05" / "hybrid_surface.h",
     POC / "src" / "hybrid_surface.cpp",
 ]
-WORKFLOW = ROOT / ".github" / "workflows" / "poc05.yml"
 
 
 def main() -> int:
@@ -39,23 +38,12 @@ def main() -> int:
         if required not in core_text:
             violations.append(f"missing stable boundary {required}")
 
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    for required in (
-        "host-contract:",
-        "web-overlay:",
-        "apple-rn-fabric:",
-        "poc05-host-debug",
-        "poc05-host-asan",
-        "node-version: 24.18.0",
-        "ios-simulator-arm64-metal",
-        "AxiomHybridSurfaceComponentView",
-        "pocs/hybrid_surface/**",
-    ):
-        if required not in workflow:
-            violations.append(f"workflow missing {required}")
     if violations:
         raise RuntimeError("POC-05 contract violation: " + ", ".join(violations))
-    print("POC-05 core consumes only the stable Runtime View/Surface C ABI boundary")
+    print(
+        "POC-05 archived core consumes only the stable Runtime View/Surface "
+        "C ABI boundary"
+    )
     return 0
 
 

@@ -3,14 +3,14 @@ name: POC-02 Ink Engine
 on:
   pull_request:
     paths:
-      - "skia-sdk.lock.json"
+      - "r1-full-skia-sdk.lock.json"
       - "pocs/ink_engine/**"
       - "arc/**"
       - "pocs/fastink/**"
   push:
     branches: [main]
     paths:
-      - "skia-sdk.lock.json"
+      - "r1-full-skia-sdk.lock.json"
       - "pocs/ink_engine/**"
       - "arc/**"
       - "pocs/fastink/**"
@@ -70,7 +70,9 @@ jobs:
         run: python3 tools/bootstrap_deps.py --core --web
       - name: Fetch verified Web Skia SDK
         run: >-
-          python3 tools/skia/fetch.py --target web-wasm-webgl2
+          python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json
+          --lock r1-full-skia-sdk.lock.json --target web-wasm-webgl2
+          --variant release
           --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Enforce prebuilt Skia consumer boundary
         run: python3 pocs/ink_engine/tools/check_ci_boundary.py
@@ -121,7 +123,7 @@ jobs:
           (Join-Path $installDir "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
       - name: Fetch verified Windows Skia SDK
         shell: pwsh
-        run: python tools/skia/fetch.py --target windows-x64-d3d12 --summary-file "$env:GITHUB_STEP_SUMMARY"
+        run: python tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json --target windows-x64-d3d12 --variant release --summary-file "$env:GITHUB_STEP_SUMMARY"
       - name: Build and test Windows C++ Runtime
         shell: pwsh
         run: |
@@ -157,8 +159,8 @@ jobs:
       - name: Bootstrap core and Android Skia SDKs
         run: |
           python3 tools/bootstrap_deps.py --core
-          python3 tools/skia/fetch.py --target android-arm64-v8a-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
-          python3 tools/skia/fetch.py --target android-x86_64-gles3 --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json --target android-arm64-v8a-gles3 --variant release --summary-file "$GITHUB_STEP_SUMMARY"
+          python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json --target android-x86_64-gles3 --variant release --summary-file "$GITHUB_STEP_SUMMARY"
       - name: Clean-build Android arm64 and emulator targets
         working-directory: pocs/ink_engine/platform/android
         run: |

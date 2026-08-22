@@ -344,6 +344,11 @@ POC-03 的 Windows Integrated D3D12 结果已连续两次未达到既有 p95/p99
 - unit、快速 property、smoke operation/pointer/text replay。
 - 小型 golden、Bridge contract 和 cache/device fallback smoke。
 - core/public ABI 或 shared semantic 变更必须编译 Product Tier A + Portability Tier B；单一 Shell UI 变更只阻断受影响 Tier A，但不得跳过共享 contract tests。
+- 已 Accepted 的 POC 不再拥有自动 PR/push workflow；其语料迁入产品/RF regression
+  gate，历史 lock、Release 和报告只用于显式复现。仍处于 Validating 的 POC 可暂时保留
+  按路径触发的门禁，但不得建立新的 POC 专用 Skia Producer。
+- 活跃 Runtime/POC Skia Consumer 默认使用锁定的 R1 Full `release` variant；Debug/ASan
+  必须显式选择。只有 R1 Full Producer 可 checkout Skia source 或运行 GN/Ninja。
 
 ### 合并前
 

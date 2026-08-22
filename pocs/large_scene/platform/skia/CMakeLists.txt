@@ -21,20 +21,46 @@ else()
 endif()
 
 set(CANVAS_SKIA_SDK_ROOT
-    "${PROJECT_SOURCE_DIR}/.deps/skia-sdk/${CANVAS_POC03_SDK_TARGET}" CACHE PATH
+    "${PROJECT_SOURCE_DIR}/.deps/skia-sdk/${CANVAS_POC03_SDK_TARGET}/release" CACHE PATH
     "Verified Canvas Skia SDK root for this POC-03 worktree")
+set(CANVAS_SKIA_SDK_LOCK
+    "${PROJECT_SOURCE_DIR}/r1-full-skia-sdk.lock.json" CACHE FILEPATH
+    "Verified Canvas Skia SDK lock")
 if(NOT EXISTS
    "${CANVAS_SKIA_SDK_ROOT}/lib/cmake/CanvasSkia/CanvasSkiaConfig.cmake")
   message(FATAL_ERROR
-    "Missing verified Canvas Skia SDK. Run: python3 tools/skia/fetch.py --target ${CANVAS_POC03_SDK_TARGET}")
+    "Missing verified Canvas Skia SDK. Run: python3 tools/skia/fetch.py --profile "
+    "tools/skia/profiles/r1-full-v1.json --lock r1-full-skia-sdk.lock.json "
+    "--target ${CANVAS_POC03_SDK_TARGET} --variant release")
 endif()
 
 file(READ "${CANVAS_SKIA_SDK_ROOT}/manifest.json" _poc03_sdk_manifest)
 string(JSON _poc03_manifest_target ERROR_VARIABLE _poc03_manifest_error
        GET "${_poc03_sdk_manifest}" identity target)
-if(_poc03_manifest_error OR
-   NOT _poc03_manifest_target STREQUAL CANVAS_POC03_SDK_TARGET)
-  message(FATAL_ERROR "POC-03 Skia SDK manifest target does not match this build")
+file(READ "${CANVAS_SKIA_SDK_LOCK}" _poc03_sdk_lock)
+string(JSON _poc03_lock_schema ERROR_VARIABLE _poc03_lock_schema_error
+       GET "${_poc03_sdk_lock}" schema_version)
+if(_poc03_lock_schema EQUAL 2)
+  string(JSON _poc03_manifest_variant ERROR_VARIABLE _poc03_manifest_variant_error
+         GET "${_poc03_sdk_manifest}" identity variant)
+  string(JSON _poc03_locked_id ERROR_VARIABLE _poc03_lock_error
+         GET "${_poc03_sdk_lock}" targets "${CANVAS_POC03_SDK_TARGET}"
+         variants release sdk_id)
+else()
+  set(_poc03_manifest_variant "release")
+  set(_poc03_manifest_variant_error "")
+  string(JSON _poc03_locked_id ERROR_VARIABLE _poc03_lock_error
+         GET "${_poc03_sdk_lock}" targets "${CANVAS_POC03_SDK_TARGET}" sdk_id)
+endif()
+string(JSON _poc03_manifest_id ERROR_VARIABLE _poc03_manifest_id_error
+       GET "${_poc03_sdk_manifest}" sdk_id)
+if(_poc03_manifest_error OR _poc03_manifest_variant_error OR
+   _poc03_lock_schema_error OR _poc03_lock_error OR _poc03_manifest_id_error OR
+   NOT _poc03_manifest_target STREQUAL CANVAS_POC03_SDK_TARGET OR
+   NOT _poc03_manifest_variant STREQUAL "release" OR
+   NOT _poc03_manifest_id STREQUAL _poc03_locked_id)
+  message(FATAL_ERROR
+    "POC-03 Skia SDK manifest does not match ${CANVAS_SKIA_SDK_LOCK}")
 endif()
 
 find_package(CanvasSkia CONFIG REQUIRED
