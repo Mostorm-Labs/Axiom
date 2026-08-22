@@ -611,6 +611,16 @@ class SdkMetadataTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown R1 Skia target"):
             build_matrix(["unknown-target"])
 
+    def test_r1_consumer_validation_is_source_free_and_compiles_the_sdk(self) -> None:
+        workflow = (
+            SKIA_TOOLS.parents[1]
+            / ".github/workflows/r1-full-consumer-validation.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("tools/skia/smoke_consumer.py", workflow)
+        self.assertIn("test ! -d .deps/skia", workflow)
+        self.assertNotIn("tools/skia/build.py", workflow)
+        self.assertNotIn("--sync-skia", workflow)
+
     def test_cross_run_reuse_accepts_only_trusted_completed_runs(self) -> None:
         base = {
             "id": 41, "status": "completed", "head_sha": "a" * 40,

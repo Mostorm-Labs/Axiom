@@ -66,3 +66,79 @@ jobs:
           ! grep -E 'git-sync-deps|tools/skia/build\.py|\.deps/skia/out' \
             .github/workflows/r1-full-consumer-validation.yml \
             tools/skia/fetch.py tools/skia/consumer.py
+
+  source-free-smoke:
+    needs: contract
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: windows-x64-d3d12, os: windows-2025, family: windows }
+          - { target: web-wasm-webgl2, os: ubuntu-24.04, family: web }
+          - { target: macos-arm64-metal, os: macos-15, family: apple }
+          - { target: macos-x64-metal, os: macos-15, family: apple }
+          - { target: ios-arm64-metal, os: macos-15, family: apple }
+          - { target: ios-simulator-arm64-metal, os: macos-15, family: apple }
+          - { target: android-arm64-v8a-gles3, os: ubuntu-24.04, family: android }
+          - { target: android-x86_64-gles3, os: ubuntu-24.04, family: android }
+    runs-on: ${{ matrix.os }}
+    name: smoke-${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: matrix.family == 'windows'
+        with: { arch: x64 }
+      - name: Install pinned Windows LLVM
+        if: matrix.family == 'windows'
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --windows-llvm
+          $installer = Resolve-Path .deps/downloads/LLVM-22.1.8-win64.exe
+          $installDir = Join-Path $PWD .deps/llvm
+          Start-Process $installer -ArgumentList /S,"/D=$installDir" -Wait
+          (Join-Path $installDir bin) | Out-File $env:GITHUB_PATH -Append
+      - name: Install pinned Emscripten
+        if: matrix.family == 'web'
+        run: python tools/bootstrap_deps.py --web
+      - name: Install pinned Android NDK
+        if: matrix.family == 'android'
+        shell: bash
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "cmake;3.30.5" "ndk;27.2.12479018" || [[ "${PIPESTATUS[1]}" -eq 0 ]]
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Fetch verified Release archive
+        env:
+          SDK_TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          python tools/skia/fetch.py \
+            --profile "$PROFILE" --lock "$LOCK" --target "$SDK_TARGET" \
+            --variant release --summary-file "$GITHUB_STEP_SUMMARY"
+          asset=$(python -c 'import json,os; lock=json.load(open("r1-full-skia-sdk.lock.json")); print(lock["targets"][os.environ["SDK_TARGET"]]["variants"]["release"]["asset"])')
+          repository=$(python -c 'import json; print(json.load(open("r1-full-skia-sdk.lock.json"))["repository"])')
+          tag=$(python -c 'import json; print(json.load(open("r1-full-skia-sdk.lock.json"))["tag"])')
+          url="https://github.com/$repository/releases/download/$tag/$asset"
+          curl -L --fail --retry 5 --retry-all-errors --output "$asset" "$url"
+          echo "SDK_ARCHIVE=$asset" >> "$GITHUB_ENV"
+      - name: Source-free Canvas and capability smoke
+        if: matrix.family != 'windows'
+        shell: bash
+        run: |
+          python tools/bootstrap_deps.py --core --font-only
+          if [[ "${{ matrix.family }}" == web ]]; then source .deps/emsdk/emsdk_env.sh; fi
+          if [[ "${{ matrix.family }}" == android ]]; then extra=(--ndk "$ANDROID_NDK_ROOT"); else extra=(); fi
+          python tools/skia/smoke_consumer.py \
+            --profile "$PROFILE" --target "${{ matrix.target }}" --variant release \
+            --archive "$SDK_ARCHIVE" "${extra[@]}"
+          test ! -d .deps/skia
+      - name: Source-free Canvas and capability smoke on Windows
+        if: matrix.family == 'windows'
+        shell: pwsh
+        run: |
+          python tools/bootstrap_deps.py --core --font-only
+          python tools/skia/smoke_consumer.py --profile "$env:PROFILE" --target "${{ matrix.target }}" --variant release --archive "$env:SDK_ARCHIVE" --cc "$PWD/.deps/llvm/bin/clang-cl.exe" --cxx "$PWD/.deps/llvm/bin/clang-cl.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Source-free consumer smoke failed" }
+          if (Test-Path .deps/skia) { throw "consumer smoke materialized Skia source" }
