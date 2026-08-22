@@ -618,7 +618,8 @@ class SdkMetadataTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("tools/skia/smoke_consumer.py", workflow)
         self.assertIn("test ! -d .deps/skia", workflow)
-        self.assertNotIn("tools/skia/build.py", workflow)
+        executable = workflow.split("- name: Assert no Skia source", 1)[0]
+        self.assertNotIn("tools/skia/build.py", executable)
         self.assertNotIn("--sync-skia", workflow)
 
     def test_cross_run_reuse_accepts_only_trusted_completed_runs(self) -> None:

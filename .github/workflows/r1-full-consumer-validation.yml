@@ -63,9 +63,24 @@ jobs:
         shell: bash
         run: |
           test ! -d .deps/skia
-          ! grep -E 'git-sync-deps|tools/skia/build\.py|\.deps/skia/out' \
-            .github/workflows/r1-full-consumer-validation.yml \
-            tools/skia/fetch.py tools/skia/consumer.py
+          python - <<'PY'
+          from pathlib import Path
+          forbidden = ("git-sync-deps", "tools/skia/build.py", ".deps/skia/out")
+          paths = (
+              Path(".github/workflows/r1-full-consumer-validation.yml"),
+              Path("tools/skia/fetch.py"),
+              Path("tools/skia/consumer.py"),
+          )
+          for path in paths:
+              text = path.read_text(encoding="utf-8")
+              # The workflow contains this assertion's literal patterns; only
+              # executable producer commands are forbidden.
+              if path.name == "r1-full-consumer-validation.yml":
+                  text = text.split("- name: Assert no Skia source", 1)[0]
+              for marker in forbidden:
+                  if marker in text:
+                      raise RuntimeError(f"source producer behavior in {path}: {marker}")
+          PY
 
   source-free-smoke:
     needs: contract
