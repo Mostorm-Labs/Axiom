@@ -60,6 +60,13 @@ Release 是唯一默认 variant。Debug 和 ASan 必须显式选择；ASan consu
 smoke。R1 Full matrix lock 只在不可变 Release 发布后生成，不预造哈希。普通 Canvas
 CI 继续只下载 SDK，不允许源码回退、GN 或 Ninja。
 
+R1 Full 的 PR 入口按变更影响范围分类：profile、Skia lock、构建/打包 recipe 和
+Producer workflow 运行完整 24-job 矩阵；平台专属 producer 变更只运行对应平台的
+三个 variant；fetch、consumer、lock 和验证工具只运行 source-free consumer validation；
+文档与无关变更不启动 Producer。正式发布由独立的 `workflow_dispatch` workflow 从
+`main` 触发，始终要求完整矩阵。跨 run 复用仍必须逐项校验身份、manifest、digest 和
+文件 hash，复用失败才回到 Skia source build。
+
 ## Validation
 
 Producer 必须验证 schema、canonical hash、target/toolchain identity、包内容、许可证、

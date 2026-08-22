@@ -33,6 +33,7 @@ from smoke_consumer import (  # noqa: E402
     windows_variant_cmake_args,
 )
 from reuse_artifact import trusted_run  # noqa: E402
+from classify_r1_changes import ALL_TARGETS, build_matrix, classify  # noqa: E402
 
 
 class SdkMetadataTest(unittest.TestCase):
@@ -551,11 +552,12 @@ class SdkMetadataTest(unittest.TestCase):
             )[0]
             self.assertNotIn("pull_request:", trigger)
             self.assertIn("workflow_dispatch:", trigger)
-        full_trigger = (workflows / "skia-sdk-r1-full-producer.yml").read_text(
+        full_trigger = (workflows / "r1-full-producer-contract.yml").read_text(
             encoding="utf-8"
         ).split("permissions:", maxsplit=1)[0]
         self.assertIn("pull_request:", full_trigger)
         self.assertIn('"tools/skia/**"', full_trigger)
+        self.assertIn("r1-full-consumer-validation.yml", full_trigger)
         for consumer in ("poc01.yml", "poc03.yml", "poc04.yml"):
             trigger = (workflows / consumer).read_text(encoding="utf-8").split(
                 "concurrency:", maxsplit=1
@@ -568,11 +570,46 @@ class SdkMetadataTest(unittest.TestCase):
             SKIA_TOOLS.parents[1]
             / ".github/workflows/skia-sdk-r1-full-producer.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("variant: [release, debug, asan]", workflow)
+        self.assertIn("matrix: ${{ fromJSON(needs.preflight.outputs.matrix) }}", workflow)
         self.assertIn("name: ${{ matrix.target }}-${{ matrix.variant }}", workflow)
-        self.assertNotIn("for variant in release debug asan", workflow)
+        # The producer must expose one matrix job per target/variant.  Do not
+        # assert against prose that happens to mention the old serial-loop
+        # shape; the matrix contract above is the behavior we need to freeze.
         self.assertNotIn("foreach ($variant in @('release', 'debug', 'asan'))", workflow)
         self.assertIn("tools/skia/reuse_artifact.py", workflow)
+
+    def test_r1_change_classifier_scopes_expensive_jobs(self) -> None:
+        full = classify(["tools/skia/build.py"])
+        self.assertEqual(full["mode"], "full")
+        self.assertEqual(len(full["targets"]), 8)
+        consumer = classify(["tools/skia/fetch.py", "tools/skia/tests/test_consumer.py"])
+        self.assertEqual(consumer, {
+            "mode": "consumer", "targets": [],
+            "reason": "consumer or schema validation",
+        })
+        platform = classify(["tools/skia/platform/windows/adapter.py"])
+        self.assertEqual(platform["mode"], "platform")
+        self.assertEqual(platform["targets"], ["windows-x64-d3d12"])
+        self.assertEqual(classify(["docs/design.md"])["mode"], "none")
+
+    def test_r1_change_classifier_recognizes_workflow_consumer_changes(self) -> None:
+        consumer = classify([
+            ".github/workflows/r1-full-consumer-validation.yml",
+            ".github/workflows/r1-full-producer-contract.yml",
+        ])
+        self.assertEqual(consumer["mode"], "consumer")
+        self.assertEqual(consumer["targets"], [])
+
+    def test_r1_target_matrix_expands_only_selected_platform_variants(self) -> None:
+        windows = build_matrix(["windows-x64-d3d12"])["include"]
+        self.assertEqual(len(windows), 3)
+        self.assertEqual({item["variant"] for item in windows}, {
+            "release", "debug", "asan",
+        })
+        self.assertTrue(all(item["family"] == "windows" for item in windows))
+        self.assertEqual(len(build_matrix(ALL_TARGETS)["include"]), 24)
+        with self.assertRaisesRegex(ValueError, "unknown R1 Skia target"):
+            build_matrix(["unknown-target"])
 
     def test_cross_run_reuse_accepts_only_trusted_completed_runs(self) -> None:
         base = {

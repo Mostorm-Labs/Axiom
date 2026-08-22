@@ -1,0 +1,68 @@
+name: R1 Full Skia Consumer Validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  PROFILE: tools/skia/profiles/r1-full-v1.json
+  LOCK: r1-full-skia-sdk.lock.json
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Validate lock and consumer contracts
+        run: |
+          python -m unittest tools.skia.tests.test_consumer tools.skia.tests.test_sdk_tools -v
+          python - <<'PY'
+          import json
+          import sys
+          sys.path.insert(0, "tools/skia")
+          from consumer import validate_lock
+          validate_lock(json.load(open("r1-full-skia-sdk.lock.json")))
+          print("R1 Full lock is valid")
+          PY
+          python tools/skia/check_consumer_ci.py
+          git diff --check
+
+  fetch-release:
+    needs: contract
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - windows-x64-d3d12
+          - web-wasm-webgl2
+          - macos-arm64-metal
+          - macos-x64-metal
+          - ios-arm64-metal
+          - ios-simulator-arm64-metal
+          - android-arm64-v8a-gles3
+          - android-x86_64-gles3
+    runs-on: ubuntu-24.04
+    name: fetch-${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Fetch and verify immutable Release SDK
+        run: >-
+          python tools/skia/fetch.py
+          --profile "$PROFILE"
+          --lock "$LOCK"
+          --target "${{ matrix.target }}"
+          --variant release
+          --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Assert no Skia source checkout or builder is used
+        shell: bash
+        run: |
+          test ! -d .deps/skia
+          ! grep -E 'git-sync-deps|tools/skia/build\.py|\.deps/skia/out' \
+            .github/workflows/r1-full-consumer-validation.yml \
+            tools/skia/fetch.py tools/skia/consumer.py

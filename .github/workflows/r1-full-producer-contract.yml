@@ -1,0 +1,49 @@
+name: R1 Full Skia Producer Contract
+
+on:
+  pull_request:
+    paths:
+      - "deps.lock.json"
+      - "tools/skia/**"
+      - ".github/workflows/r1-full-producer-contract.yml"
+      - ".github/workflows/skia-sdk-r1-full-producer.yml"
+      - ".github/workflows/r1-full-consumer-validation.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      targets: ${{ steps.classify.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: classify
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          map=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | python3 tools/skia/classify_r1_changes.py)
+          echo "classification=$map" >> "$GITHUB_STEP_SUMMARY"
+          echo "mode=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["mode"])' <<< "$map")" >> "$GITHUB_OUTPUT"
+          echo "targets=$(python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["targets"], separators=(",",":")))' <<< "$map")" >> "$GITHUB_OUTPUT"
+
+  producer:
+    needs: classify
+    if: needs.classify.outputs.mode == 'full' || needs.classify.outputs.mode == 'platform'
+    uses: ./.github/workflows/skia-sdk-r1-full-producer.yml
+    with:
+      targets: ${{ needs.classify.outputs.targets }}
+      aggregate: false
+    secrets: inherit
+
+  consumer:
+    needs: classify
+    if: needs.classify.outputs.mode == 'consumer'
+    uses: ./.github/workflows/r1-full-consumer-validation.yml
+    secrets: inherit

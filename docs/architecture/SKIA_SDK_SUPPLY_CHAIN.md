@@ -142,15 +142,30 @@ Skottie、SVG、PDF、JPEG/WebP 与 PathOps API，证明 package 是自包含的
 
 ## 发布权限和不可变性
 
-[`skia-sdk-producer.yml`](../../.github/workflows/skia-sdk-producer.yml) 在相关 PR
-上以 `contents: read` 并行构建、打包和验证七个 target。Actions artifact 只负责
-matrix 与聚合 job 之间的短期传递。
+R1 Full 将 Producer 拆为可复用的
+[`skia-sdk-r1-full-producer.yml`](../../.github/workflows/skia-sdk-r1-full-producer.yml)、
+变更分类入口
+[`r1-full-producer-contract.yml`](../../.github/workflows/r1-full-producer-contract.yml)
+和只允许 `workflow_dispatch` 的
+[`r1-full-release.yml`](../../.github/workflows/r1-full-release.yml)。Producer 的
+`target × variant` 是 24 个独立 job；PR 可按变更影响范围运行完整矩阵、对应平台的
+3 个 variant，或完全不运行 Producer。`fetch.py`、consumer 校验、lock 工具和 consumer
+workflow 只进入
+[`r1-full-consumer-validation.yml`](../../.github/workflows/r1-full-consumer-validation.yml)，
+不 checkout Skia source、不运行 GN/Ninja。文档和无关改动不启动这些昂贵验证。
 
-从 `main` 人工触发时会重新构建，而不是提升 PR artifact。聚合 job 要求七包齐全，
-生成 `skia-sdk-index.json` 与 `SHA256SUMS`。publish job 单独获取写权限，为 ZIP 与
-index 生成 provenance，然后创建
-`skia-sdk-poc01-minimal-v1-<set_id 前 16 位>` prerelease。若同名 Release 已存在，
-只有 target commit、资产集合和每个字节都一致才成功；任何差异都失败且不会覆盖资产。
+变更分类由
+[`classify_r1_changes.py`](../../tools/skia/classify_r1_changes.py) 完成：profile、Skia
+lock、构建/打包/identity/aggregate/publish recipe 或 Producer workflow 选择完整 24
+job；平台专属 producer 路径只选择对应平台的 3 个 variant；fetch、consumer、lock 校验
+和 consumer workflow 只运行 source-free consumer validation。普通 PR 仅获得
+`contents: read`；Actions artifact 只负责 matrix 与聚合 job 之间的短期传递。
+
+从 `main` 人工触发 R1 Full release 时会重新构建完整 24-job 矩阵，而不是提升 PR
+artifact。聚合 job 要求八个 target 的 24 包齐全，生成 `skia-sdk-index.json` 与
+`SHA256SUMS`。publish job 单独获取写权限，为 ZIP 与 index 生成 provenance，然后创建
+`skia-sdk-r1-full-v1-<set_id 前 16 位>` prerelease。若同名 Release 已存在，只有 target
+commit、资产集合和每个字节都一致才成功；任何差异都失败且不会覆盖资产。
 
 首个不可变 prerelease 已发布为
 `skia-sdk-poc01-minimal-v1-debcbb7b9376806c`，完整 set ID 为

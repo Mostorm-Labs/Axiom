@@ -1,0 +1,54 @@
+name: R1 Full Skia Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: JSON array of all target names to build
+        required: true
+        type: string
+        default: '["windows-x64-d3d12","web-wasm-webgl2","macos-arm64-metal","macos-x64-metal","ios-arm64-metal","ios-simulator-arm64-metal","android-arm64-v8a-gles3","android-x86_64-gles3"]'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  require-main:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require manual publication from main
+        run: test "$GITHUB_REF" = refs/heads/main
+
+  producer:
+    needs: require-main
+    uses: ./.github/workflows/skia-sdk-r1-full-producer.yml
+    with:
+      targets: ${{ inputs.targets }}
+      aggregate: true
+    secrets: inherit
+
+  publish:
+    needs: producer
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: r1-full-skia-release-set, path: out/skia-sdk/release }
+      - uses: actions/attest@v4
+        with:
+          subject-path: |
+            out/skia-sdk/release/skia-sdk-*.zip
+            out/skia-sdk/release/skia-sdk-index.json
+      - name: Publish immutable prerelease
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: >-
+          python tools/skia/publish_release.py
+          --directory out/skia-sdk/release
+          --repository "${{ github.repository }}"
+          --target-commit "${{ github.sha }}"
