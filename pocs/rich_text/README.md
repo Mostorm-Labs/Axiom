@@ -61,7 +61,7 @@ The host build does not consume Skia. It verifies the semantic model,
 transactional replay, snapshot round-trip, composition state machine, resource
 identity, probe geometry, lifecycle, and performance harness.
 
-## RichText Skia SDK bootstrap
+## Historical RichText Skia SDK
 
 POC-01's `poc01-minimal-v1` SDK disables HarfBuzz and ICU, so it cannot satisfy
 POC-04. The historical `poc04-richtext-v1` release built and packaged
@@ -74,9 +74,9 @@ backend, and fixed Latin/CJK font fixtures for these four targets:
 - `android-x86_64-gles3`
 
 That four-target profile and its committed lock remain immutable for the
-already recorded Web/Windows/Android evidence. The current producer workflow
-uses the successor `poc04-richtext-v2` profile, which retains those four
-targets and adds the Apple SDK supply-chain targets:
+already recorded Web/Windows/Android evidence. Its successor
+`poc04-richtext-v2` profile retained those four targets and added the Apple
+SDK supply-chain targets:
 
 - `macos-arm64-metal`
 - `ios-arm64-metal`
@@ -92,19 +92,27 @@ or macOS/iOS/iPadOS behavior acceptance. The seven-target
 `Mostorm-Labs/Axiom` repository; the historical v1 lock remains unchanged in
 Git history.
 
-The `POC-04 RichText Skia SDK Producer` workflow now uses the seven-target
-`poc04-richtext-v2` profile. After its immutable prerelease is published,
-generate the replacement consumer lock with:
+The historical `poc04-richtext-v2` profile, lock, Release, and physical-device
+reports remain immutable so the accepted POC can be reproduced. Its dedicated
+Producer and automatic POC workflow are retired: active RichText development
+uses the locked `r1-full-v1` Release SDK, which includes SkParagraph, HarfBuzz,
+ICU, fixed Latin/CJK fixtures, and all other Runtime capabilities.
+
+Fetch the current Full SDK explicitly, for example:
 
 ```sh
-python3 tools/skia/update_lock.py \
-  --tag <published-tag> \
-  --output pocs/rich_text/skia-sdk.lock.json
+python3 tools/skia/fetch.py \
+  --profile tools/skia/profiles/r1-full-v1.json \
+  --lock r1-full-skia-sdk.lock.json \
+  --target macos-arm64-metal \
+  --variant release
 ```
 
-Consumer CI never checks out or builds Skia source. Web, Windows, and Android
-consume the v2 lock, and the Apple job source-free builds the AppKit/UIKit
-adapter against the macOS and iOS-simulator SDK targets.
+Ordinary Consumer CI never checks out or builds Skia source. The source-free R1
+Full Consumer workflow validates the same Windows, Web, Android, macOS and iOS
+target families and their RichText capability probes. POC-04's accepted IME
+behavior corpus is retained as regression input for the product Runtime rather
+than rerun as an independent stage on every change.
 
 ## Apple native IME adapter
 
@@ -179,9 +187,10 @@ is `Accepted`.
 
 ## Windows and Chrome Stable physical revalidation
 
-Run the physical validation from a clean checkout of
-`codex/poc04-windows-web-revalidation` on the Windows machine. The preparation
-script consumes only the locked `poc04-richtext-v2` SDKs, builds and tests the
+The following is a historical/manual revalidation procedure; it is not an
+ordinary CI workflow. Run the physical validation from a clean checkout on the
+Windows machine. The preparation script now consumes the locked `r1-full-v1`
+Release SDK, builds and tests the
 Windows canonical target, builds the Web/WASM recorder, and prints the exact
 commands for both interactive gates:
 

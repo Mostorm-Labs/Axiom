@@ -26,6 +26,8 @@ REQUIRED_FETCH_TARGETS = {
     "android-arm64-v8a-gles3",
     "android-x86_64-gles3",
 }
+FULL_PROFILE = "tools/skia/profiles/r1-full-v1.json"
+FULL_LOCK = "r1-full-skia-sdk.lock.json"
 
 
 def main() -> int:
@@ -38,13 +40,17 @@ def main() -> int:
         if re.search(pattern, text, flags=re.IGNORECASE):
             failures.append(f"{label} is forbidden in {path}")
     for target in sorted(REQUIRED_FETCH_TARGETS):
-        command = f"tools/skia/fetch.py --target {target}"
-        if command not in text:
+        if target not in text:
             failures.append(f"missing locked SDK fetch: {target}")
+    for required in (FULL_PROFILE, FULL_LOCK, "--variant release"):
+        if required not in text:
+            failures.append(f"missing R1 Full release SDK selection: {required}")
+    if '"skia-sdk.lock.json"' in text:
+        failures.append("historical POC-01 SDK lock must not trigger active POC-02 CI")
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print("POC-02 CI consumes only locked prebuilt Skia SDK targets")
+    print("POC-02 CI consumes only the locked R1 Full release Skia SDK")
     return 0
 
 

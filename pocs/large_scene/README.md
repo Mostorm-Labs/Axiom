@@ -92,7 +92,8 @@ and the
 To verify the prebuilt Skia consumer on macOS without any Skia source build:
 
 ```bash
-python3 tools/skia/fetch.py --target macos-arm64-metal
+python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json \
+  --lock r1-full-skia-sdk.lock.json --target macos-arm64-metal --variant release
 cmake -S . -B out/poc03-macos-skia -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCANVAS_POC01_BUILD=OFF -DCANVAS_POC03_BUILD=ON \
@@ -112,7 +113,9 @@ Choreographer-coalesced native frame request. Select a scale at launch with
 `--ei poc03_nodes 1000|10000|50000|100000`:
 
 ```bash
-python3 tools/skia/fetch.py --target android-arm64-v8a-gles3
+python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json \
+  --lock r1-full-skia-sdk.lock.json --target android-arm64-v8a-gles3 \
+  --variant release
 cd pocs/large_scene/platform/android
 gradle :app:assembleDebug -PcanvasPoc03Abi=arm64-v8a
 mkdir -p ../../../../out/poc03-android-apks
@@ -135,9 +138,10 @@ The iPadOS/iOS runner uses a native UIKit `CAMetalLayer` and the locked
 are supplied only on the local command line and must not be committed:
 
 ```bash
-python3 tools/skia/fetch.py --target ios-arm64-metal
+python3 tools/skia/fetch.py --profile tools/skia/profiles/r1-full-v1.json \
+  --lock r1-full-skia-sdk.lock.json --target ios-arm64-metal --variant release
 cmake --preset poc03-ios-device-release \
-  -DCANVAS_SKIA_SDK_ROOT="$PWD/.deps/skia-sdk/ios-arm64-metal"
+  -DCANVAS_SKIA_SDK_ROOT="$PWD/.deps/skia-sdk/ios-arm64-metal/release"
 xcodebuild \
   -project out/poc03-ios-device-release/canvas_v2_pocs.xcodeproj \
   -scheme canvas_poc03_ipados_runner -configuration Release \

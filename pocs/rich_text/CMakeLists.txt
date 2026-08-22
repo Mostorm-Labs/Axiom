@@ -16,9 +16,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(MSVC)
-  # Official Skia SDK archives use the static MSVC runtime. Keep all POC-04
-  # consumers, including GoogleTest and the Win32 adapter, on that ABI contract.
-  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  # R1 Full uses the static release CRT for every SDK variant. Keep RichText,
+  # GoogleTest, and the Win32 adapter on that ABI contract in all configurations.
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+  add_compile_definitions(_ITERATOR_DEBUG_LEVEL=0 _HAS_ITERATOR_DEBUGGING=0)
 endif()
 
 get_filename_component(CANVAS_REPOSITORY_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)

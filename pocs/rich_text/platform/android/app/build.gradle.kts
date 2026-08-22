@@ -39,7 +39,7 @@ android {
                     "-DCANVAS_POC04_BUILD_TESTS=OFF",
                     "-DCANVAS_POC04_ENABLE_SKPARAGRAPH=ON",
                     "-DCANVAS_POC04_BUILD_ANDROID=ON",
-                    "-DCANVAS_POC04_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk-poc04/${canvasPoc04SdkTarget.get()}",
+                    "-DCANVAS_POC04_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPoc04SdkTarget.get()}/release",
                 )
                 cppFlags += listOf("-std=c++20")
             }

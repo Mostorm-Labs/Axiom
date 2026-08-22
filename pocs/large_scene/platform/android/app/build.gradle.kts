@@ -34,7 +34,7 @@ android {
                     "-DCANVAS_POC03_BUILD_TESTS=OFF",
                     "-DCANVAS_POC03_ENABLE_SKIA=ON",
                     "-DCANVAS_POC03_ENABLE_INK_INTEGRATION=ON",
-                    "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPoc03SdkTarget.get()}"
+                    "-DCANVAS_SKIA_SDK_ROOT=${rootProject.projectDir}/../../../../.deps/skia-sdk/${canvasPoc03SdkTarget.get()}/release"
                 )
                 cppFlags += listOf("-std=c++20")
             }

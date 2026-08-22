@@ -76,3 +76,14 @@ Producer 必须验证 schema、canonical hash、target/toolchain identity、包�
 Consumer 切换后，六端原有 digest、黄金图、100 次生命周期、60 秒 smoke、sanitizer、
 模拟器和跨平台接受门禁全部保留；普通 POC workflow 还必须通过静态检查证明没有源码
 bootstrap、`skia/out` cache 或 producer builder 引用。
+
+## 已验收 POC workflow 退役
+
+POC-01 与 POC-04 已完成统一验收，POC-05 已完成非 V1 风险验证。对应自动 workflow、
+POC-01 minimal Producer 与 POC-04 RichText Producer 从日常 CI 中删除；这不删除或重写
+历史 profile、lock、Release、复现工具和证据。POC-02/03/06 在剩余门禁关闭前继续拥有
+按路径触发的实验验证，但其 Skia Consumer 统一下载锁定的 R1 Full `release` variant。
+
+R1 以后不再为单个 POC 创建新的 Skia profile 或 Producer。历史 POC 复现必须显式使用
+对应旧 lock；普通 PR/push 只运行产品/RF 门禁、尚未完成的实验门禁，以及按变更影响范围
+选择的 R1 Full Producer 或 source-free Consumer validation。

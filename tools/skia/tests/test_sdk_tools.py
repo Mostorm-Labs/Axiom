@@ -540,25 +540,17 @@ class SdkMetadataTest(unittest.TestCase):
         self.assertIn("add_link_options(/INCREMENTAL:NO)", injector)
         self.assertIn("add_link_options(-fsanitize=address)", injector)
 
-    def test_only_r1_full_producer_tracks_shared_skia_tooling(self) -> None:
+    def test_only_r1_full_producer_exists(self) -> None:
         workflows = SKIA_TOOLS.parents[1] / ".github/workflows"
-        legacy_producers = (
-            workflows / "skia-sdk-producer.yml",
-            workflows / "skia-sdk-poc04-producer.yml",
-        )
-        for workflow in legacy_producers:
-            trigger = workflow.read_text(encoding="utf-8").split(
-                "permissions:", maxsplit=1
-            )[0]
-            self.assertNotIn("pull_request:", trigger)
-            self.assertIn("workflow_dispatch:", trigger)
+        self.assertFalse((workflows / "skia-sdk-producer.yml").exists())
+        self.assertFalse((workflows / "skia-sdk-poc04-producer.yml").exists())
         full_trigger = (workflows / "r1-full-producer-contract.yml").read_text(
             encoding="utf-8"
         ).split("permissions:", maxsplit=1)[0]
         self.assertIn("pull_request:", full_trigger)
         self.assertIn('"tools/skia/**"', full_trigger)
         self.assertIn("r1-full-consumer-validation.yml", full_trigger)
-        for consumer in ("poc01.yml", "poc03.yml", "poc04.yml"):
+        for consumer in ("poc02.yml", "poc03.yml"):
             trigger = (workflows / consumer).read_text(encoding="utf-8").split(
                 "concurrency:", maxsplit=1
             )[0]
@@ -640,18 +632,26 @@ class SdkMetadataTest(unittest.TestCase):
             "42", "a" * 40, trusted
         ))
 
-    def test_legacy_workflows_do_not_track_full_sdk_changes(self) -> None:
+    def test_active_poc_workflows_are_limited_to_unfinished_gates(self) -> None:
         workflows = SKIA_TOOLS.parents[1] / ".github/workflows"
-        for name in (
-            "poc01.yml", "poc02.yml", "poc03.yml", "poc04.yml",
-            "poc05.yml", "rf01.yml", "arc.yml",
-        ):
+        for retired in ("poc01.yml", "poc04.yml", "poc05.yml"):
+            self.assertFalse((workflows / retired).exists())
+        for name in ("poc02.yml", "poc03.yml", "rf01.yml", "arc.yml"):
             trigger = (workflows / name).read_text(encoding="utf-8").split(
                 "concurrency:", maxsplit=1
             )[0]
             self.assertNotIn('"CMakeLists.txt"', trigger)
             self.assertNotIn('"tools/skia/**"', trigger)
             self.assertNotIn(f'".github/workflows/{name}"', trigger)
+
+    def test_active_poc_skia_consumers_use_r1_full_release(self) -> None:
+        workflows = SKIA_TOOLS.parents[1] / ".github/workflows"
+        for name in ("poc02.yml", "poc03.yml"):
+            text = (workflows / name).read_text(encoding="utf-8")
+            self.assertIn("tools/skia/profiles/r1-full-v1.json", text)
+            self.assertIn("r1-full-skia-sdk.lock.json", text)
+            self.assertIn("--variant release", text)
+            self.assertNotIn('"skia-sdk.lock.json"', text)
 
     def test_r1_full_profile_requires_bundled_dependencies(self) -> None:
         profile = load_profile(SKIA_TOOLS / "profiles/r1-full-v1.json")

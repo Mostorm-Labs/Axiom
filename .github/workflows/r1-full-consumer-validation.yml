@@ -28,7 +28,6 @@ jobs:
           validate_lock(json.load(open("r1-full-skia-sdk.lock.json")))
           print("R1 Full lock is valid")
           PY
-          python tools/skia/check_consumer_ci.py
           git diff --check
 
   fetch-release:

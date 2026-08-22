@@ -6,13 +6,19 @@
 JPEG/WebP、SVG、PDF、Vulkan、Graphite、Debug 或符号包。Producer 是唯一允许获取
 Skia source 并运行 GN/Ninja 的路径；Canvas 普通 CI 是只读 Consumer。
 
-POC-04 使用独立的
+POC-04 历史验收使用独立的
 [`poc04-richtext-v2`](../../tools/skia/profiles/poc04-richtext-v2.json) profile。
 它在保留既有 Web、Windows 和
 Android RichText SDK 的基础上，增加 `macos-arm64-metal`、`ios-arm64-metal` 和
 `ios-simulator-arm64-metal`。iOS device SDK 同时服务 iPhone 与 iPad，iOS
 simulator SDK 同时服务 iPhone 与 iPad simulator；这些是 SDK producer 和
 source-free linking 门禁，不等同于 AppKit/UIKit IME 行为验收。
+
+POC-01 与 POC-04 已 Accepted，POC-05 也已完成非 V1 风险验证，因此它们的自动
+workflow 和两条历史 Producer 已退役。历史 profile、lock、Release、工具与证据继续保留
+用于显式复现，但不再参与普通 PR/push。POC-02、POC-03 和 POC-06 尚有未关闭门禁；其中
+需要 Skia 的活跃 Consumer 统一使用 `r1-full-v1` 的锁定 `release` variant，不再依赖
+POC-01 minimal 或 POC-04 RichText SDK。
 
 R1 产品化使用独立的
 [`r1-full-v1`](../../tools/skia/profiles/r1-full-v1.json) profile。历史
